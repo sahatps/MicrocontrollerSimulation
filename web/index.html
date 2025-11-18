@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>HackCable</title>
+    <link rel="icon" href="./assets/icon.png" />
+
+    <!-- CSS will be auto-injected -->
+    <!-- JS will be auto-injected -->
+</head>
+<body>
+    <header>
+
+    </header>
+    <main>
+        <div class="sideBar">
+            <div class="buttonBar">
+                <p data-i18n="ui.code">Code:</p>
+                <button id="compile" data-i18n="ui.compile">Compile</button>
+                <button id="execute" data-i18n="ui.execute">Execute</button>
+                <button id="stop" data-i18n="ui.stop">Stop</button>
+                <button id="pause" data-i18n="ui.pause">Pause</button>
+            </div>
+            <div class="buttonBar">
+                <p data-i18n="ui.wiring">Wiring:</p>
+                <button id="save" data-i18n="ui.save">Save</button>
+                <button id="restore" data-i18n="ui.load">Load</button>
+                <button id="clear-all" data-i18n="ui.clearAll">Clear All</button>
+            </div>
+            <div class="buttonBar">
+                <p data-i18n="ui.language">Language:</p>
+                <button id="language-en">English</button>
+                <button id="language-th">ไทย</button>
+            </div>
+            <div class="buttonBar">
+                <p data-i18n="ui.examples">Examples:</p>
+                <select id="code-examples">
+                    <option value="" data-i18n="ui.selectExample">Select an example...</option>
+                    <option value="blink">LED Blink</option>
+                    <option value="button">Button Input</option>
+                    <option value="fade">LED Fade</option>
+                </select>
+            </div>
+            <div id="status-message" class="status-message"></div>
+            <label for="code-editor" data-i18n="ui.codeLabel">Code:</label>
+            <textarea id="code-editor" rows="20"></textarea>
+            <br><br>
+            <label for="code-compiled" data-i18n="ui.compiledCode">Compiled Code:</label>
+            <textarea id="code-compiled" rows="20" wrap="off"></textarea>
+
+        </div>
+        <div id="hackCable">
+
+        </div>
+    </main>
+    <footer>
+        <div>
+
+        </div>
+    </footer>
+</body>
+</html>

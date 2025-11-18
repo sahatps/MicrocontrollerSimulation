@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npm run serve:web:*)",
+      "Bash(timeout 10 cmd:*)",
+      "Bash(ping:*)",
+      "Bash(nul)",
+      "Bash(npx webpack serve:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(dir nul)",
+      "Bash(del nul)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

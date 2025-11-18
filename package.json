@@ -1,0 +1,78 @@
+{
+  "name": "hackcable",
+  "version": "0.0.3",
+  "description": "Arduino and ESP32 simulator (Components wiring + code emulation)",
+  "main": "dist/bundle.js",
+  "types": "dist/types/src/main.d.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "type-check:watch": "npm run type-check -- --watch",
+    "build:types": "tsc --emitDeclarationOnly",
+    "build:src": "webpack --mode=production",
+    "build:web": "webpack --mode=production --config ./webpack.config.web.js",
+    "serve:web": "npx webpack serve --mode=development --config ./webpack.config.web.js"
+  },
+  "exports": {
+    ".": "./dist/src/bundle.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ClementGre/HackCable.git"
+  },
+  "author": "Clément Grennerat",
+  "license": "BSD-3-Clause",
+  "bugs": {
+    "url": "https://github.com/ClementGre/HackCable/issues"
+  },
+  "homepage": "https://github.com/ClementGre/HackCable#readme",
+  "keywords": [],
+  "devDependencies": {
+    "@babel/core": "^7.16.0",
+    "@babel/plugin-proposal-class-properties": "^7.16.0",
+    "@babel/plugin-proposal-object-rest-spread": "7.16.0",
+    "@babel/plugin-transform-runtime": "^7.16.4",
+    "@babel/polyfill": "^7.12.1",
+    "@babel/preset-env": "^7.16.0",
+    "@babel/preset-typescript": "7.16.0",
+    "@types/jquery": "^3.5.9",
+    "@types/react": "^17.0.37",
+    "babel-loader": "^8.2.3",
+    "buffer": "^6.0.3",
+    "copy-webpack-plugin": "^10.0.0",
+    "css-loader": "^6.5.1",
+    "draw2d-types": "^1.0.3",
+    "fork-ts-checker-webpack-plugin": "6.4.0",
+    "html-loader": "^3.0.1",
+    "html-webpack-plugin": "^5.5.0",
+    "style-loader": "^3.3.1",
+    "stylus": "^0.55.0",
+    "stylus-loader": "^6.2.0",
+    "typescript": "4.4.4",
+    "webpack": "5.62.1",
+    "webpack-cli": "4.9.1",
+    "webpack-dev-server": "^4.5.0"
+  },
+  "dependencies": {
+    "@wokwi/elements": "^0.54.1",
+    "avr8js": "^0.18.6",
+    "canvg": "^3.0.9",
+    "class": "^0.1.4",
+    "draw2d": "^1.0.38",
+    "i18next": "^21.6.3",
+    "intel-hex": "^0.1.2",
+    "jquery": "^3.6.0",
+    "jquery-autosize": "^1.18.18",
+    "jquery-contextmenu": "^2.9.2",
+    "jquery-ui": "^1.13.0",
+    "jquery-ui-touch-punch": "^0.2.3",
+    "json2": "^0.4.0",
+    "pathfinding": "^0.4.18",
+    "raphael": "^2.3.0",
+    "rgbcolor": "^1.0.1",
+    "shifty": "^2.16.0",
+    "webpack-jquery-ui": "^2.0.1"
+  }
+}
