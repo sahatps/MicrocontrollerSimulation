@@ -45,6 +45,11 @@ export class ComponentFigure extends draw2d.shape.basic.Rectangle{
                 let svg = this.overlay.shadowRoot?.querySelector("svg")
                 this.setWidth(unitToPx(svg.getAttribute('width')))
                 this.setHeight(unitToPx(svg.getAttribute('height')))
+
+                // Force ports to relocate now that dimensions are set
+                this.getPorts().data.forEach((port: Port) => {
+                    port.getLocator().relocate(0, port);
+                });
             })
         })
         this.on("removed", (_emitter: any, _event: any) => {
@@ -67,6 +72,13 @@ export class ComponentFigure extends draw2d.shape.basic.Rectangle{
     public toFront(){
         super.toFront()
         this.getCanvas().overlayContainer.append(this.overlay)
+    }
+    public toBack(){
+        super.toBack()
+        const container = this.getCanvas().overlayContainer;
+        if (container && container.firstChild !== this.overlay) {
+            container.insertBefore(this.overlay, container.firstChild);
+        }
     }
 
     public getPortByName(name: string): Port{

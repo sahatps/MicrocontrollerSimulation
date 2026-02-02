@@ -1,10 +1,13 @@
-import {ComponentElement, ComponentType, wokwiComponents} from "./component";
+import {ComponentElement, ComponentType, wokwiComponents, wokwiComponentById} from "./component";
+import { Canvas } from "../editor/canvas";
+import { ComponentFigure } from "../editor/component-figure";
 
 export class Catalog {
 
     readonly elements: ComponentElement[] = []
     private readonly catalog;
     private readonly sorter: HTMLSelectElement | undefined;
+    private canvas: Canvas | null = null;
     constructor() {
 
         this.elements = wokwiComponents().filter((c) => c.type != ComponentType.CARD).map((c) => {
@@ -23,6 +26,9 @@ export class Catalog {
         }else console.error("[HackCable] Unable to find element .hackCable-catalog-list")
     }
 
+    public setCanvas(canvas: Canvas) {
+        this.canvas = canvas;
+    }
 
     build(){
 
@@ -63,6 +69,16 @@ export class Catalog {
             div.setAttribute("title", e.description)
             div.innerHTML = "<h3>" + e.name + "</h3>";
             this.catalog?.appendChild(div);
+
+            // Click to add component to canvas
+            div.addEventListener("click", () => {
+                if (this.canvas) {
+                    const figure = new ComponentFigure(wokwiComponentById[e.componentId]);
+                    const x = 300;
+                    const y = 200;
+                    this.canvas.add(figure.setX(x).setY(y));
+                }
+            });
 
             setTimeout(() => {
                 const svg = e.wokwiComponent.shadowRoot?.querySelector("svg");

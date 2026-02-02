@@ -4,6 +4,9 @@ import '@wokwi/elements';
 import {LEDElement} from "@wokwi/elements";
 import {Catalog} from "./panels/catalog";
 import {EmulatorManager} from "./emulator/emulator-manager";
+import {MistingPumpElement} from "./components/misting-pump-element";
+import {WaterPumpElement} from "./components/water-pump-element";
+import {FanElement} from "./components/fan-element";
 
 export {AVRRunner} from "./emulator/avr-runner";
 export {EmulatorManager} from './emulator/emulator-manager';
@@ -50,6 +53,12 @@ export class HackCable {
         this._emulatorManager = new EmulatorManager(this);
         this._editor = new Editor();
 
+        // Connect catalog to canvas for click-to-add functionality
+        this._catalog.setCanvas(this._editor.canvas);
+
+        // Initialize sidebar toggle functionality
+        this.initializeSidebarToggle();
+
         console.log(i18next.t('wokwiComponents.arduinoUno.description'))
     }
     public changeLanguage(language: string): Promise<TFunction>{
@@ -93,16 +102,29 @@ export class HackCable {
                         if (otherFigure) {
                             const otherElement = otherFigure.componentElement;
 
-                            // Check if connected to Arduino
-                            if (otherElement?.constructor.name === 'ArduinoUnoElement') {
+                            // Check if connected to Arduino or ESP32
+                            if (otherElement?.constructor.name === 'ArduinoUnoElement' ||
+                                otherElement?.constructor.name === 'ESP32DevkitV1Element' ||
+                                otherElement?.constructor.name === 'CustomESP32BoardElement' ||
+                                otherElement?.constructor.name === 'HandysenseProBoardElement') {
                                 const pinName = otherPort.getLocator().portId;
-                                console.log(`[updateLEDs] LED connected to Arduino pin ${pinName}`);
+                                const boardType = (otherElement?.constructor.name === 'ESP32DevkitV1Element' ||
+                                                   otherElement?.constructor.name === 'CustomESP32BoardElement' ||
+                                                   otherElement?.constructor.name === 'HandysenseProBoardElement') ? 'ESP32' : 'Arduino';
+                                console.log(`[updateLEDs] LED connected to ${boardType} pin ${pinName}`);
+
+                                // For ESP32, convert D-format pins to numbers (e.g., "D2" -> "2")
+                                let mappedPinName = pinName;
+                                if (boardType === 'ESP32' && pinName.startsWith('D')) {
+                                    mappedPinName = pinName.substring(1); // "D2" -> "2"
+                                    console.log(`[updateLEDs] ESP32 pin ${pinName} mapped to ${mappedPinName}`);
+                                }
 
                                 // Check if this pin is in our pin map
-                                if (pinMap[pinName] !== undefined) {
-                                    const pinState = port.pinState(pinMap[pinName]);
+                                if (pinMap[mappedPinName] !== undefined) {
+                                    const pinState = port.pinState(pinMap[mappedPinName]);
                                     const isHigh = pinState === avr8js.PinState.High;
-                                    console.log(`[updateLEDs] Pin ${pinName} state: ${pinState} (${isHigh ? 'HIGH' : 'LOW'}), setting LED to ${isHigh}`);
+                                    console.log(`[updateLEDs] Pin ${mappedPinName} state: ${pinState} (${isHigh ? 'HIGH' : 'LOW'}), setting LED to ${isHigh}`);
                                     element.value = isHigh;
                                 }
                             }
@@ -158,5 +180,141 @@ export class HackCable {
             '7': 7
         };
         this.updateLEDs(portD, pinMap);
+    }
+
+    public esp32PinUpdate(pin: number, value: boolean) {
+        console.log(`[esp32PinUpdate] ESP32 Pin ${pin} update triggered, value: ${value}`);
+
+        // Update all LED elements on the canvas based on ESP32 pin states
+        const figures = this._editor.canvas.getAllFigures();
+        console.log(`[esp32PinUpdate] Found ${figures.length} figures on canvas`);
+
+        figures.forEach(figure => {
+            const element = figure.componentElement;
+
+            // Check if this is an LED element
+            if (element instanceof LEDElement) {
+                console.log('[esp32PinUpdate] Found LED element');
+                // Find which ESP32 pin this LED is connected to
+                const connections = figure.getPorts().data;
+
+                connections.forEach((figurePort: any) => {
+                    const portConnections = figurePort.getConnections().data;
+
+                    portConnections.forEach((connection: any) => {
+                        const otherPort = connection.sourcePort === figurePort ? connection.targetPort : connection.sourcePort;
+                        const otherFigure = otherPort?.getParent();
+
+                        if (otherFigure) {
+                            const otherElement = otherFigure.componentElement;
+
+                            // Check if connected to ESP32
+                            if (otherElement?.constructor.name === 'ESP32DevkitV1Element' ||
+                                otherElement?.constructor.name === 'CustomESP32BoardElement' ||
+                                otherElement?.constructor.name === 'HandysenseProBoardElement') {
+                                const pinName = otherPort.getLocator().portId;
+                                console.log(`[esp32PinUpdate] LED connected to ESP32 pin ${pinName}`);
+
+                                // Convert D-format pins to numbers (e.g., "D2" -> 2)
+                                let pinNumber = -1;
+                                if (pinName.startsWith('D')) {
+                                    pinNumber = parseInt(pinName.substring(1));
+                                } else if (!isNaN(parseInt(pinName))) {
+                                    pinNumber = parseInt(pinName);
+                                }
+
+                                console.log(`[esp32PinUpdate] Comparing pin ${pinNumber} with ${pin}`);
+
+                                // Check if this is the pin that changed
+                                if (pinNumber === pin) {
+                                    console.log(`[esp32PinUpdate] Updating LED on pin ${pin} to ${value}`);
+                                    element.value = value;
+                                    element.requestUpdate();
+                                }
+                            }
+                        }
+                    });
+                });
+            }
+
+            // Check if this is an actuator element (Misting Pump, Water Pump, or Fan)
+            if (element instanceof MistingPumpElement ||
+                element instanceof WaterPumpElement ||
+                element instanceof FanElement) {
+                const actuatorType = element.constructor.name;
+                console.log(`[esp32PinUpdate] Found ${actuatorType}`);
+
+                // Find which ESP32 pin this actuator is connected to
+                const connections = figure.getPorts().data;
+
+                connections.forEach((figurePort: any) => {
+                    const portConnections = figurePort.getConnections().data;
+
+                    portConnections.forEach((connection: any) => {
+                        const otherPort = connection.sourcePort === figurePort ? connection.targetPort : connection.sourcePort;
+                        const otherFigure = otherPort?.getParent();
+
+                        if (otherFigure) {
+                            const otherElement = otherFigure.componentElement;
+
+                            // Check if connected to ESP32
+                            if (otherElement?.constructor.name === 'ESP32DevkitV1Element' ||
+                                otherElement?.constructor.name === 'CustomESP32BoardElement' ||
+                                otherElement?.constructor.name === 'HandysenseProBoardElement') {
+                                const pinName = otherPort.getLocator().portId;
+                                console.log(`[esp32PinUpdate] ${actuatorType} connected to ESP32 pin ${pinName}`);
+
+                                // Convert pin formats to numbers
+                                let pinNumber = -1;
+                                if (pinName.startsWith('D')) {
+                                    pinNumber = parseInt(pinName.substring(1));
+                                } else if (pinName.startsWith('IO')) {
+                                    pinNumber = parseInt(pinName.substring(2));
+                                } else if (!isNaN(parseInt(pinName))) {
+                                    pinNumber = parseInt(pinName);
+                                }
+
+                                console.log(`[esp32PinUpdate] Comparing pin ${pinNumber} with ${pin}`);
+
+                                // Check if this is the pin that changed
+                                if (pinNumber === pin) {
+                                    console.log(`[esp32PinUpdate] Updating ${actuatorType} on pin ${pin} to ${value}`);
+                                    element.isOn = value;
+                                    element.ledPower = value;
+                                    element.requestUpdate();
+                                }
+                            }
+                        }
+                    });
+                });
+            }
+        });
+    }
+
+    private initializeSidebarToggle() {
+        const sideBar = document.querySelector('.hackCable-sideBar') as HTMLElement;
+        const toggleBtn = document.querySelector('.hackCable-toggle-sidebar') as HTMLButtonElement;
+
+        if (!sideBar || !toggleBtn) {
+            console.warn('[HackCable] Unable to find sidebar or toggle button');
+            return;
+        }
+
+        // Load saved state from localStorage
+        const isSideBarHidden = localStorage.getItem('hackCable-sidebar-hidden') === 'true';
+        if (isSideBarHidden) {
+            sideBar.classList.add('hidden');
+            toggleBtn.classList.add('sidebar-hidden');
+        }
+
+        // Handle toggle button click
+        toggleBtn.addEventListener('click', () => {
+            sideBar.classList.toggle('hidden');
+            toggleBtn.classList.toggle('sidebar-hidden');
+
+            // Save state to localStorage
+            const isNowHidden = sideBar.classList.contains('hidden');
+            localStorage.setItem('hackCable-sidebar-hidden', isNowHidden.toString());
+        });
     }
 }

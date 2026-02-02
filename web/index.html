@@ -15,6 +15,9 @@
     </header>
     <main>
         <div class="sideBar">
+            <button class="toggle-sidebar" title="Hide/Show sidebar">
+                <span class="toggle-icon">◀</span>
+            </button>
             <div class="buttonBar">
                 <p data-i18n="ui.code">Code:</p>
                 <button id="compile" data-i18n="ui.compile">Compile</button>
@@ -34,12 +37,29 @@
                 <button id="language-th">ไทย</button>
             </div>
             <div class="buttonBar">
+                <p data-i18n="ui.board">Board:</p>
+                <select id="board-select">
+                    <option value="arduino">Arduino Uno</option>
+                    <option value="esp32">ESP32</option>
+                    <option value="custom-esp32">Custom ESP32</option>
+                    <option value="handysense-pro" selected>Handysense pro</option>
+                </select>
+            </div>
+            <div class="buttonBar">
                 <p data-i18n="ui.examples">Examples:</p>
                 <select id="code-examples">
                     <option value="" data-i18n="ui.selectExample">Select an example...</option>
                     <option value="blink">LED Blink</option>
                     <option value="button">Button Input</option>
                     <option value="fade">LED Fade</option>
+                    <optgroup label="Handysense Pro - Smart Farm" data-i18n-label="examples.smartFarmGroup">
+                        <option value="phMistingControl" data-i18n="examples.phMistingControl">pH Misting Control</option>
+                        <option value="humidityFanControl" data-i18n="examples.humidityFanControl">Humidity Fan Control</option>
+                        <option value="phFullControl" data-i18n="examples.phFullControl">pH Full Control</option>
+                        <option value="humidityClimateControl" data-i18n="examples.humidityClimateControl">Humidity Climate Control</option>
+                        <option value="dualSensorMisting" data-i18n="examples.dualSensorMisting">Dual Sensor Misting</option>
+                        <option value="dualSensorFan" data-i18n="examples.dualSensorFan">Dual Sensor Fan</option>
+                    </optgroup>
                 </select>
             </div>
             <div id="status-message" class="status-message"></div>

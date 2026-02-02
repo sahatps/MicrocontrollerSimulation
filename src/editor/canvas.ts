@@ -3,6 +3,7 @@ import {connectionsPolicy} from "./connections-policies";
 import {ComponentFigure} from "./component-figure";
 import {css} from "../utils/dom";
 import {CodeGenerator} from "./code-generator";
+import {CanvasToolbar} from "./canvas-toolbar";
 
 const DEFAULT_ZOOM = .6;
 
@@ -43,6 +44,9 @@ export class Canvas extends draw2d.Canvas{
 
         // Handle window resize for responsive canvas
         this.setupResponsiveCanvas();
+
+        // Initialize canvas toolbar (bin, forward, backward buttons)
+        new CanvasToolbar(this);
 
         // Add test figures (commented out - using auto-setup instead)
         /*
@@ -101,6 +105,9 @@ export class Canvas extends draw2d.Canvas{
             this.selected = selected;
         }
     }
+    public getSelected(): any {
+        return this.selected;
+    }
     public clear(){
         super.clear()
         // Clear all overlay components
@@ -149,5 +156,24 @@ export class Canvas extends draw2d.Canvas{
             }
         });
         return figures;
+    }
+
+    /**
+     * Detect which board type is on the canvas
+     */
+    public getBoardType(): 'arduino' | 'esp32' | null {
+        const figures = this.getAllFigures();
+        for (const figure of figures) {
+            const elementName = figure.componentElement?.constructor.name;
+            if (elementName === 'ArduinoUnoElement' ||
+                elementName === 'ArduinoMegaElement' ||
+                elementName === 'ArduinoNanoElement') {
+                return 'arduino';
+            }
+            if (elementName === 'ESP32DevkitV1Element' || elementName === 'CustomESP32BoardElement' || elementName === 'HandysenseProBoardElement') {
+                return 'esp32';
+            }
+        }
+        return null;
     }
 }

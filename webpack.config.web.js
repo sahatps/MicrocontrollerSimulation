@@ -9,12 +9,30 @@ module.exports = {
     performance: {
         hints: false
     },
+    experiments: {
+        asyncWebAssembly: true,
+        topLevelAwait: true
+    },
+    externals: {
+        // Exclude MicroPython from bundling - load it dynamically instead
+        '@micropython/micropython-webassembly-pyscript': 'micropythonModule'
+    },
     devServer: {
         client: {
             overlay: true,
         },
         compress: true,
-        port: 9000,
+        port: 3000,
+        static: [
+            {
+                directory: path.join(__dirname, 'node_modules/@micropython/micropython-webassembly-pyscript'),
+                publicPath: '/'
+            }
+        ],
+        headers: {
+            'Cross-Origin-Opener-Policy': 'same-origin',
+            'Cross-Origin-Embedder-Policy': 'require-corp'
+        }
     },
 
     output: {
@@ -26,6 +44,9 @@ module.exports = {
         extensions: ['.ts', '.js', '.json', '.css'],
         fallback: {
             buffer: require.resolve('buffer/'),
+            module: false,
+            fs: false,
+            path: false
         }
     },
     module: {
@@ -71,6 +92,14 @@ module.exports = {
                 {
                     from: './web/assets',
                     to: 'assets'
+                },
+                {
+                    from: './node_modules/@micropython/micropython-webassembly-pyscript/micropython.wasm',
+                    to: 'micropython.wasm'
+                },
+                {
+                    from: './node_modules/@micropython/micropython-webassembly-pyscript/micropython.mjs',
+                    to: 'micropython.mjs'
                 }
             ]
         }),

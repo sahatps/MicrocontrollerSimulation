@@ -29,18 +29,132 @@ main
     display flex
     flex-direction row
 
-    .sideBar
-        background-color #30343F
-        max-width 500px
-        min-width 300px
-        width 40%
-        height 100%
-        border-right 1px solid black
-        padding 10px
+.sideBar, .hackCable-sideBar
+    background-color #30343F
+    max-width 500px
+    min-width 300px
+    width 40%
+    height 100%
+    border-right 1px solid black
+    padding 10px
+    display flex
+    flex-direction column
+    overflow-y auto
+    overflow-x visible
+    transition width 0.3s ease, min-width 0.3s ease
+    position relative
+
+    .toggle-sidebar
+        border none
+        border-radius 5px
+        padding 6px 10px
+        cursor pointer
+        transition all 0.2s
+        font-size 14px
+        background-color white
+        color black
+        min-width 40px
+        min-height 32px
         display flex
-        flex-direction column
-        overflow-y auto
-        overflow-x hidden
+        align-items center
+        justify-content center
+        position absolute
+        top 10px
+        left 10px
+        z-index 100
+
+        &:hover
+            background-color #e0e0e0
+
+        .toggle-icon
+            font-size 12px
+            font-weight bold
+            transition transform 0.2s
+
+        &.sidebar-hidden
+            position fixed
+            background-color #30343F
+            color white
+            border 1px solid black
+            left 10px
+            top 50px
+
+            &:hover
+                background-color #3a3e4a
+
+            .toggle-icon
+                transform rotateY(180deg)
+
+    &.hidden
+        width 0
+        min-width 0
+        max-width 0
+        padding 0
+        border-right none
+        overflow hidden
+
+    .hackCable-catalog-actions
+        display flex
+        flex-direction row
+        margin-bottom 10px
+        gap 10px
+        flex-wrap wrap
+        line-height 0
+        align-items center
+
+        select
+            border none
+            border-radius 5px
+            padding 6px 12px
+            background-color white
+            color black
+            cursor pointer
+            font-size 14px
+            min-width 150px
+            flex 1
+
+            option
+                color black
+
+    .hackCable-toggle-sidebar
+        border none
+        border-radius 5px
+        padding 6px 10px
+        cursor pointer
+        transition all 0.2s
+        font-size 14px
+        background-color white
+        color black
+        min-width 40px
+        min-height 32px
+        display flex
+        align-items center
+        justify-content center
+        position absolute
+        top 10px
+        left 10px
+        z-index 100
+
+        &:hover
+            background-color #e0e0e0
+
+        .toggle-icon
+            font-size 12px
+            font-weight bold
+            transition transform 0.2s
+
+        &.sidebar-hidden
+            background-color #30343F
+            color white
+            border 1px solid black
+            left 0
+            top 50px
+
+            &:hover
+                background-color #3a3e4a
+
+            .toggle-icon
+                transform rotateY(180deg)
 
         .buttonBar
             display flex
@@ -71,9 +185,13 @@ main
                 border-radius 5px
                 padding 6px 12px
                 background-color white
+                color black
                 cursor pointer
                 font-size 14px
                 min-width 150px
+
+                option
+                    color black
 
         .status-message
             padding 8px 12px

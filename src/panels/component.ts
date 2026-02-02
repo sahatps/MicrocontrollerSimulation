@@ -30,12 +30,19 @@ import {
     TiltSwitchElement
 } from "@wokwi/elements";
 import i18next from "i18next";
+import { CustomESP32BoardElement } from "../components/custom-esp32-board";
+import { HandysenseProBoardElement } from "../components/handysense-pro-board";
+import { PhSensorElement } from "../components/ph-sensor-element";
+import { AirHumiditySensorElement } from "../components/air-humidity-sensor-element";
+import { MistingPumpElement } from "../components/misting-pump-element";
+import { WaterPumpElement } from "../components/water-pump-element";
+import { FanElement } from "../components/fan-element";
 
-export declare type WokwiComponent = SevenSegmentElement | ArduinoUnoElement | LCD1602Element | LEDElement | NeoPixelElement | PushbuttonElement | ResistorElement | MembraneKeypadElement | PotentiometerElement | NeopixelMatrixElement | SSD1306Element | BuzzerElement | RotaryDialerElement | ServoElement | Dht22Element | ArduinoMegaElement | ArduinoNanoElement | Ds1307Element | LEDRingElement | SlideSwitchElement | HCSR04Element | LCD2004Element | AnalogJoystickElement | SlidePotentiometerElement | IRReceiverElement | IRRemoteElement | PIRMotionSensorElement | NTCTemperatureSensorElement | HeartBeatSensorElement | TiltSwitchElement | FlameSensorElement | GasSensorElement | FranzininhoElement | NanoRP2040ConnectElement | SmallSoundSensorElement | BigSoundSensorElement | MPU6050Element | ESP32DevkitV1Element | KY040Element | PhotoresistorSensorElement | RGBLedElement | ILI9341Element | LedBarGraphElement | MicrosdCardElement | DipSwitch8Element
+export declare type WokwiComponent = SevenSegmentElement | ArduinoUnoElement | LCD1602Element | LEDElement | NeoPixelElement | PushbuttonElement | ResistorElement | MembraneKeypadElement | PotentiometerElement | NeopixelMatrixElement | SSD1306Element | BuzzerElement | RotaryDialerElement | ServoElement | Dht22Element | ArduinoMegaElement | ArduinoNanoElement | Ds1307Element | LEDRingElement | SlideSwitchElement | HCSR04Element | LCD2004Element | AnalogJoystickElement | SlidePotentiometerElement | IRReceiverElement | IRRemoteElement | PIRMotionSensorElement | NTCTemperatureSensorElement | HeartBeatSensorElement | TiltSwitchElement | FlameSensorElement | GasSensorElement | FranzininhoElement | NanoRP2040ConnectElement | SmallSoundSensorElement | BigSoundSensorElement | MPU6050Element | ESP32DevkitV1Element | KY040Element | PhotoresistorSensorElement | RGBLedElement | ILI9341Element | LedBarGraphElement | MicrosdCardElement | DipSwitch8Element | CustomESP32BoardElement | HandysenseProBoardElement | PhSensorElement | AirHumiditySensorElement | MistingPumpElement | WaterPumpElement | FanElement
 
 export declare type WokwiClass = typeof Dht22Element;
 
-export const wokwiComponentClasses = [SevenSegmentElement, ArduinoUnoElement, LCD1602Element, LEDElement, NeoPixelElement, PushbuttonElement, ResistorElement, MembraneKeypadElement, PotentiometerElement, NeopixelMatrixElement, SSD1306Element, BuzzerElement, RotaryDialerElement, ServoElement, Dht22Element, ArduinoMegaElement, ArduinoNanoElement, Ds1307Element, LEDRingElement, SlideSwitchElement, HCSR04Element, LCD2004Element, AnalogJoystickElement, SlidePotentiometerElement, IRReceiverElement, IRRemoteElement,  PIRMotionSensorElement, NTCTemperatureSensorElement, HeartBeatSensorElement, TiltSwitchElement, FlameSensorElement, GasSensorElement, FranzininhoElement, NanoRP2040ConnectElement, SmallSoundSensorElement, BigSoundSensorElement, MPU6050Element, ESP32DevkitV1Element, KY040Element, PhotoresistorSensorElement, RGBLedElement, ILI9341Element, LedBarGraphElement, MicrosdCardElement, DipSwitch8Element]
+export const wokwiComponentClasses = [SevenSegmentElement, ArduinoUnoElement, LCD1602Element, LEDElement, NeoPixelElement, PushbuttonElement, ResistorElement, MembraneKeypadElement, PotentiometerElement, NeopixelMatrixElement, SSD1306Element, BuzzerElement, RotaryDialerElement, ServoElement, Dht22Element, ArduinoMegaElement, ArduinoNanoElement, Ds1307Element, LEDRingElement, SlideSwitchElement, HCSR04Element, LCD2004Element, AnalogJoystickElement, SlidePotentiometerElement, IRReceiverElement, IRRemoteElement,  PIRMotionSensorElement, NTCTemperatureSensorElement, HeartBeatSensorElement, TiltSwitchElement, FlameSensorElement, GasSensorElement, FranzininhoElement, NanoRP2040ConnectElement, SmallSoundSensorElement, BigSoundSensorElement, MPU6050Element, ESP32DevkitV1Element, KY040Element, PhotoresistorSensorElement, RGBLedElement, ILI9341Element, LedBarGraphElement, MicrosdCardElement, DipSwitch8Element, CustomESP32BoardElement, HandysenseProBoardElement, PhSensorElement, AirHumiditySensorElement, MistingPumpElement, WaterPumpElement, FanElement]
 
 export declare type WokwiComponentInfo = {id: number, clasz: WokwiClass, name: string, description: string, type: ComponentType}
 export declare type WokwiComponents = WokwiComponentInfo[]
@@ -58,6 +65,24 @@ export const wokwiComponents = (): WokwiComponents => [
         clasz: ArduinoUnoElement,
         name: "Arduino Uno",
         description: i18next.t("wokwiComponents.arduinoUno.description"),
+        type: ComponentType.CARD
+    },{
+        id: 26,
+        clasz: ESP32DevkitV1Element,
+        name: "ESP32",
+        description: i18next.t("wokwiComponents.esp32.description"),
+        type: ComponentType.CARD
+    },{
+        id: 27,
+        clasz: CustomESP32BoardElement,
+        name: "Custom ESP32",
+        description: "Custom ESP32 board with modified design",
+        type: ComponentType.CARD
+    },{
+        id: 28,
+        clasz: HandysenseProBoardElement,
+        name: "Handysense pro",
+        description: "Handysense pro board with ESP32-WROOM-32D",
         type: ComponentType.CARD
     },{
         id: 1,
@@ -209,6 +234,36 @@ export const wokwiComponents = (): WokwiComponents => [
         name: "Ds1307 (Horloge)",
         description: "",
         type: ComponentType.OTHER
+    },{
+        id: 29,
+        clasz: PhSensorElement,
+        name: i18next.t("wokwiComponents.phSensor.name"),
+        description: i18next.t("wokwiComponents.phSensor.description"),
+        type: ComponentType.SENSOR
+    },{
+        id: 30,
+        clasz: AirHumiditySensorElement,
+        name: i18next.t("wokwiComponents.airHumiditySensor.name"),
+        description: i18next.t("wokwiComponents.airHumiditySensor.description"),
+        type: ComponentType.SENSOR
+    },{
+        id: 31,
+        clasz: MistingPumpElement,
+        name: i18next.t("wokwiComponents.mistingPump.name"),
+        description: i18next.t("wokwiComponents.mistingPump.description"),
+        type: ComponentType.MOTOR
+    },{
+        id: 32,
+        clasz: WaterPumpElement,
+        name: i18next.t("wokwiComponents.waterPump.name"),
+        description: i18next.t("wokwiComponents.waterPump.description"),
+        type: ComponentType.MOTOR
+    },{
+        id: 33,
+        clasz: FanElement,
+        name: i18next.t("wokwiComponents.fan.name"),
+        description: i18next.t("wokwiComponents.fan.description"),
+        type: ComponentType.MOTOR
     }]
 
 export let wokwiComponentById: WokwiComponentById = {};

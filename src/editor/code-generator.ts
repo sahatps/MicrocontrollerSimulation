@@ -62,6 +62,7 @@ export class CodeGenerator {
         const wiring: WiringInfo = {
             leds: [],
             buttons: [],
+            actuators: [],
             other: []
         };
 
@@ -81,23 +82,23 @@ export class CodeGenerator {
 
             if (!sourceComp || !targetComp) return;
 
-            // Determine which is Arduino and which is component
-            let arduinoPort = '';
+            // Determine which is Arduino/ESP32 and which is component
+            let boardPort = '';
             let componentType = '';
             let componentPort = '';
 
-            if (sourceComp.type === 'ArduinoUnoElement') {
-                arduinoPort = source.getName();
+            if (sourceComp.type === 'ArduinoUnoElement' || sourceComp.type === 'ESP32DevkitV1Element') {
+                boardPort = source.getName();
                 componentType = targetComp.type;
                 componentPort = target.getName();
-            } else if (targetComp.type === 'ArduinoUnoElement') {
-                arduinoPort = target.getName();
+            } else if (targetComp.type === 'ArduinoUnoElement' || targetComp.type === 'ESP32DevkitV1Element') {
+                boardPort = target.getName();
                 componentType = sourceComp.type;
                 componentPort = source.getName();
             }
 
-            if (arduinoPort && componentType) {
-                const pinNumber = this.extractPinNumber(arduinoPort);
+            if (boardPort && componentType) {
+                const pinNumber = this.extractPinNumber(boardPort);
 
                 if (componentType === 'LEDElement') {
                     // Check if this LED is already tracked
@@ -118,6 +119,28 @@ export class CodeGenerator {
                     if (!button && pinNumber >= 0) {
                         wiring.buttons.push({ pin: pinNumber });
                     }
+                } else if (componentType === 'MistingPumpElement') {
+                    // Only track SIG pin for actuators
+                    if (componentPort === 'SIG' && pinNumber >= 0) {
+                        const existing = wiring.actuators.find(a => a.type === 'misting_pump' && a.pin === pinNumber);
+                        if (!existing) {
+                            wiring.actuators.push({ type: 'misting_pump', pin: pinNumber });
+                        }
+                    }
+                } else if (componentType === 'WaterPumpElement') {
+                    if (componentPort === 'SIG' && pinNumber >= 0) {
+                        const existing = wiring.actuators.find(a => a.type === 'water_pump' && a.pin === pinNumber);
+                        if (!existing) {
+                            wiring.actuators.push({ type: 'water_pump', pin: pinNumber });
+                        }
+                    }
+                } else if (componentType === 'FanElement') {
+                    if (componentPort === 'SIG' && pinNumber >= 0) {
+                        const existing = wiring.actuators.find(a => a.type === 'fan' && a.pin === pinNumber);
+                        if (!existing) {
+                            wiring.actuators.push({ type: 'fan', pin: pinNumber });
+                        }
+                    }
                 }
             }
         });
@@ -129,18 +152,28 @@ export class CodeGenerator {
     }
 
     private extractPinNumber(portName: string): number {
-        // Extract pin number from port name (e.g., "13" from "13", "A0" from "A0")
-        const match = portName.match(/(\d+)/);
-        if (match) {
-            return parseInt(match[1]);
+        // Handle ESP32 pin names (e.g., "D2", "D4", "D13")
+        if (portName.startsWith('D')) {
+            const espPin = portName.match(/D(\d+)/);
+            if (espPin) {
+                return parseInt(espPin[1]); // D2 = 2, D4 = 4, etc.
+            }
         }
-        // Handle analog pins
+
+        // Handle Arduino analog pins (e.g., "A0", "A1")
         if (portName.startsWith('A')) {
             const analogNum = portName.match(/A(\d+)/);
             if (analogNum) {
                 return 14 + parseInt(analogNum[1]); // A0 = 14, A1 = 15, etc.
             }
         }
+
+        // Handle Arduino digital pins (e.g., "13", "2")
+        const match = portName.match(/^(\d+)$/);
+        if (match) {
+            return parseInt(match[1]);
+        }
+
         return -1;
     }
 
@@ -153,6 +186,12 @@ export class CodeGenerator {
 
         wiring.buttons.forEach((button, index) => {
             code += `#define BUTTON_PIN_${index + 1} ${button.pin}\n`;
+        });
+
+        // Generate defines for actuators
+        wiring.actuators.forEach((actuator) => {
+            const prefix = actuator.type.toUpperCase();
+            code += `#define ${prefix}_PIN ${actuator.pin}\n`;
         });
 
         return code;
@@ -174,6 +213,16 @@ export class CodeGenerator {
             code += '  // Setup button pins as inputs with pullup\n';
             wiring.buttons.forEach((_button, index) => {
                 code += `  pinMode(BUTTON_PIN_${index + 1}, INPUT_PULLUP);\n`;
+            });
+            code += '\n';
+        }
+
+        if (wiring.actuators.length > 0) {
+            code += '  // Setup actuator pins as outputs\n';
+            wiring.actuators.forEach((actuator) => {
+                const prefix = actuator.type.toUpperCase();
+                const friendlyName = actuator.type.replace('_', ' ');
+                code += `  pinMode(${prefix}_PIN, OUTPUT);  // ${friendlyName}\n`;
             });
             code += '\n';
         }
@@ -203,6 +252,17 @@ export class CodeGenerator {
                 code += `  if (button${index + 1}State == LOW) {\n`;
                 code += `    Serial.println("Button ${index + 1} pressed!");\n`;
                 code += `  }\n`;
+            });
+            code += '\n';
+        }
+
+        if (wiring.actuators.length > 0) {
+            code += '  // Control actuators example (uncomment to use)\n';
+            wiring.actuators.forEach((actuator) => {
+                const prefix = actuator.type.toUpperCase();
+                const friendlyName = actuator.type.replace('_', ' ');
+                code += `  // digitalWrite(${prefix}_PIN, HIGH);  // Turn ON ${friendlyName}\n`;
+                code += `  // digitalWrite(${prefix}_PIN, LOW);   // Turn OFF ${friendlyName}\n`;
             });
             code += '\n';
         }
@@ -241,5 +301,6 @@ interface ComponentInfo {
 interface WiringInfo {
     leds: Array<{ anode: number, cathode: number, pin: number }>;
     buttons: Array<{ pin: number }>;
+    actuators: Array<{ type: string, pin: number }>;
     other: any[];
 }
