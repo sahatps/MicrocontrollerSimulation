@@ -292,29 +292,27 @@ export class HackCable {
     }
 
     private initializeSidebarToggle() {
-        const sideBar = document.querySelector('.hackCable-sideBar') as HTMLElement;
-        const toggleBtn = document.querySelector('.hackCable-toggle-sidebar') as HTMLButtonElement;
+        const bar = document.querySelector('.hackCable-catalog-bar') as HTMLElement;
+        const toggleBtn = document.querySelector('.hackCable-toggle-catalog') as HTMLButtonElement;
 
-        if (!sideBar || !toggleBtn) {
-            console.warn('[HackCable] Unable to find sidebar or toggle button');
+        if (!bar || !toggleBtn) {
+            console.warn('[HackCable] Unable to find catalog bar or toggle button');
             return;
         }
 
-        // Load saved state from localStorage
-        const isSideBarHidden = localStorage.getItem('hackCable-sidebar-hidden') === 'true';
-        if (isSideBarHidden) {
-            sideBar.classList.add('hidden');
-            toggleBtn.classList.add('sidebar-hidden');
+        // Default visible — hide only if user previously closed it
+        const isCatalogHidden = localStorage.getItem('hackCable-catalog-visible') === 'false';
+        if (isCatalogHidden) {
+            bar.classList.add('hidden');
+        } else {
+            toggleBtn.classList.add('active');
         }
 
         // Handle toggle button click
         toggleBtn.addEventListener('click', () => {
-            sideBar.classList.toggle('hidden');
-            toggleBtn.classList.toggle('sidebar-hidden');
-
-            // Save state to localStorage
-            const isNowHidden = sideBar.classList.contains('hidden');
-            localStorage.setItem('hackCable-sidebar-hidden', isNowHidden.toString());
+            const isNowHidden = bar.classList.toggle('hidden');
+            toggleBtn.classList.toggle('active', !isNowHidden);
+            localStorage.setItem('hackCable-catalog-visible', (!isNowHidden).toString());
         });
     }
 }

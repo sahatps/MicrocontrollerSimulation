@@ -85,6 +85,20 @@ main
             .toggle-icon
                 transform rotateY(180deg)
 
+    .buttonBar
+        select
+            border none
+            border-radius 5px
+            padding 6px 12px
+            background-color white
+            color black
+            cursor pointer
+            font-size 14px
+            min-width 150px
+
+            option
+                color black
+
     &.hidden
         width 0
         min-width 0
@@ -236,6 +250,109 @@ main
         flex 1
         overflow auto
         background-color #f5f5f5
+        margin-right 340px
+        transition margin-right 0.3s ease
+
+body.controlbar-hidden #hackCable
+    margin-right 0
+
+.controlBar
+    position fixed
+    right 0
+    top 40px
+    bottom 20px
+    width 340px
+    background-color #30343F
+    border-left 1px solid black
+    padding 10px
+    display flex
+    flex-direction column
+    gap 6px
+    overflow-x hidden
+    overflow-y auto
+    transition width 0.3s ease, padding 0.3s ease
+    box-sizing border-box
+    z-index 1000
+
+    &.hidden
+        width 0
+        padding 0
+        border-left none
+        overflow hidden
+
+    .status-message
+        padding 8px 12px
+        border-radius 5px
+        font-size 14px
+        font-weight 500
+        text-align center
+        transition all 0.3s ease
+
+        &.status-info
+            background-color #2196F3
+            color white
+
+        &.status-success
+            background-color #4CAF50
+            color white
+
+        &.status-error
+            background-color #f44336
+            color white
+
+    label
+        display block
+        margin-top 10px
+        margin-bottom 5px
+        font-size 14px
+
+    textarea
+        border none
+        border-radius 5px
+        width 100%
+        resize vertical
+        min-height 120px
+        padding 8px
+        font-family monospace
+        font-size 13px
+        box-sizing border-box
+
+    .buttonBar
+        display flex
+        flex-direction column
+        gap 6px
+
+        p
+            margin 0
+            white-space nowrap
+
+        button
+            border none
+            border-radius 5px
+            padding 6px 12px
+            cursor pointer
+            transition background-color 0.2s
+            font-size 14px
+            background-color white
+            color black
+            width 100%
+            text-align left
+
+            &:hover
+                background-color #e0e0e0
+
+        select
+            border none
+            border-radius 5px
+            padding 6px 12px
+            background-color white
+            color black
+            cursor pointer
+            font-size 14px
+            width 100%
+
+            option
+                color black
 
 footer
     position absolute
@@ -248,9 +365,9 @@ footer
 // Responsive design for tablets
 @media screen and (max-width: 1024px)
     main
-        .sideBar
-            width 50%
-            min-width 280px
+        .controlBar
+            width 300px
+            min-width 260px
 
             .buttonBar
                 button
@@ -258,7 +375,7 @@ footer
                     font-size 13px
 
             textarea
-                min-height 120px
+                min-height 100px
                 font-size 12px
 
 // Responsive design for mobile devices
@@ -266,39 +383,40 @@ footer
     main
         flex-direction column
 
-        .sideBar
+        .controlBar
             width 100%
-            max-width 100%
             min-width 100%
             height auto
-            max-height 50vh
-            border-right none
-            border-bottom 1px solid black
-
-            .buttonBar
-                gap 5px
-
-                p
-                    font-size 13px
-
-                button
-                    padding 5px 8px
-                    font-size 12px
-                    flex 1
-                    min-width 60px
-
-                select
-                    font-size 12px
-                    min-width 100px
-                    padding 5px 8px
+            border-left none
+            border-top 1px solid black
 
             label
                 font-size 13px
                 margin-top 8px
 
             textarea
-                min-height 100px
+                min-height 80px
                 font-size 12px
+
+            .buttonBar
+                flex-direction row
+                flex-wrap wrap
+                gap 5px
+
+                p
+                    font-size 13px
+                    width 100%
+
+                button
+                    padding 5px 8px
+                    font-size 12px
+                    width auto
+                    flex 1
+                    min-width 60px
+
+                select
+                    font-size 12px
+                    padding 5px 8px
 
         #hackCable
             height 50vh
@@ -312,32 +430,58 @@ footer
     main
         padding-top 35px
 
-        .sideBar
+        .controlBar
             padding 8px
-
-            .buttonBar
-                gap 4px
-                flex-direction column
-                align-items stretch
-
-                p
-                    font-size 12px
-                    margin-bottom 4px
-
-                button
-                    padding 6px 8px
-                    font-size 11px
-                    width 100%
-
-                select
-                    font-size 11px
-                    padding 6px 8px
-                    width 100%
 
             label
                 font-size 12px
 
             textarea
-                min-height 80px
+                min-height 60px
                 font-size 11px
                 padding 6px
+
+            .buttonBar
+                gap 4px
+
+                p
+                    font-size 12px
+
+                button
+                    padding 6px 8px
+                    font-size 11px
+
+                select
+                    font-size 11px
+                    padding 6px 8px
+
+// Control bar toggle button — always fixed to right edge, independent of controlBar state
+.toggle-controlbar
+    position fixed
+    right 0
+    top 50%
+    transform translateY(-50%)
+    background-color #30343F
+    color white
+    border 1px solid #555
+    border-right none
+    border-radius 5px 0 0 5px
+    padding 10px 6px
+    cursor pointer
+    display flex
+    align-items center
+    justify-content center
+    z-index 9999
+    transition background-color 0.2s
+
+    &:hover
+        background-color #4a4e5a
+
+    .toggle-icon
+        font-size 12px
+        font-weight bold
+        transition transform 0.2s
+
+    &.panel-open
+        .toggle-icon
+            transform rotate(180deg)

@@ -5,6 +5,7 @@
   display flex
   flex-direction column
   flex-wrap nowrap
+  position relative
 
   p, h1, h2, h3, h4, select
     font-family Rubik
@@ -17,105 +18,173 @@
     word-wrap break-word
 
   .hackCable-header
-    height 50px
+    height 44px
     width 100%
     background-color #30343F
     border-bottom 1px solid black
     display flex
     align-items center
-    padding-left 10px
+    padding 0 10px
+    gap 8px
     flex-shrink 0
     position relative
+    z-index 200
 
-  .hackCable-content-wrapper
-    display flex
-    flex-direction row
-    flex 1
-    overflow hidden
-
-  .hackCable-sideBar
-    height 100%
-    width 250px
+  .hackCable-toggle-catalog
+    border none
+    border-radius 5px
+    padding 6px 12px
+    cursor pointer
+    transition background-color 0.2s
+    font-size 13px
     background-color #424B5A
+    color #c9c9c9
+    height 32px
     display flex
-    flex-direction column
+    align-items center
+    gap 6px
     flex-shrink 0
-    transition width 0.3s ease, min-width 0.3s ease, padding 0.3s ease
-    position relative
+
+    &:hover
+      background-color #4e5768
+
+    &.active
+      background-color #5a6478
+      color white
+
+    .toggle-icon
+      font-size 16px
+      line-height 1
+
+    .toggle-label
+      font-family Rubik
+      font-size 13px
+
+  .hackCable-catalog-bar
+    width 100%
+    background-color #383d4a
+    border-bottom 1px solid #222
+    flex-shrink 0
+    overflow hidden
+    max-height 140px
+    transition max-height 0.3s ease
 
     &.hidden
-      width 0
-      min-width 0
-      padding 0
-      border-right none
-      overflow hidden
+      max-height 0
+      border-bottom none
+
+    .hackCable-catalog-bar-inner
+      display flex
+      flex-direction row
+      align-items stretch
+      height 140px
+      padding 6px 8px
+      gap 8px
+      box-sizing border-box
 
     .hackCable-catalog-actions
-      width 100%
-      background #30343F
-      text-align center
+      display flex
+      align-items center
+      flex-shrink 0
+      padding-right 8px
+      border-right 1px solid #555
 
       select
-        margin 5px
-        padding 3px
-        width 80%
-        max-width 150px
+        padding 4px 6px
         background-color #f5f5f5
         border-radius 3px
         border none
         color black
+        font-size 12px
+        cursor pointer
+        width 120px
 
         option
           color black
           background-color white
 
     .hackCable-catalog-list
-      overflow-y scroll
-      overflow-x hidden
-      height 100%
-      width 100%
-      padding 5px 5px 0 5px
-      box-sizing border-box
+      display flex
+      flex-direction row
+      align-items center
+      gap 8px
+      overflow-x auto
+      overflow-y hidden
+      flex 1
       scrollbar-width thin
+      padding-bottom 4px
+
+      .hackCable-catalog-section
+        display flex
+        flex-direction row
+        align-items center
+        gap 8px
+        flex-shrink 0
+
+        .hackCable-catalog-section-header
+          background #30343F
+          padding 6px 10px
+          cursor pointer
+          border-radius 5px
+          display flex
+          align-items center
+          gap 6px
+          user-select none
+          transition background 0.2s ease
+          height 100px
+          writing-mode vertical-rl
+          text-orientation mixed
+          flex-shrink 0
+
+          &:hover
+            background #3a444f
+
+          .hackCable-section-toggle-icon
+            font-size 0.75em
+            font-weight bold
+
+          span
+            font-weight 500
+            color #c9c9c9
+            font-size 0.8em
+
+        .hackCable-catalog-section-content
+          display flex
+          flex-direction row
+          gap 8px
 
       .hackCable-catalog-element
-        text-align center
-        display block
-        overflow hidden
+        display flex
+        flex-direction column
+        align-items center
+        justify-content center
         border-radius 5px
         background #30343F
-        padding 10px
-        margin-bottom 5px
+        padding 6px 8px
+        cursor pointer
+        transition background 0.2s ease
+        flex-shrink 0
+        width 80px
+        height 110px
+        overflow hidden
+
+        &:hover
+          background #3a444f
+
         h3
-          margin 0 0 10px 0
+          margin 4px 0 0 0
+          font-size 0.7em
+          white-space nowrap
+          overflow hidden
+          text-overflow ellipsis
+          width 100%
+          text-align center
 
-  .hackCable-toggle-sidebar
-    border none
-    border-radius 5px
-    padding 8px 12px
-    cursor pointer
-    transition all 0.2s
-    font-size 14px
-    background-color white
-    color black
-    min-width 40px
-    min-height 36px
+  .hackCable-content-wrapper
     display flex
-    align-items center
-    justify-content center
-    flex-shrink 0
-
-    &:hover
-      background-color #e0e0e0
-
-    .toggle-icon
-      font-size 14px
-      font-weight bold
-      transition transform 0.2s
-
-    &.sidebar-hidden
-      .toggle-icon
-        transform rotateY(180deg)
+    flex-direction row
+    flex 1
+    overflow hidden
 
   .hackCable-editor
     background-color white
@@ -221,9 +290,6 @@
 // Responsive canvas styles for tablets
 @media screen and (max-width: 1024px)
   .hackCable-root
-    .hackCable-sideBar
-      width 200px
-
     .hackCable-editor
       #hackCable-canvas
         min-width 600px
@@ -232,25 +298,16 @@
 // Responsive canvas styles for mobile devices
 @media screen and (max-width: 768px)
   .hackCable-root
-    .hackCable-content-wrapper
-      flex-direction column
+    .hackCable-catalog-bar
+      max-height 120px
 
-    .hackCable-sideBar
-      width 100%
-      height auto
-      max-height 40vh
-      border-right none
-      border-bottom 1px solid #333
-
-      .hackCable-catalog-actions
-        select
-          font-size 14px
+      .hackCable-catalog-bar-inner
+        height 120px
 
       .hackCable-catalog-list
         .hackCable-catalog-element
-          padding 8px
-          h3
-            font-size 0.85em
+          width 70px
+          height 90px
 
     .hackCable-editor
       height 60vh
@@ -263,14 +320,11 @@
 // Responsive canvas styles for small mobile devices
 @media screen and (max-width: 480px)
   .hackCable-root
-    .hackCable-sideBar
-      max-height 35vh
+    .hackCable-catalog-bar
+      max-height 110px
 
-      .hackCable-catalog-list
-        .hackCable-catalog-element
-          padding 6px
-          h3
-            font-size 0.8em
+      .hackCable-catalog-bar-inner
+        height 110px
 
     .hackCable-editor
       height 65vh

@@ -3,22 +3,20 @@
 </head>
 
 <header class="hackCable-header">
-    <button class="hackCable-toggle-sidebar" title="Hide/Show sidebar">
-        <span class="toggle-icon">◀</span>
+    <button class="hackCable-toggle-catalog" title="Show/Hide components">
+        <span class="toggle-icon">⊞</span>
+        <span class="toggle-label">Components</span>
     </button>
 </header>
-<div class="hackCable-content-wrapper">
-    <div class="hackCable-sideBar">
+<div class="hackCable-catalog-bar">
+    <div class="hackCable-catalog-bar-inner">
         <div class="hackCable-catalog-actions">
-            <label>
-                <select class="hackCable-catalog-sorter">
-                </select>
-            </label>
+            <select class="hackCable-catalog-sorter"></select>
         </div>
-        <div class="hackCable-catalog-list">
-
-        </div>
+        <div class="hackCable-catalog-list"></div>
     </div>
+</div>
+<div class="hackCable-content-wrapper">
     <div class="hackCable-editor">
         <div id="hackCable-canvas" class="hackCable-canvas">
             <div class="hackCable-canvas-overlay-container"></div>

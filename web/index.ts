@@ -240,6 +240,32 @@ function initializeSidebarToggle() {
 // Call after DOM is ready
 initializeSidebarToggle();
 
+// Initialize control bar toggle functionality
+function initializeControlBarToggle() {
+    const controlBar = document.querySelector('.controlBar') as HTMLElement;
+    const toggleBtn = document.querySelector('.toggle-controlbar') as HTMLButtonElement;
+
+    if (!controlBar || !toggleBtn) return;
+
+    const isHidden = localStorage.getItem('hackCable-controlbar-hidden') === 'true';
+    if (isHidden) {
+        controlBar.classList.add('hidden');
+        document.body.classList.add('controlbar-hidden');
+    } else {
+        toggleBtn.classList.add('panel-open');
+    }
+
+    toggleBtn.addEventListener('click', () => {
+        controlBar.classList.toggle('hidden');
+        const isNowHidden = controlBar.classList.contains('hidden');
+        toggleBtn.classList.toggle('panel-open', !isNowHidden);
+        document.body.classList.toggle('controlbar-hidden', isNowHidden);
+        localStorage.setItem('hackCable-controlbar-hidden', isNowHidden.toString());
+    });
+}
+
+initializeControlBarToggle();
+
 const save = document.getElementById('save');
 const restore = document.getElementById('restore');
 const clearAll = document.getElementById('clear-all');
