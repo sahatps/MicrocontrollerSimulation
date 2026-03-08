@@ -90,7 +90,7 @@ setTimeout(() => {
         } else if (selectedBoard === 'custom-esp32') {
             setupCustomESP32Circuit();
         } else if (selectedBoard === 'handysense-pro') {
-            setupHandysenseProCircuit();
+            setupPhFullControlCircuit();
         } else {
             autoSetupBasicCircuit();
         }
@@ -108,11 +108,15 @@ setTimeout(() => {
         }
     });
 
-    // Generate initial code for the default setup
+    // Set default example selection and load its code
+    const examplesSelect = document.getElementById('code-examples') as HTMLSelectElement;
+    if (examplesSelect) {
+        examplesSelect.value = 'phFullControl';
+    }
     setTimeout(() => {
-        const initialCode = hackCable.editor.canvas.generateCode();
         if (codeInput instanceof HTMLTextAreaElement && !codeInput.value.trim()) {
-            codeInput.value = initialCode;
+            codeInput.value = codeExamples['phFullControl'];
+            localStorage.setItem('hackCable-webExample-inputCode', codeInput.value);
         }
     }, 1000);
 }, 100);
@@ -1022,6 +1026,7 @@ function setupPhMistingCircuit() {
             // Connect Misting Pump
             connectPorts(mistPumpFigure, "VCC", boardFigure, "VIN_1");
             connectPorts(mistPumpFigure, "GND", boardFigure, "GND_5");
+            connectPorts(mistPumpFigure, "SIG", boardFigure, "IO25");
 
             console.log("pH Misting Control circuit setup complete!");
         } catch (error) {
@@ -1054,6 +1059,7 @@ function setupHumidityFanCircuit() {
             // Connect Fan
             connectPorts(fanFigure, "VCC", boardFigure, "VIN_2");
             connectPorts(fanFigure, "GND", boardFigure, "GND_6");
+            connectPorts(fanFigure, "SIG", boardFigure, "IO4");
 
             console.log("Humidity Fan Control circuit setup complete!");
         } catch (error) {
@@ -1089,10 +1095,12 @@ function setupPhFullControlCircuit() {
             // Misting Pump
             connectPorts(mistPumpFigure, "VCC", boardFigure, "VIN_1");
             connectPorts(mistPumpFigure, "GND", boardFigure, "GND_5");
+            connectPorts(mistPumpFigure, "SIG", boardFigure, "IO25");
 
             // Fan
             connectPorts(fanFigure, "VCC", boardFigure, "VIN_2");
             connectPorts(fanFigure, "GND", boardFigure, "GND_6");
+            connectPorts(fanFigure, "SIG", boardFigure, "IO4");
 
             console.log("pH Full Control circuit setup complete!");
         } catch (error) {
@@ -1128,10 +1136,12 @@ function setupHumidityClimateControlCircuit() {
             // Misting Pump
             connectPorts(mistPumpFigure, "VCC", boardFigure, "VIN_1");
             connectPorts(mistPumpFigure, "GND", boardFigure, "GND_5");
+            connectPorts(mistPumpFigure, "SIG", boardFigure, "IO25");
 
             // Fan
             connectPorts(fanFigure, "VCC", boardFigure, "VIN_2");
             connectPorts(fanFigure, "GND", boardFigure, "GND_6");
+            connectPorts(fanFigure, "SIG", boardFigure, "IO4");
 
             console.log("Humidity Climate Control circuit setup complete!");
         } catch (error) {
@@ -1172,6 +1182,7 @@ function setupDualSensorMistingCircuit() {
             // Misting Pump
             connectPorts(mistPumpFigure, "VCC", boardFigure, "VIN_1");
             connectPorts(mistPumpFigure, "GND", boardFigure, "GND_5");
+            connectPorts(mistPumpFigure, "SIG", boardFigure, "IO25");
 
             console.log("Dual Sensor Misting circuit setup complete!");
         } catch (error) {
@@ -1212,6 +1223,7 @@ function setupDualSensorFanCircuit() {
             // Fan
             connectPorts(fanFigure, "VCC", boardFigure, "VIN_2");
             connectPorts(fanFigure, "GND", boardFigure, "GND_6");
+            connectPorts(fanFigure, "SIG", boardFigure, "IO4");
 
             console.log("Dual Sensor Fan Control circuit setup complete!");
         } catch (error) {

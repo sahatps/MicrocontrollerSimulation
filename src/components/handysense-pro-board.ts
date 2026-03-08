@@ -38,6 +38,12 @@ export class HandysenseProBoardElement extends LitElement {
     { name: 'VIN_2', x: 10, y: 162, signals: [{ type: 'power', signal: 'VCC' }] },
     { name: 'GND_6', x: 10, y: 169, signals: [{ type: 'power', signal: 'GND' }] },
 
+    // Relay control pins (bottom relay modules)
+    { name: 'IO25', x: 38, y: 208, signals: [] },
+    { name: 'IO4', x: 88, y: 208, signals: [] },
+    { name: 'IO12', x: 138, y: 208, signals: [] },
+    { name: 'IO13', x: 188, y: 208, signals: [] },
+
     // Right side pins (aligned 1:1 with SVG circles/rectangles at X=230, terminal block center)
     { name: 'SCL_1', x: 230, y: 25, signals: [{ type: 'i2c', signal: 'SCL', bus: 0 }] },
     { name: 'SDA_1', x: 230, y: 32, signals: [{ type: 'i2c', signal: 'SDA', bus: 0 }] },
@@ -161,7 +167,7 @@ export class HandysenseProBoardElement extends LitElement {
           <rect x="22" y="194" width="32" height="28" fill="#222" stroke="#444" stroke-width="0.3" />
           <rect x="27" y="226" width="22" height="8" fill="#ffcc00" stroke="#000" stroke-width="0.3" />
           <text x="38" y="232" fill="#000" font-family="Arial" font-size="5" text-anchor="middle" font-weight="bold">IO25</text>
-          <circle cx="30" cy="208" r="2" fill="#c41e3a" opacity="0.4" />
+          <circle cx="38" cy="208" r="3" fill="#e8e8e8" stroke="#999" stroke-width="0.5" />
           <text x="38" y="250" fill="#00ff00" font-family="Arial" font-size="6" text-anchor="middle" font-weight="bold">R1</text>
 
           <!-- Relay 2 - IO4 -->
@@ -169,7 +175,7 @@ export class HandysenseProBoardElement extends LitElement {
           <rect x="72" y="194" width="32" height="28" fill="#222" stroke="#444" stroke-width="0.3" />
           <rect x="77" y="226" width="22" height="8" fill="#ffcc00" stroke="#000" stroke-width="0.3" />
           <text x="88" y="232" fill="#000" font-family="Arial" font-size="5" text-anchor="middle" font-weight="bold">IO4</text>
-          <circle cx="80" cy="208" r="2" fill="#c41e3a" opacity="0.4" />
+          <circle cx="88" cy="208" r="3" fill="#e8e8e8" stroke="#999" stroke-width="0.5" />
           <text x="88" y="250" fill="#00ff00" font-family="Arial" font-size="6" text-anchor="middle" font-weight="bold">R2</text>
 
           <!-- Relay 3 - IO12 -->
@@ -177,7 +183,7 @@ export class HandysenseProBoardElement extends LitElement {
           <rect x="122" y="194" width="32" height="28" fill="#222" stroke="#444" stroke-width="0.3" />
           <rect x="127" y="226" width="22" height="8" fill="#ffcc00" stroke="#000" stroke-width="0.3" />
           <text x="138" y="232" fill="#000" font-family="Arial" font-size="5" text-anchor="middle" font-weight="bold">IO12</text>
-          <circle cx="130" cy="208" r="2" fill="#c41e3a" opacity="0.4" />
+          <circle cx="138" cy="208" r="3" fill="#e8e8e8" stroke="#999" stroke-width="0.5" />
           <text x="138" y="250" fill="#00ff00" font-family="Arial" font-size="6" text-anchor="middle" font-weight="bold">R3</text>
 
           <!-- Relay 4 - IO13 -->
@@ -185,7 +191,7 @@ export class HandysenseProBoardElement extends LitElement {
           <rect x="172" y="194" width="32" height="28" fill="#222" stroke="#444" stroke-width="0.3" />
           <rect x="177" y="226" width="22" height="8" fill="#ffcc00" stroke="#000" stroke-width="0.3" />
           <text x="188" y="232" fill="#000" font-family="Arial" font-size="5" text-anchor="middle" font-weight="bold">IO13</text>
-          <circle cx="180" cy="208" r="2" fill="#c41e3a" opacity="0.4" />
+          <circle cx="188" cy="208" r="3" fill="#e8e8e8" stroke="#999" stroke-width="0.5" />
           <text x="188" y="250" fill="#00ff00" font-family="Arial" font-size="6" text-anchor="middle" font-weight="bold">R4</text>
         </g>
 

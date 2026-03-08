@@ -48,7 +48,8 @@ export class PhSensorElement extends LitElement {
         </defs>
 
         <!-- Main PCB Board - Blue -->
-        <rect x="0" y="0" width="65" height="100" fill="#1565c0" rx="2" ry="2" stroke="#0d47a1" stroke-width="0.5" />
+        <rect x="0" y="0" width="65" height="100" fill="#1565c0" rx="2" ry="2"
+              stroke="${this.ledPower ? '#00ff00' : 'none'}" stroke-width="${this.ledPower ? '3' : '0'}" />
 
         <!-- Mounting holes -->
         <circle cx="5" cy="5" r="2" fill="#333" stroke="#000" stroke-width="0.3" />

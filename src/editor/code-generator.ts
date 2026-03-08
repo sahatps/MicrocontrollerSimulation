@@ -67,6 +67,9 @@ export class CodeGenerator {
         };
 
         connections.each((_index: number, connection: any) => {
+            // Skip standalone lines that aren't port-to-port connections
+            if (typeof connection.getSource !== 'function') return;
+
             const source = connection.getSource();
             const target = connection.getTarget();
 

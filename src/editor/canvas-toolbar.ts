@@ -1,5 +1,6 @@
 import { Canvas } from "./canvas";
 import { ComponentFigure } from "./component-figure";
+import draw2d from "draw2d";
 
 // SVG Icons (inline for simplicity)
 const ICONS = {
@@ -22,6 +23,7 @@ export class CanvasToolbar {
     private backwardButton!: HTMLButtonElement;
     private isDraggingOverBin: boolean = false;
     private draggingFigure: ComponentFigure | null = null;
+    private draggingLine: any = null;
     private dragging: boolean = false;
 
     constructor(canvas: Canvas) {
@@ -39,7 +41,7 @@ export class CanvasToolbar {
         this.binElement = document.createElement('div');
         this.binElement.className = 'hackCable-toolbar-bin';
         this.binElement.innerHTML = ICONS.bin;
-        this.binElement.title = 'Drag component here to delete';
+        this.binElement.title = 'Delete selected item (or drag here)';
 
         // Create forward button
         this.forwardButton = document.createElement('button');
@@ -84,8 +86,13 @@ export class CanvasToolbar {
             }
         });
 
-        // Listen for selection changes to enable/disable buttons
+        // Listen for selection changes to show/hide toolbar and enable/disable buttons
         this.canvas.on('select', (_emitter: any, event: any) => {
+            if (event.figure !== null) {
+                this.showToolbar();
+            } else {
+                this.hideToolbar();
+            }
             this.updateButtonStates(event.figure);
         });
 
@@ -103,6 +110,24 @@ export class CanvasToolbar {
             }
         });
 
+        // Detect drag on selected connection/line for drag-to-bin
+        const canvasEl = document.getElementById('hackCable-canvas');
+        canvasEl?.addEventListener('mousedown', () => {
+            const selected = this.canvas.getSelected();
+            if (selected !== null && !(selected instanceof ComponentFigure)) {
+                const onFirstMove = () => {
+                    this.draggingLine = selected;
+                    this.dragging = true;
+                    this.showBin();
+                    document.removeEventListener('mousemove', onFirstMove);
+                };
+                document.addEventListener('mousemove', onFirstMove);
+                document.addEventListener('mouseup', () => {
+                    document.removeEventListener('mousemove', onFirstMove);
+                }, { once: true });
+            }
+        });
+
         // Monitor mouse position during drag to detect bin hover
         document.addEventListener('mousemove', (e) => {
             if (this.dragging) {
@@ -116,6 +141,18 @@ export class CanvasToolbar {
                 this.handleDropOnBin();
             }
             this.resetBinState();
+        });
+
+        // Delete key to remove selected item (figure, connection, or line)
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Delete' || e.keyCode === 46) {
+                this.deleteSelected();
+            }
+        });
+
+        // Click bin to delete currently selected item
+        this.binElement.addEventListener('click', () => {
+            this.deleteSelected();
         });
     }
 
@@ -165,7 +202,20 @@ export class CanvasToolbar {
             // Remove the figure from canvas
             this.canvas.remove(this.draggingFigure);
             this.draggingFigure = null;
+            this.hideToolbar();
+        } else if (this.draggingLine) {
+            // Remove the connection/line via command stack
+            this.deleteSelected();
+            this.draggingLine = null;
         }
+    }
+
+    private showToolbar(): void {
+        this.toolbarElement.classList.add('visible');
+    }
+
+    private hideToolbar(): void {
+        this.toolbarElement.classList.remove('visible');
     }
 
     private showBin(): void {
@@ -176,10 +226,24 @@ export class CanvasToolbar {
         this.binElement.classList.remove('active');
     }
 
+    private deleteSelected(): void {
+        const selected = this.canvas.getSelected();
+        if (selected !== null) {
+            const cmd = selected.createCommand(
+                new draw2d.command.CommandType(draw2d.command.CommandType.DELETE)
+            );
+            if (cmd !== null) {
+                this.canvas.getCommandStack().execute(cmd);
+                this.hideToolbar();
+            }
+        }
+    }
+
     private resetBinState(): void {
         this.isDraggingOverBin = false;
         this.binElement.classList.remove('hover');
         this.hideBin();
         this.dragging = false;
+        this.draggingLine = null;
     }
 }

@@ -2,16 +2,12 @@ import {ComponentElement, ComponentType, wokwiComponents, wokwiComponentById} fr
 import { Canvas } from "../editor/canvas";
 import { ComponentFigure } from "../editor/component-figure";
 
-// Custom component IDs
-const CUSTOM_COMPONENT_IDS = [29, 30, 31, 32, 33]; // pH Sensor, Air Humidity Sensor, Misting Pump, Water Pump, Fan
-
 export class Catalog {
 
     readonly elements: ComponentElement[] = []
     private readonly catalog;
     private readonly sorter: HTMLSelectElement | undefined;
     private canvas: Canvas | null = null;
-    private customComponentsExpanded: boolean = true; // Default to show
 
     constructor() {
 
@@ -40,6 +36,7 @@ export class Catalog {
         // Actions
         if(this.sorter){
             this.sorter.innerHTML = "<option value=\"-1\">Tout afficher</option>\n" +
+                "<option value=" + ComponentType.CUSTOM + ">Custom</option>\n" +
                 "<option value=" + ComponentType.LED + ">LED</option>\n" +
                 "<option value=" + ComponentType.MOTOR + ">Moteur</option>\n" +
                 "<option value=" + ComponentType.TRANSMITTER + ">Émmeteur</option>\n" +
@@ -64,69 +61,8 @@ export class Catalog {
             filterType = parseInt(this.sorter.value, 10)
         }
 
-        // Separate custom and standard components
-        const customComponents = this.elements.filter((e) => CUSTOM_COMPONENT_IDS.includes(e.componentId) && (ComponentType[e.type] == ComponentType[filterType] || filterType == -1));
-        const standardComponents = this.elements.filter((e) => !CUSTOM_COMPONENT_IDS.includes(e.componentId) && (ComponentType[e.type] == ComponentType[filterType] || filterType == -1));
-
-        // Add custom components section first
-        if (customComponents.length > 0) {
-            this.addSectionWithToggle("Custom Components", customComponents, this.customComponentsExpanded);
-        }
-
-        // Add standard components section
-        if (standardComponents.length > 0) {
-            this.addComponentsToSection(null, standardComponents);
-        }
-    }
-
-    private addSectionWithToggle(sectionTitle: string, components: ComponentElement[], initiallyExpanded: boolean) {
-        // Create section container
-        const sectionDiv = document.createElement('div');
-        sectionDiv.setAttribute("class", "hackCable-catalog-section");
-
-        // Create header with toggle
-        const headerDiv = document.createElement('div');
-        headerDiv.setAttribute("class", "hackCable-catalog-section-header");
-
-        const toggleIcon = document.createElement('span');
-        toggleIcon.setAttribute("class", "hackCable-section-toggle-icon");
-        toggleIcon.textContent = initiallyExpanded ? '▼' : '▶';
-
-        const titleSpan = document.createElement('span');
-        titleSpan.textContent = sectionTitle;
-
-        headerDiv.appendChild(toggleIcon);
-        headerDiv.appendChild(titleSpan);
-
-        // Create content container
-        const contentDiv = document.createElement('div');
-        contentDiv.setAttribute("class", "hackCable-catalog-section-content");
-        contentDiv.style.display = initiallyExpanded ? 'block' : 'none';
-
-        // Add toggle functionality
-        headerDiv.addEventListener('click', () => {
-            const isVisible = contentDiv.style.display !== 'none';
-            contentDiv.style.display = isVisible ? 'none' : 'block';
-            toggleIcon.textContent = isVisible ? '▶' : '▼';
-            this.customComponentsExpanded = !isVisible;
-            localStorage.setItem('hackCable-custom-components-expanded', this.customComponentsExpanded.toString());
-        });
-
-        // Restore state from localStorage
-        const savedState = localStorage.getItem('hackCable-custom-components-expanded');
-        if (savedState !== null) {
-            const isExpanded = savedState === 'true';
-            contentDiv.style.display = isExpanded ? 'block' : 'none';
-            toggleIcon.textContent = isExpanded ? '▼' : '▶';
-            this.customComponentsExpanded = isExpanded;
-        }
-
-        sectionDiv.appendChild(headerDiv);
-        sectionDiv.appendChild(contentDiv);
-        this.catalog?.appendChild(sectionDiv);
-
-        // Add components to content
-        this.addComponentsToSection(contentDiv, components);
+        const filtered = this.elements.filter((e) => ComponentType[e.type] == ComponentType[filterType] || filterType == -1);
+        this.addComponentsToSection(null, filtered);
     }
 
     private addComponentsToSection(container: HTMLElement | null, components: ComponentElement[]) {

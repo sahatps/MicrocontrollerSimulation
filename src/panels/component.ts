@@ -56,7 +56,8 @@ export enum ComponentType {
     BUTTON,
     SENSOR,
     OTHER,
-    CARD
+    CARD,
+    CUSTOM
 }
 
 export const wokwiComponents = (): WokwiComponents => [
@@ -239,31 +240,31 @@ export const wokwiComponents = (): WokwiComponents => [
         clasz: PhSensorElement,
         name: i18next.t("wokwiComponents.phSensor.name"),
         description: i18next.t("wokwiComponents.phSensor.description"),
-        type: ComponentType.SENSOR
+        type: ComponentType.CUSTOM
     },{
         id: 30,
         clasz: AirHumiditySensorElement,
         name: i18next.t("wokwiComponents.airHumiditySensor.name"),
         description: i18next.t("wokwiComponents.airHumiditySensor.description"),
-        type: ComponentType.SENSOR
+        type: ComponentType.CUSTOM
     },{
         id: 31,
         clasz: MistingPumpElement,
         name: i18next.t("wokwiComponents.mistingPump.name"),
         description: i18next.t("wokwiComponents.mistingPump.description"),
-        type: ComponentType.MOTOR
+        type: ComponentType.CUSTOM
     },{
         id: 32,
         clasz: WaterPumpElement,
         name: i18next.t("wokwiComponents.waterPump.name"),
         description: i18next.t("wokwiComponents.waterPump.description"),
-        type: ComponentType.MOTOR
+        type: ComponentType.CUSTOM
     },{
         id: 33,
         clasz: FanElement,
         name: i18next.t("wokwiComponents.fan.name"),
         description: i18next.t("wokwiComponents.fan.description"),
-        type: ComponentType.MOTOR
+        type: ComponentType.CUSTOM
     }]
 
 export let wokwiComponentById: WokwiComponentById = {};

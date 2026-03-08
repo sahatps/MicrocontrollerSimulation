@@ -222,13 +222,22 @@
 
     // Canvas Toolbar styles
     .hackCable-canvas-toolbar
-      position absolute
-      top 10px
-      left 10px
+      position sticky
+      bottom 10px
+      left 50%
+      transform translateX(-50%)
       z-index 1000
       display flex
-      flex-direction column
+      flex-direction row
       gap 5px
+      width fit-content
+      opacity 0
+      pointer-events none
+      transition opacity 0.2s ease
+
+      &.visible
+        opacity 1
+        pointer-events auto
 
       .hackCable-toolbar-bin
         width 40px
@@ -238,10 +247,8 @@
         display flex
         align-items center
         justify-content center
-        cursor default
+        cursor pointer
         transition all 0.2s ease
-        opacity 0.5
-        pointer-events none
 
         svg
           color #666

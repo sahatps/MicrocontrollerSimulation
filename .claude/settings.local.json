@@ -32,7 +32,8 @@
       "Bash(grep:*)",
       "Bash(find:*)",
       "Bash(npx tsc:*)",
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(dir \"e:\\\\สวทช\\\\mini2\\\\package\\\\user_input_files\\\\HackCable-main\\\\src\" /s /b)"
     ],
     "deny": [],
     "ask": []
