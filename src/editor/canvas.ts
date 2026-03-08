@@ -4,6 +4,9 @@ import {ComponentFigure} from "./component-figure";
 import {css} from "../utils/dom";
 import {CodeGenerator} from "./code-generator";
 import {CanvasToolbar} from "./canvas-toolbar";
+import {ArduinoUnoElement, ArduinoMegaElement, ArduinoNanoElement, ESP32DevkitV1Element} from "@wokwi/elements";
+import {CustomESP32BoardElement} from "../components/custom-esp32-board";
+import {HandysenseProBoardElement} from "../components/handysense-pro-board";
 
 const DEFAULT_ZOOM = .6;
 
@@ -164,13 +167,16 @@ export class Canvas extends draw2d.Canvas{
     public getBoardType(): 'arduino' | 'esp32' | null {
         const figures = this.getAllFigures();
         for (const figure of figures) {
-            const elementName = figure.componentElement?.constructor.name;
-            if (elementName === 'ArduinoUnoElement' ||
-                elementName === 'ArduinoMegaElement' ||
-                elementName === 'ArduinoNanoElement') {
+            const el = figure.componentElement;
+            if (!el) continue;
+            if (el instanceof ArduinoUnoElement ||
+                el instanceof ArduinoMegaElement ||
+                el instanceof ArduinoNanoElement) {
                 return 'arduino';
             }
-            if (elementName === 'ESP32DevkitV1Element' || elementName === 'CustomESP32BoardElement' || elementName === 'HandysenseProBoardElement') {
+            if (el instanceof ESP32DevkitV1Element ||
+                el instanceof CustomESP32BoardElement ||
+                el instanceof HandysenseProBoardElement) {
                 return 'esp32';
             }
         }

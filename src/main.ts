@@ -1,12 +1,14 @@
 import "./ui/css.styl"
 import * as avr8js from 'avr8js';
 import '@wokwi/elements';
-import {LEDElement} from "@wokwi/elements";
+import {LEDElement, ArduinoUnoElement, ESP32DevkitV1Element} from "@wokwi/elements";
 import {Catalog} from "./panels/catalog";
 import {EmulatorManager} from "./emulator/emulator-manager";
 import {MistingPumpElement} from "./components/misting-pump-element";
 import {WaterPumpElement} from "./components/water-pump-element";
 import {FanElement} from "./components/fan-element";
+import {CustomESP32BoardElement} from "./components/custom-esp32-board";
+import {HandysenseProBoardElement} from "./components/handysense-pro-board";
 
 export {AVRRunner} from "./emulator/avr-runner";
 export {EmulatorManager} from './emulator/emulator-manager';
@@ -103,14 +105,14 @@ export class HackCable {
                             const otherElement = otherFigure.componentElement;
 
                             // Check if connected to Arduino or ESP32
-                            if (otherElement?.constructor.name === 'ArduinoUnoElement' ||
-                                otherElement?.constructor.name === 'ESP32DevkitV1Element' ||
-                                otherElement?.constructor.name === 'CustomESP32BoardElement' ||
-                                otherElement?.constructor.name === 'HandysenseProBoardElement') {
+                            if (otherElement instanceof ArduinoUnoElement ||
+                                otherElement instanceof ESP32DevkitV1Element ||
+                                otherElement instanceof CustomESP32BoardElement ||
+                                otherElement instanceof HandysenseProBoardElement) {
                                 const pinName = otherPort.getLocator().portId;
-                                const boardType = (otherElement?.constructor.name === 'ESP32DevkitV1Element' ||
-                                                   otherElement?.constructor.name === 'CustomESP32BoardElement' ||
-                                                   otherElement?.constructor.name === 'HandysenseProBoardElement') ? 'ESP32' : 'Arduino';
+                                const boardType = (otherElement instanceof ESP32DevkitV1Element ||
+                                                   otherElement instanceof CustomESP32BoardElement ||
+                                                   otherElement instanceof HandysenseProBoardElement) ? 'ESP32' : 'Arduino';
                                 console.log(`[updateLEDs] LED connected to ${boardType} pin ${pinName}`);
 
                                 // For ESP32, convert D-format pins to numbers (e.g., "D2" -> "2")
@@ -209,9 +211,9 @@ export class HackCable {
                             const otherElement = otherFigure.componentElement;
 
                             // Check if connected to ESP32
-                            if (otherElement?.constructor.name === 'ESP32DevkitV1Element' ||
-                                otherElement?.constructor.name === 'CustomESP32BoardElement' ||
-                                otherElement?.constructor.name === 'HandysenseProBoardElement') {
+                            if (otherElement instanceof ESP32DevkitV1Element ||
+                                otherElement instanceof CustomESP32BoardElement ||
+                                otherElement instanceof HandysenseProBoardElement) {
                                 const pinName = otherPort.getLocator().portId;
                                 console.log(`[esp32PinUpdate] LED connected to ESP32 pin ${pinName}`);
 
@@ -258,9 +260,9 @@ export class HackCable {
                             const otherElement = otherFigure.componentElement;
 
                             // Check if connected to ESP32
-                            if (otherElement?.constructor.name === 'ESP32DevkitV1Element' ||
-                                otherElement?.constructor.name === 'CustomESP32BoardElement' ||
-                                otherElement?.constructor.name === 'HandysenseProBoardElement') {
+                            if (otherElement instanceof ESP32DevkitV1Element ||
+                                otherElement instanceof CustomESP32BoardElement ||
+                                otherElement instanceof HandysenseProBoardElement) {
                                 const pinName = otherPort.getLocator().portId;
                                 console.log(`[esp32PinUpdate] ${actuatorType} connected to ESP32 pin ${pinName}`);
 

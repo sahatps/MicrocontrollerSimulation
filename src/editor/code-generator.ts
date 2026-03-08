@@ -1,5 +1,11 @@
 import {ComponentFigure} from "./component-figure";
 import {Canvas} from "./canvas";
+import {ArduinoUnoElement, ESP32DevkitV1Element, LEDElement, PushbuttonElement} from "@wokwi/elements";
+import {CustomESP32BoardElement} from "../components/custom-esp32-board";
+import {HandysenseProBoardElement} from "../components/handysense-pro-board";
+import {MistingPumpElement} from "../components/misting-pump-element";
+import {WaterPumpElement} from "../components/water-pump-element";
+import {FanElement} from "../components/fan-element";
 
 export class CodeGenerator {
 
@@ -34,11 +40,10 @@ export class CodeGenerator {
         figures.each((_index: number, figure: any) => {
             if (figure instanceof ComponentFigure) {
                 const element = figure.componentElement;
-                const elementName = element.constructor.name;
 
                 let componentInfo: ComponentInfo = {
                     id: figure.getId(),
-                    type: elementName,
+                    element: element,
                     ports: this.getPortNames(figure),
                     connections: []
                 };
@@ -87,23 +92,32 @@ export class CodeGenerator {
 
             // Determine which is Arduino/ESP32 and which is component
             let boardPort = '';
-            let componentType = '';
+            let componentEl: any = null;
             let componentPort = '';
 
-            if (sourceComp.type === 'ArduinoUnoElement' || sourceComp.type === 'ESP32DevkitV1Element') {
+            const srcEl = sourceComp.element;
+            const tgtEl = targetComp.element;
+
+            const isBoard = (el: any) =>
+                el instanceof ArduinoUnoElement ||
+                el instanceof ESP32DevkitV1Element ||
+                el instanceof CustomESP32BoardElement ||
+                el instanceof HandysenseProBoardElement;
+
+            if (isBoard(srcEl)) {
                 boardPort = source.getName();
-                componentType = targetComp.type;
+                componentEl = tgtEl;
                 componentPort = target.getName();
-            } else if (targetComp.type === 'ArduinoUnoElement' || targetComp.type === 'ESP32DevkitV1Element') {
+            } else if (isBoard(tgtEl)) {
                 boardPort = target.getName();
-                componentType = sourceComp.type;
+                componentEl = srcEl;
                 componentPort = source.getName();
             }
 
-            if (boardPort && componentType) {
+            if (boardPort && componentEl) {
                 const pinNumber = this.extractPinNumber(boardPort);
 
-                if (componentType === 'LEDElement') {
+                if (componentEl instanceof LEDElement) {
                     // Check if this LED is already tracked
                     let led = wiring.leds.find(l => l.anode === pinNumber || l.cathode === pinNumber);
                     if (!led) {
@@ -117,12 +131,12 @@ export class CodeGenerator {
                     } else if (componentPort === 'C') {
                         led.cathode = pinNumber;
                     }
-                } else if (componentType === 'PushbuttonElement') {
+                } else if (componentEl instanceof PushbuttonElement) {
                     const button = wiring.buttons.find(b => b.pin === pinNumber);
                     if (!button && pinNumber >= 0) {
                         wiring.buttons.push({ pin: pinNumber });
                     }
-                } else if (componentType === 'MistingPumpElement') {
+                } else if (componentEl instanceof MistingPumpElement) {
                     // Only track SIG pin for actuators
                     if (componentPort === 'SIG' && pinNumber >= 0) {
                         const existing = wiring.actuators.find(a => a.type === 'misting_pump' && a.pin === pinNumber);
@@ -130,14 +144,14 @@ export class CodeGenerator {
                             wiring.actuators.push({ type: 'misting_pump', pin: pinNumber });
                         }
                     }
-                } else if (componentType === 'WaterPumpElement') {
+                } else if (componentEl instanceof WaterPumpElement) {
                     if (componentPort === 'SIG' && pinNumber >= 0) {
                         const existing = wiring.actuators.find(a => a.type === 'water_pump' && a.pin === pinNumber);
                         if (!existing) {
                             wiring.actuators.push({ type: 'water_pump', pin: pinNumber });
                         }
                     }
-                } else if (componentType === 'FanElement') {
+                } else if (componentEl instanceof FanElement) {
                     if (componentPort === 'SIG' && pinNumber >= 0) {
                         const existing = wiring.actuators.find(a => a.type === 'fan' && a.pin === pinNumber);
                         if (!existing) {
@@ -296,7 +310,7 @@ export class CodeGenerator {
 
 interface ComponentInfo {
     id: string;
-    type: string;
+    element: any;
     ports: string[];
     connections: any[];
 }
