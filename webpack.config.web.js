@@ -2,6 +2,7 @@ const path = require('path');
 const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+const TerserPlugin = require('terser-webpack-plugin');
 const webpack = require('webpack')
 
 module.exports = {
@@ -35,6 +36,16 @@ module.exports = {
         }
     },
 
+    optimization: {
+        minimizer: [
+            new TerserPlugin({
+                terserOptions: {
+                    keep_classnames: true,
+                    keep_fnames: true,
+                },
+            }),
+        ],
+    },
     output: {
         filename: 'bundle.js',
         path: path.resolve(__dirname, 'dist/web'),
