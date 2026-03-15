@@ -20,54 +20,79 @@
     </main>
     <div class="controlBar">
         <div id="status-message" class="status-message"></div>
-        <div class="buttonBar">
-            <p data-i18n="ui.code">Code:</p>
-            <button id="compile" data-i18n="ui.compile">Compile</button>
-            <button id="execute" data-i18n="ui.execute">Execute</button>
-            <button id="stop" data-i18n="ui.stop">Stop</button>
-            <button id="pause" data-i18n="ui.pause">Pause</button>
+        <div class="tab-bar">
+            <button class="tab-btn active" data-tab="code" data-i18n="ui.tab.code">Code</button>
+            <button class="tab-btn" data-tab="io" data-i18n="ui.tab.io">I/O</button>
         </div>
-        <div class="buttonBar">
-            <p data-i18n="ui.wiring">Wiring:</p>
-            <button id="save" data-i18n="ui.save">Save</button>
-            <button id="restore" data-i18n="ui.load">Load</button>
-            <button id="clear-all" data-i18n="ui.clearAll">Clear All</button>
+        <div class="tab-panel code-panel active">
+            <div class="buttonBar">
+                <p data-i18n="ui.code">Code:</p>
+                <button id="compile" data-i18n="ui.compile">Compile</button>
+                <button id="execute" data-i18n="ui.execute">Execute</button>
+                <button id="stop" data-i18n="ui.stop">Stop</button>
+                <button id="pause" data-i18n="ui.pause">Pause</button>
+            </div>
+            <div class="buttonBar">
+                <p data-i18n="ui.wiring">Wiring:</p>
+                <button id="save" data-i18n="ui.save">Save</button>
+                <button id="restore" data-i18n="ui.load">Load</button>
+                <button id="clear-all" data-i18n="ui.clearAll">Clear All</button>
+            </div>
+            <div class="buttonBar">
+                <p data-i18n="ui.language">Language:</p>
+                <button id="language-en">English</button>
+                <button id="language-th">ไทย</button>
+            </div>
+            <div class="buttonBar">
+                <p data-i18n="ui.board">Board:</p>
+                <select id="board-select">
+                    <option value="arduino">Arduino Uno</option>
+                    <option value="esp32">ESP32</option>
+                    <option value="custom-esp32">Custom ESP32</option>
+                    <option value="handysense-pro" selected>Handysense pro</option>
+                </select>
+            </div>
+            <div class="buttonBar">
+                <p data-i18n="ui.examples">Examples:</p>
+                <select id="code-examples">
+                    <option value="" data-i18n="ui.selectExample">Select an example...</option>
+                    <option value="blink">LED Blink</option>
+                    <option value="button">Button Input</option>
+                    <option value="fade">LED Fade</option>
+                    <optgroup label="Handysense Pro - Smart Farm" data-i18n-label="examples.smartFarmGroup">
+                        <option value="phMistingControl" data-i18n="examples.phMistingControl">pH Misting Control</option>
+                        <option value="humidityFanControl" data-i18n="examples.humidityFanControl">Humidity Fan Control</option>
+                        <option value="phFullControl" data-i18n="examples.phFullControl" selected>pH Full Control</option>
+                        <option value="humidityClimateControl" data-i18n="examples.humidityClimateControl">Humidity Climate Control</option>
+                        <option value="dualSensorMisting" data-i18n="examples.dualSensorMisting">Dual Sensor Misting</option>
+                        <option value="dualSensorFan" data-i18n="examples.dualSensorFan">Dual Sensor Fan</option>
+                        <option value="relaySequentialBlink" data-i18n="examples.relaySequentialBlink">Relay Sequential Blink</option>
+                        <option value="mcpSmartControl" data-i18n="examples.mcpSmartControl">MCP23008 Smart Control</option>
+                    </optgroup>
+                </select>
+            </div>
+            <label for="code-editor" data-i18n="ui.codeLabel">Code:</label>
+            <textarea id="code-editor" rows="10"></textarea>
+            <label for="code-compiled" data-i18n="ui.compiledCode">Compiled Code:</label>
+            <textarea id="code-compiled" rows="10" wrap="off"></textarea>
         </div>
-        <div class="buttonBar">
-            <p data-i18n="ui.language">Language:</p>
-            <button id="language-en">English</button>
-            <button id="language-th">ไทย</button>
+        <div class="tab-panel io-panel">
+            <div class="io-section">
+                <h4 class="io-section-title" data-i18n="ui.io.outputs">Outputs</h4>
+                <div id="io-outputs-list" class="io-list"></div>
+            </div>
+            <div class="io-section">
+                <h4 class="io-section-title" data-i18n="ui.io.inputs">Inputs</h4>
+                <div id="io-inputs-list" class="io-list"></div>
+            </div>
+            <div class="io-section serial-in-io">
+                <div class="serial-monitor-header">
+                    <span class="serial-monitor-title" data-i18n="ui.serial.title">Serial Monitor</span>
+                    <button id="serial-clear" data-i18n="ui.serial.clear">Clear</button>
+                </div>
+                <div id="serial-output" class="serial-output"></div>
+            </div>
         </div>
-        <div class="buttonBar">
-            <p data-i18n="ui.board">Board:</p>
-            <select id="board-select">
-                <option value="arduino">Arduino Uno</option>
-                <option value="esp32">ESP32</option>
-                <option value="custom-esp32">Custom ESP32</option>
-                <option value="handysense-pro" selected>Handysense pro</option>
-            </select>
-        </div>
-        <div class="buttonBar">
-            <p data-i18n="ui.examples">Examples:</p>
-            <select id="code-examples">
-                <option value="" data-i18n="ui.selectExample">Select an example...</option>
-                <option value="blink">LED Blink</option>
-                <option value="button">Button Input</option>
-                <option value="fade">LED Fade</option>
-                <optgroup label="Handysense Pro - Smart Farm" data-i18n-label="examples.smartFarmGroup">
-                    <option value="phMistingControl" data-i18n="examples.phMistingControl">pH Misting Control</option>
-                    <option value="humidityFanControl" data-i18n="examples.humidityFanControl">Humidity Fan Control</option>
-                    <option value="phFullControl" data-i18n="examples.phFullControl" selected>pH Full Control</option>
-                    <option value="humidityClimateControl" data-i18n="examples.humidityClimateControl">Humidity Climate Control</option>
-                    <option value="dualSensorMisting" data-i18n="examples.dualSensorMisting">Dual Sensor Misting</option>
-                    <option value="dualSensorFan" data-i18n="examples.dualSensorFan">Dual Sensor Fan</option>
-                </optgroup>
-            </select>
-        </div>
-        <label for="code-editor" data-i18n="ui.codeLabel">Code:</label>
-        <textarea id="code-editor" rows="10"></textarea>
-        <label for="code-compiled" data-i18n="ui.compiledCode">Compiled Code:</label>
-        <textarea id="code-compiled" rows="10" wrap="off"></textarea>
     </div>
     <button class="toggle-controlbar" title="Hide/Show panel">
         <span class="toggle-icon">▶</span>

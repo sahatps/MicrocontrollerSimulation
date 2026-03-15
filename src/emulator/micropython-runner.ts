@@ -12,6 +12,7 @@ export class MicroPythonRunner {
     private taskScheduler = new MicroTaskScheduler();
     public pins: Map<number, PinState> = new Map();
     private pinCallbacks: Map<number, (value: boolean) => void> = new Map();
+    public onSerialData: ((data: string) => void) | null = null;
 
     // ESP32 common GPIO pins
     private readonly availablePins = [2, 4, 5, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33];
@@ -41,6 +42,7 @@ export class MicroPythonRunner {
             // Configure MicroPython with custom stdout
             const config = {
                 stdout: (text: string) => {
+                    if (this.onSerialData) this.onSerialData(text + '\n');
                     console.log('[MicroPython]:', text);
                 }
             };
@@ -325,11 +327,9 @@ builtins.Serial = Serial
             };
 
             (globalThis as any)._micropython_serial_print = (text: string, newline: boolean) => {
-                if (newline) {
-                    console.log(`[Serial] ${text}`);
-                } else {
-                    console.log(`[Serial] ${text}`);
-                }
+                const output = newline ? text + '\n' : text;
+                if (this.onSerialData) this.onSerialData(output);
+                console.log(`[Serial] ${text}`);
             };
 
             // Check if code has a "while True:" loop

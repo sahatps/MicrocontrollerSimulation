@@ -98,6 +98,9 @@ export class EmulatorManager{
             return code;
         }
 
+        // Detect HandySense/MCP23008 usage for I2C relay emulation
+        const usesMCP23008 = code.includes('MCP23008') || code.includes('HandySense.h');
+
         // Try to extract setup and loop sections
         const setupMatch = code.match(/void\s+setup\s*\(\s*\)\s*\{([\s\S]*?)\n\}/);
         const loopMatch = code.match(/void\s+loop\s*\(\s*\)\s*\{([\s\S]*?)\n\}/);
@@ -214,6 +217,23 @@ export class EmulatorManager{
             pythonCode += '\n';
         }
 
+        // Inject MCP23008 mock for HandySense/I2C relay control
+        if (usesMCP23008) {
+            pythonCode += [
+                '# MCP23008 mock - maps I2C expander to ESP32 relay GPIO',
+                'class MCP23008:',
+                '    _RELAY_PINS = [25, 4, 12, 13]  # GP0=IO25(R1), GP1=IO4(R2), GP2=IO12(R3), GP3=IO13(R4)',
+                '    def __init__(self, addr):',
+                '        self._pins = [Pin(p, Pin.OUT) for p in self._RELAY_PINS]',
+                '    def begin(self): pass',
+                '    def pinMode8(self, mode): pass',
+                '    def write(self, pin, val):',
+                '        if pin < len(self._pins): self._pins[pin].value(val)',
+                'MCP = MCP23008(0x24)',
+                '',
+            ].join('\n');
+        }
+
         // Store pin mappings for line conversion
         this.currentConversionContext = {
             constants,
@@ -287,6 +307,15 @@ export class EmulatorManager{
         // analogRead with plain number → adcN.read()
         result = result.replace(/analogRead\s*\(\s*(\d+)\s*\)/g, 'adc$1.read()');
 
+        // Strip Wire/HandySense/MCP init calls (no-ops handled by mock)
+        if (/\b(Wire\.(begin|setClock)|MCP\.(begin|pinMode8)|setPin_(Relay|SW|ErrorSensor))\s*\(/.test(result)) {
+            return '';
+        }
+
+        // MCP23008.digitalWrite(pin, HIGH/LOW) → MCP.write(pin, 0/1)
+        result = result.replace(/\bMCP\.digitalWrite\s*\(\s*(\d+)\s*,\s*(HIGH|LOW|1|0)\s*\)/g,
+            (_match, pin, state) => `MCP.write(${pin}, ${state === 'HIGH' || state === '1' ? 1 : 0})`);
+
         // digitalWrite with named constant → name.value()
         result = result.replace(/digitalWrite\s*\(\s*([A-Z_][A-Z0-9_]*)\s*,\s*(HIGH|LOW|1|0)\s*\)/g,
             (_match, pinName, state) => {
@@ -359,6 +388,11 @@ export class EmulatorManager{
             });
         });
 
+        // Wire serial output to HackCable callback
+        this.micropythonRunner.onSerialData = (data: string) => {
+            this.hackcable.serialDataReceived(data);
+        };
+
         console.log('[EmulatorManager] ESP32 hardware listeners configured');
     }
 
@@ -399,6 +433,10 @@ export class EmulatorManager{
         this.runner.portD.addListener(() => {
             if(this.runner) this.hackcable.portDUpdate(this.runner.portD)
         });
+        // Wire Arduino serial (USART) output to HackCable callback
+        this.runner.usart.onByteTransmit = (value: number) => {
+            this.hackcable.serialDataReceived(String.fromCharCode(value));
+        };
         console.log('[EmulatorManager] Hardware listeners configured');
     }
 }

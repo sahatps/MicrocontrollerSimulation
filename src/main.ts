@@ -7,6 +7,7 @@ import {EmulatorManager} from "./emulator/emulator-manager";
 import {MistingPumpElement} from "./components/misting-pump-element";
 import {WaterPumpElement} from "./components/water-pump-element";
 import {FanElement} from "./components/fan-element";
+import {RelayElement} from "./components/relay-element";
 import {CustomESP32BoardElement} from "./components/custom-esp32-board";
 import {HandysenseProBoardElement} from "./components/handysense-pro-board";
 
@@ -78,6 +79,11 @@ export class HackCable {
     }
     public get editor(){
         return this._editor;
+    }
+
+    public serialDataCallback: ((data: string) => void) | null = null;
+    public serialDataReceived(data: string) {
+        if (this.serialDataCallback) this.serialDataCallback(data);
     }
 
     private updateLEDs(port: avr8js.AVRIOPort, pinMap: {[key: string]: number}) {
@@ -217,10 +223,12 @@ export class HackCable {
                                 const pinName = otherPort.getLocator().portId;
                                 console.log(`[esp32PinUpdate] LED connected to ESP32 pin ${pinName}`);
 
-                                // Convert D-format pins to numbers (e.g., "D2" -> 2)
+                                // Convert D-format pins to numbers (e.g., "D2" -> 2, "IO25" -> 25)
                                 let pinNumber = -1;
                                 if (pinName.startsWith('D')) {
                                     pinNumber = parseInt(pinName.substring(1));
+                                } else if (pinName.startsWith('IO')) {
+                                    pinNumber = parseInt(pinName.substring(2));
                                 } else if (!isNaN(parseInt(pinName))) {
                                     pinNumber = parseInt(pinName);
                                 }
@@ -283,6 +291,38 @@ export class HackCable {
                                     console.log(`[esp32PinUpdate] Updating ${actuatorType} on pin ${pin} to ${value}`);
                                     element.isOn = value;
                                     element.ledPower = value;
+                                    element.requestUpdate();
+                                }
+                            }
+                        }
+                    });
+                });
+            }
+
+            // Check if this is a Relay element
+            if (element instanceof RelayElement) {
+                const connections = figure.getPorts().data;
+                connections.forEach((figurePort: any) => {
+                    const portConnections = figurePort.getConnections().data;
+                    portConnections.forEach((connection: any) => {
+                        const otherPort = connection.sourcePort === figurePort ? connection.targetPort : connection.sourcePort;
+                        const otherFigure = otherPort?.getParent();
+                        if (otherFigure) {
+                            const otherElement = otherFigure.componentElement;
+                            if (otherElement instanceof ESP32DevkitV1Element ||
+                                otherElement instanceof CustomESP32BoardElement ||
+                                otherElement instanceof HandysenseProBoardElement) {
+                                const pinName = otherPort.getLocator().portId;
+                                let pinNumber = -1;
+                                if (pinName.startsWith('IO')) {
+                                    pinNumber = parseInt(pinName.substring(2));
+                                } else if (pinName.startsWith('D')) {
+                                    pinNumber = parseInt(pinName.substring(1));
+                                } else if (!isNaN(parseInt(pinName))) {
+                                    pinNumber = parseInt(pinName);
+                                }
+                                if (pinNumber === pin) {
+                                    element.isOn = value;
                                     element.requestUpdate();
                                 }
                             }

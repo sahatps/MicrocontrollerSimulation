@@ -12,6 +12,9 @@ const ICONS = {
     </svg>`,
     backward: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
         <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm10 6l4 4 4-4h-3v-6h-2v6h-3z"/>
+    </svg>`,
+    color: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+        <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
     </svg>`
 };
 
@@ -25,6 +28,8 @@ export class CanvasToolbar {
     private draggingFigure: ComponentFigure | null = null;
     private draggingLine: any = null;
     private dragging: boolean = false;
+    private colorButton!: HTMLButtonElement;
+    private colorInput!: HTMLInputElement;
 
     constructor(canvas: Canvas) {
         this.canvas = canvas;
@@ -57,10 +62,25 @@ export class CanvasToolbar {
         this.backwardButton.title = 'Send to back';
         this.backwardButton.disabled = true;
 
+        // Create hidden native color input
+        this.colorInput = document.createElement('input');
+        this.colorInput.type = 'color';
+        this.colorInput.value = '#129CE4';
+        this.colorInput.style.cssText = 'position:absolute;opacity:0;width:0;height:0;pointer-events:none;';
+
+        // Create color picker button
+        this.colorButton = document.createElement('button');
+        this.colorButton.className = 'hackCable-toolbar-btn hackCable-toolbar-color';
+        this.colorButton.innerHTML = ICONS.color;
+        this.colorButton.title = 'Change cable color';
+        this.colorButton.disabled = true;
+        this.colorButton.appendChild(this.colorInput);
+
         // Assemble toolbar
         this.toolbarElement.appendChild(this.binElement);
         this.toolbarElement.appendChild(this.forwardButton);
         this.toolbarElement.appendChild(this.backwardButton);
+        this.toolbarElement.appendChild(this.colorButton);
 
         // Insert toolbar into editor container (fixed position, not affected by zoom/pan)
         const editorContainer = document.querySelector('.hackCable-editor');
@@ -83,6 +103,19 @@ export class CanvasToolbar {
             const selected = this.canvas.getSelected();
             if (selected instanceof ComponentFigure) {
                 selected.toBack();
+            }
+        });
+
+        // Color button opens native color picker
+        this.colorButton.addEventListener('click', () => {
+            this.colorInput.click();
+        });
+
+        // When a color is picked, apply to selected cable line
+        this.colorInput.addEventListener('input', () => {
+            const selected = this.canvas.getSelected();
+            if (selected !== null && !(selected instanceof ComponentFigure)) {
+                selected.setColor(new draw2d.util.Color(this.colorInput.value));
             }
         });
 
@@ -158,8 +191,17 @@ export class CanvasToolbar {
 
     private updateButtonStates(selected: any): void {
         const isComponentSelected = selected instanceof ComponentFigure;
+        const isCableSelected = selected !== null && !isComponentSelected;
         this.forwardButton.disabled = !isComponentSelected;
         this.backwardButton.disabled = !isComponentSelected;
+        this.colorButton.disabled = !isCableSelected;
+        if (isCableSelected) {
+            const col = selected.getColor?.();
+            if (col) {
+                const hex = col.hashString ? col.hashString() : col.html?.();
+                if (hex) this.colorInput.value = hex;
+            }
+        }
     }
 
     private attachDragListeners(figure: ComponentFigure): void {

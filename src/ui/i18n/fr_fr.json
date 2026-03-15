@@ -2,5 +2,16 @@
   "wokwiComponents.arduinoUno.description": "Carte Arduino Uno",
   "wokwiComponents.led.description": "Diode Électroluminescente",
   "wokwiComponents.rgbLed.description": "Diode Électroluminescente de couleur contrôllable",
-  "wokwiComponents.ledBar.description": "Barre de 10 Diodes Électroluminescentes"
+  "wokwiComponents.ledBar.description": "Barre de 10 Diodes Électroluminescentes",
+  "wokwiComponents.relay.name": "Relais",
+  "wokwiComponents.relay.description": "Module relais monocanal pour commutation de charges (COM/NC/NO)",
+  "ui.tab.code": "Code",
+  "ui.tab.io": "E/S",
+  "ui.tab.serial": "Serial",
+  "ui.io.outputs": "Sorties",
+  "ui.io.inputs": "Entrées",
+  "ui.serial.title": "Moniteur Série",
+  "ui.serial.clear": "Effacer",
+  "examples.relaySequentialBlink": "Clignotement Séquentiel de Relais",
+  "examples.mcpSmartControl": "Contrôle Intelligent MCP23008"
 }

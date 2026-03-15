@@ -3,7 +3,7 @@ import {ComponentFigure, FigureData, WiringData} from "./component-figure";
 import {wokwiComponentById} from "../panels/component";
 import {Port} from "draw2d-types";
 import * as draw2d from "draw2d";
-import {DisconnectableConnectionPolicy} from "./connections-policies";
+import {DisconnectableConnectionPolicy, ensureOrthogonalVertices, prepareOrthogonalLine} from "./connections-policies";
 
 export declare type StandaloneLineData = {id: string, vertices: Array<{x: number, y: number}>}
 export declare type EditorSaveData = {figures: FigureData[], connections: WiringData[], standaloneLines?: StandaloneLineData[]}
@@ -59,10 +59,9 @@ export class Editor{
                 const targetPort: Port = targetFigure.getPortByName(connectionData.targetPortName)
                 if(sourcePort && targetPort){
                     let con = new draw2d.Connection();
-                    con.setRouter(new draw2d.layout.connection.VertexRouter());
+                    con.setRouter(new draw2d.layout.connection.ManhattanConnectionRouter());
                     con.setSource(sourcePort)
                     con.setTarget(targetPort)
-                    con.setVertices(connectionData.svgPath)
                     con.installEditPolicy(new DisconnectableConnectionPolicy())
                     this._canvas.add(con)
                 }
@@ -76,9 +75,11 @@ export class Editor{
                 polyline.setRouter(new draw2d.layout.connection.VertexRouter());
                 polyline.setId(lineData.id);
                 polyline.setVertices(lineData.vertices);
-                polyline.installEditPolicy(new draw2d.policy.line.VertexSelectionFeedbackPolicy());
+                polyline.installEditPolicy(new DisconnectableConnectionPolicy());
                 polyline.setUserData({type: "standalone-line"});
                 this._canvas.add(polyline);
+                prepareOrthogonalLine(polyline);
+                ensureOrthogonalVertices(polyline);
             });
         }
     }

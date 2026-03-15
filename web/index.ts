@@ -1,8 +1,9 @@
 import "./css/main.styl"
 import {CompileResult, EmulatorManager, HackCable} from "../src/main";
-import {wokwiComponentById} from "../src/panels/component";
+import {wokwiComponentById, wokwiComponentByClass, ComponentType} from "../src/panels/component";
 import {ComponentFigure} from "../src/editor/component-figure";
 import * as draw2d from "draw2d";
+import {DisconnectableConnectionPolicy} from "../src/editor/connections-policies";
 
 console.log("Running HackCable web interface")
 
@@ -83,8 +84,21 @@ setTimeout(() => {
     const selectedBoard = localStorage.getItem('hackCable-selectedBoard') || 'handysense-pro';
     const savedCircuit = localStorage.getItem('savedEditor');
 
-    // Only auto-setup if there's no saved circuit
-    if (!savedCircuit || (savedCircuit && JSON.parse(savedCircuit).components?.length === 0)) {
+    // Auto-restore saved circuit if it has figures, otherwise run default setup
+    let hasRestoredData = false;
+    if (savedCircuit) {
+        try {
+            const parsedData = JSON.parse(savedCircuit);
+            if (parsedData.figures && parsedData.figures.length > 0) {
+                hackCable.editor.loadEditorSaveData(parsedData);
+                hasRestoredData = true;
+            }
+        } catch (e) {
+            console.log("Error parsing saved circuit data:", e);
+        }
+    }
+
+    if (!hasRestoredData) {
         if (selectedBoard === 'esp32') {
             setupESP32Circuit();
         } else if (selectedBoard === 'custom-esp32') {
@@ -137,8 +151,8 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
     if(hex) hexInput.value = hex;
 
     compileButton.addEventListener("click", () => compile());
-    executeButton.addEventListener("click", () => execute());
-    stopButton.addEventListener("click", () => hackCable.emulatorManager.stop());
+    executeButton.addEventListener("click", () => { clearSerial(); execute(); switchTab('io'); setTimeout(startIOMonitor, 200); });
+    stopButton.addEventListener("click", () => { hackCable.emulatorManager.stop(); stopIOMonitor(); });
     pauseButton.addEventListener("click", () => {
         hackCable.emulatorManager.setPaused(!hackCable.emulatorManager.isPosed())
     });
@@ -208,6 +222,174 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
         }
     }
 }
+
+// Tab switching
+function switchTab(tabName: 'code' | 'io') {
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        (btn as HTMLElement).classList.toggle('active', (btn as HTMLElement).dataset.tab === tabName);
+    });
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.toggle('active', panel.classList.contains(`${tabName}-panel`));
+    });
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const tab = (btn as HTMLElement).dataset.tab as 'code' | 'io';
+        switchTab(tab);
+        if (tab === 'io') buildIOList();
+    });
+});
+
+// I/O panel
+let ioMonitorInterval: ReturnType<typeof setInterval> | null = null;
+const ioItems = new Map<string, any>();
+
+function getConnectedBoardPin(figure: any): string {
+    try {
+        const el = figure.componentElement;
+        const pinInfo: any[] = el?.pinInfo || [];
+        // Build set of non-power pin names (signal pins only)
+        const signalPins = new Set(
+            pinInfo
+                .filter(p => !p.signals?.some((s: any) => s.type === 'power'))
+                .map(p => p.name)
+        );
+
+        const ports = figure.getPorts().data;
+        for (const port of ports) {
+            const portId: string = port.getLocator()?.portId || '';
+            // Skip power pins if pin info is available
+            if (signalPins.size > 0 && !signalPins.has(portId)) continue;
+
+            const conns = port.getConnections().data;
+            for (const conn of conns) {
+                const otherPort = conn.sourcePort === port ? conn.targetPort : conn.sourcePort;
+                const otherInfo = wokwiComponentByClass[otherPort?.getParent()?.componentElement?.constructor?.name];
+                if (otherInfo?.type === ComponentType.CARD) {
+                    return otherPort.getLocator().portId || '';
+                }
+            }
+        }
+    } catch (e) {}
+    return '';
+}
+
+function readElementState(element: any): { state: string; isOn: boolean } {
+    try {
+        if (element.isOn !== undefined) {
+            return { state: element.isOn ? 'ON' : 'OFF', isOn: !!element.isOn };
+        }
+        if (typeof element.value === 'boolean') {
+            return { state: element.value ? 'ON' : 'OFF', isOn: element.value };
+        }
+        if (typeof element.value === 'number') {
+            return { state: element.value > 0 ? 'ON' : 'OFF', isOn: element.value > 0 };
+        }
+    } catch (e) {}
+    return { state: '—', isOn: false };
+}
+
+function buildIOList() {
+    const outputsList = document.getElementById('io-outputs-list');
+    const inputsList = document.getElementById('io-inputs-list');
+    if (!outputsList || !inputsList) return;
+
+    outputsList.innerHTML = '';
+    inputsList.innerHTML = '';
+    ioItems.clear();
+
+    // Use class names (language-independent) to identify actuator outputs
+    const OUTPUT_CLASSES = new Set(['MistingPumpElement', 'WaterPumpElement', 'FanElement', 'RelayElement']);
+    const figures = hackCable.editor.canvas.getAllFigures();
+    let outCount = 0;
+    let inCount = 0;
+
+    figures.forEach((figure: any, idx: number) => {
+        const el = figure.componentElement;
+        if (!el) return;
+        const info = wokwiComponentByClass[el.constructor.name];
+        if (!info || info.type === ComponentType.CARD || info.type === ComponentType.OTHER) return;
+
+        const isOutput = info.type === ComponentType.LED
+            || info.type === ComponentType.MOTOR
+            || info.type === ComponentType.TRANSMITTER
+            || (info.type === ComponentType.CUSTOM && OUTPUT_CLASSES.has(el.constructor.name));
+        const isInput = info.type === ComponentType.BUTTON
+            || info.type === ComponentType.SENSOR
+            || (info.type === ComponentType.CUSTOM && !OUTPUT_CLASSES.has(el.constructor.name));
+
+        if (!isOutput && !isInput) return;
+
+        const pin = getConnectedBoardPin(figure);
+        const { state, isOn } = readElementState(el);
+        const itemId = `io-${idx}`;
+
+        const item = document.createElement('div');
+        item.className = 'io-item';
+        item.id = itemId;
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'io-item-name';
+        nameEl.textContent = info.name;
+
+        const pinEl = document.createElement('span');
+        pinEl.className = 'io-item-pin';
+        pinEl.textContent = pin ? `Pin ${pin}` : '';
+
+        const stateEl = document.createElement('span');
+        stateEl.className = `io-item-state ${isOn ? 'state-on' : 'state-off'}`;
+        stateEl.textContent = isOutput ? state : '—';
+
+        item.appendChild(nameEl);
+        item.appendChild(pinEl);
+        item.appendChild(stateEl);
+
+        ioItems.set(itemId, { el, isOutput });
+        (isOutput ? outputsList : inputsList).appendChild(item);
+        isOutput ? outCount++ : inCount++;
+    });
+
+    if (outCount === 0) outputsList.innerHTML = '<div class="io-empty">No output components</div>';
+    if (inCount === 0) inputsList.innerHTML = '<div class="io-empty">No input components</div>';
+}
+
+function updateIOStates() {
+    ioItems.forEach(({ el, isOutput }, id) => {
+        if (!isOutput) return;
+        const stateEl = document.querySelector(`#${id} .io-item-state`);
+        if (!stateEl) return;
+        const { state, isOn } = readElementState(el);
+        stateEl.textContent = state;
+        stateEl.className = `io-item-state ${isOn ? 'state-on' : 'state-off'}`;
+    });
+}
+
+function startIOMonitor() {
+    buildIOList();
+    if (ioMonitorInterval) clearInterval(ioMonitorInterval);
+    ioMonitorInterval = setInterval(updateIOStates, 250);
+}
+
+function stopIOMonitor() {
+    if (ioMonitorInterval) { clearInterval(ioMonitorInterval); ioMonitorInterval = null; }
+}
+
+// Serial Monitor
+function appendSerial(data: string) {
+    const output = document.getElementById('serial-output');
+    if (!output) return;
+    output.textContent += data;
+    output.scrollTop = output.scrollHeight;
+}
+
+function clearSerial() {
+    const output = document.getElementById('serial-output');
+    if (output) output.textContent = '';
+}
+
+hackCable.serialDataCallback = (data: string) => appendSerial(data);
+document.getElementById('serial-clear')?.addEventListener('click', clearSerial);
 
 // Initialize sidebar toggle functionality
 function initializeSidebarToggle() {
@@ -698,6 +880,91 @@ void loop() {
   }
 
   delay(2000);
+}`,
+
+    // Example 7: Relay Sequential Blink (4 relays)
+    // Example 8: MCP23008 Smart Farm Control (2 sensors + 4 MCP23008 outputs)
+    mcpSmartControl: `#include <HandySense.h>
+#include <Arduino.h>
+#include <WiFi.h>
+#include <Wire.h>
+#include <WiFiClient.h>
+#include <WebServer.h>
+#include "time.h"
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+#include "MCP23008.h"
+
+MCP23008 MCP (0x24);
+void setup() {
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  Wire.setClock(10000);
+  MCP.begin();
+  MCP.pinMode8(0x00);
+
+}
+
+void loop() {
+  MCP.digitalWrite(0, HIGH);
+  delay(500);
+
+  MCP.digitalWrite(0, LOW);
+  delay(500);
+}`,
+
+    relaySequentialBlink: `// Relay Sequential Blink - Handysense Pro
+// Adapted from HandySense MCP23008 example for direct GPIO control
+// 4 Relay modules on IO25 (R1), IO4 (R2), IO12 (R3), IO13 (R4)
+
+const int RELAY1_PIN = 25;   // Relay R1 - IO25
+const int RELAY2_PIN = 4;    // Relay R2 - IO4
+const int RELAY3_PIN = 12;   // Relay R3 - IO12
+const int RELAY4_PIN = 13;   // Relay R4 - IO13
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(RELAY1_PIN, OUTPUT);
+  pinMode(RELAY2_PIN, OUTPUT);
+  pinMode(RELAY3_PIN, OUTPUT);
+  pinMode(RELAY4_PIN, OUTPUT);
+  digitalWrite(RELAY1_PIN, LOW);
+  digitalWrite(RELAY2_PIN, LOW);
+  digitalWrite(RELAY3_PIN, LOW);
+  digitalWrite(RELAY4_PIN, LOW);
+  Serial.println("Relay Sequential Blink Started");
+}
+
+void loop() {
+  digitalWrite(RELAY1_PIN, HIGH);
+  Serial.println("Relay 1: ON");
+  delay(500);
+  digitalWrite(RELAY1_PIN, LOW);
+  Serial.println("Relay 1: OFF");
+  delay(500);
+
+  digitalWrite(RELAY2_PIN, HIGH);
+  Serial.println("Relay 2: ON");
+  delay(500);
+  digitalWrite(RELAY2_PIN, LOW);
+  Serial.println("Relay 2: OFF");
+  delay(500);
+
+  digitalWrite(RELAY3_PIN, HIGH);
+  Serial.println("Relay 3: ON");
+  delay(500);
+  digitalWrite(RELAY3_PIN, LOW);
+  Serial.println("Relay 3: OFF");
+  delay(500);
+
+  digitalWrite(RELAY4_PIN, HIGH);
+  Serial.println("Relay 4: ON");
+  delay(500);
+  digitalWrite(RELAY4_PIN, LOW);
+  Serial.println("Relay 4: OFF");
+  delay(500);
 }`
 };
 
@@ -730,6 +997,12 @@ if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
                     break;
                 case 'dualSensorFan':
                     setupDualSensorFanCircuit();
+                    break;
+                case 'relaySequentialBlink':
+                    setupRelayBlinkCircuit();
+                    break;
+                case 'mcpSmartControl':
+                    setupMcpSmartControlCircuit();
                     break;
             }
         }
@@ -985,9 +1258,10 @@ function connectPorts(
 
     if (sourcePort && targetPort) {
         let connection = new draw2d.Connection();
-        connection.setRouter(new draw2d.layout.connection.VertexRouter());
+        connection.setRouter(new draw2d.layout.connection.ManhattanConnectionRouter());
         connection.setSource(sourcePort);
         connection.setTarget(targetPort);
+        connection.installEditPolicy(new DisconnectableConnectionPolicy());
         hackCable.editor.canvas.add(connection);
         console.log(`Connected ${sourcePortName} to ${targetPortName}`);
     } else {
@@ -1226,6 +1500,82 @@ function setupDualSensorFanCircuit() {
             connectPorts(fanFigure, "SIG", boardFigure, "IO4");
 
             console.log("Dual Sensor Fan Control circuit setup complete!");
+        } catch (error) {
+            console.error("Error during wiring:", error);
+        }
+    }, 500);
+}
+
+// Example 7: Relay Sequential Blink Circuit Setup (4 relay modules)
+function setupRelayBlinkCircuit() {
+    console.log("Setting up Relay Sequential Blink circuit...");
+    hackCable.editor.canvas.clear();
+
+    // HandySense Pro board (id: 28)
+    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
+    hackCable.editor.canvas.add(boardFigure.setX(250).setY(50));
+
+    // 4 Relay elements (id: 34) positioned around the board
+    const relay1Figure = new ComponentFigure(wokwiComponentById[34]);
+    hackCable.editor.canvas.add(relay1Figure.setX(20).setY(60));
+
+    const relay2Figure = new ComponentFigure(wokwiComponentById[34]);
+    hackCable.editor.canvas.add(relay2Figure.setX(20).setY(160));
+
+    const relay3Figure = new ComponentFigure(wokwiComponentById[34]);
+    hackCable.editor.canvas.add(relay3Figure.setX(560).setY(60));
+
+    const relay4Figure = new ComponentFigure(wokwiComponentById[34]);
+    hackCable.editor.canvas.add(relay4Figure.setX(560).setY(160));
+
+    setTimeout(() => {
+        try {
+            // Relay 1 - IO25 (R1)
+            connectPorts(relay1Figure, "VCC", boardFigure, "VIN_1");
+            connectPorts(relay1Figure, "GND", boardFigure, "GND_5");
+            connectPorts(relay1Figure, "IN", boardFigure, "IO25");
+
+            // Relay 2 - IO4 (R2)
+            connectPorts(relay2Figure, "VCC", boardFigure, "VIN_2");
+            connectPorts(relay2Figure, "GND", boardFigure, "GND_6");
+            connectPorts(relay2Figure, "IN", boardFigure, "IO4");
+
+            // Relay 3 - IO12 (R3)
+            connectPorts(relay3Figure, "VCC", boardFigure, "3V3_R1");
+            connectPorts(relay3Figure, "GND", boardFigure, "GND_R1");
+            connectPorts(relay3Figure, "IN", boardFigure, "IO12");
+
+            // Relay 4 - IO13 (R4)
+            connectPorts(relay4Figure, "VCC", boardFigure, "3V3_R2");
+            connectPorts(relay4Figure, "GND", boardFigure, "GND_R2");
+            connectPorts(relay4Figure, "IN", boardFigure, "IO13");
+
+            console.log("Relay Sequential Blink circuit setup complete!");
+        } catch (error) {
+            console.error("Error during wiring:", error);
+        }
+    }, 500);
+}
+
+// Example 8: MCP23008 Blink - board + LED on IO25 (MCP pin 0)
+function setupMcpSmartControlCircuit() {
+    console.log("Setting up MCP23008 Blink circuit...");
+    hackCable.editor.canvas.clear();
+
+    // HandySense Pro board (id: 28)
+    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
+    hackCable.editor.canvas.add(boardFigure.setX(250).setY(50));
+
+    // LED on IO25 (MCP pin 0)
+    const ledFigure = new ComponentFigure(wokwiComponentById[1]);
+    hackCable.editor.canvas.add(ledFigure.setX(20).setY(60));
+
+    setTimeout(() => {
+        try {
+            connectPorts(ledFigure, "A", boardFigure, "IO25");
+            connectPorts(ledFigure, "C", boardFigure, "GND_5");
+
+            console.log("MCP23008 Blink circuit setup complete!");
         } catch (error) {
             console.error("Error during wiring:", error);
         }

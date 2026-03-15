@@ -33,11 +33,22 @@
   "wokwiComponents.waterPump.description": "Water pump for irrigation systems",
   "wokwiComponents.fan.name": "Cooling Fan",
   "wokwiComponents.fan.description": "DC fan for ventilation and cooling",
+  "wokwiComponents.relay.name": "Relay",
+  "wokwiComponents.relay.description": "Single-channel relay module for switching loads (COM/NC/NO)",
   "examples.smartFarmGroup": "Handysense Pro - Smart Farm",
   "examples.phMistingControl": "pH Misting Control",
   "examples.humidityFanControl": "Humidity Fan Control",
   "examples.phFullControl": "pH Full Control",
   "examples.humidityClimateControl": "Humidity Climate Control",
   "examples.dualSensorMisting": "Dual Sensor Misting",
-  "examples.dualSensorFan": "Dual Sensor Fan"
+  "examples.dualSensorFan": "Dual Sensor Fan",
+  "examples.relaySequentialBlink": "Relay Sequential Blink",
+  "examples.mcpSmartControl": "MCP23008 Smart Control",
+  "ui.tab.code": "Code",
+  "ui.tab.io": "I/O",
+  "ui.tab.serial": "Serial",
+  "ui.io.outputs": "Outputs",
+  "ui.io.inputs": "Inputs",
+  "ui.serial.title": "Serial Monitor",
+  "ui.serial.clear": "Clear"
 }

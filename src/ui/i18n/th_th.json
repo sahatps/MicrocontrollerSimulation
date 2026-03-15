@@ -33,11 +33,22 @@
   "wokwiComponents.waterPump.description": "ปั๊มน้ำสำหรับระบบรดน้ำ",
   "wokwiComponents.fan.name": "พัดลมระบายความร้อน",
   "wokwiComponents.fan.description": "พัดลม DC สำหรับระบายอากาศและทำความเย็น",
+  "wokwiComponents.relay.name": "รีเลย์",
+  "wokwiComponents.relay.description": "โมดูลรีเลย์ 1 ช่องสำหรับควบคุมโหลด (COM/NC/NO)",
   "examples.smartFarmGroup": "Handysense Pro - ฟาร์มอัจฉริยะ",
   "examples.phMistingControl": "ควบคุมพ่นหมอกด้วย pH",
   "examples.humidityFanControl": "ควบคุมพัดลมด้วยความชื้น",
   "examples.phFullControl": "ควบคุมครบวงจรด้วย pH",
   "examples.humidityClimateControl": "ควบคุมสภาพอากาศด้วยความชื้น",
   "examples.dualSensorMisting": "พ่นหมอกด้วยเซนเซอร์คู่",
-  "examples.dualSensorFan": "ควบคุมพัดลมด้วยเซนเซอร์คู่"
+  "examples.dualSensorFan": "ควบคุมพัดลมด้วยเซนเซอร์คู่",
+  "examples.relaySequentialBlink": "ทดสอบรีเลย์ต่อเนื่อง",
+  "examples.mcpSmartControl": "ควบคุมอัจฉริยะด้วย MCP23008",
+  "ui.tab.code": "โค้ด",
+  "ui.tab.io": "I/O",
+  "ui.tab.serial": "Serial",
+  "ui.io.outputs": "เอาต์พุต",
+  "ui.io.inputs": "อินพุต",
+  "ui.serial.title": "Serial Monitor",
+  "ui.serial.clear": "ล้าง"
 }
