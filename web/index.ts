@@ -13,6 +13,91 @@ if(!mountingDiv) throw new DOMException("Mounting div not found")
 const lang = localStorage.getItem('hackCable-webExample-language');
 let hackCable = new HackCable(mountingDiv, lang ? lang : 'en_us');
 
+// Emscripten WASM state
+let activeWasmModule: any = null;
+let activeWasmScript: HTMLScriptElement | null = null;
+let lastEmscriptenResult: { js: string; wasm?: string } | null = null;
+let emscriptenAvailable = false;
+
+// Godbolt API (public Emscripten compiler — no backend needed)
+const GODBOLT_API = 'https://godbolt.org';
+let godboltCompilerId: string | null = null;
+
+async function findGodboltEmscriptenCompiler(): Promise<string | null> {
+    try {
+        const res = await fetch(`${GODBOLT_API}/api/compilers/c++`, {
+            headers: { Accept: 'application/json' }
+        });
+        if (!res.ok) return null;
+        const compilers: any[] = await res.json();
+        const em = compilers
+            .filter(c => /emscripten/i.test(c.id) || /emscripten/i.test(c.name ?? ''))
+            .sort((a, b) => b.id.localeCompare(a.id));
+        return em[0]?.id ?? null;
+    } catch {
+        return null;
+    }
+}
+
+async function compileWithGodbolt(code: string): Promise<string> {
+    if (!godboltCompilerId) {
+        godboltCompilerId = await findGodboltEmscriptenCompiler();
+        if (!godboltCompilerId) throw new Error('No Emscripten compiler found on Godbolt');
+    }
+    const res = await fetch(`${GODBOLT_API}/api/compiler/${godboltCompilerId}/compile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+            source: code,
+            options: {
+                userArguments: '-O1 -sSINGLE_FILE=1 -sMODULARIZE=1 -sEXPORT_NAME=HackCableModule --no-entry -sALLOW_MEMORY_GROWTH=1',
+                filters: { binary: false, execute: false, trim: false, libraryCode: true }
+            },
+            lang: 'c++'
+        })
+    });
+    if (!res.ok) throw new Error(`Godbolt API error: HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.code !== 0) {
+        const stderr = (data.stderr ?? []).map((l: any) => l.text).join('\n');
+        throw new Error(stderr.trim() || 'Compilation failed');
+    }
+    const js = (data.asm ?? []).map((l: any) => l.text).join('\n');
+    if (!js.trim()) throw new Error('Godbolt returned empty output');
+    return js;
+}
+
+async function checkEmscriptenStatus(retries = 3, delayMs = 1000) {
+    for (let attempt = 0; attempt < retries; attempt++) {
+        const id = await findGodboltEmscriptenCompiler();
+        if (id) {
+            godboltCompilerId = id;
+            emscriptenAvailable = true;
+            updateEmscriptenOption();
+            return;
+        }
+        if (attempt < retries - 1) await new Promise(r => setTimeout(r, delayMs));
+    }
+    emscriptenAvailable = false;
+    updateEmscriptenOption();
+}
+
+function updateEmscriptenOption() {
+    if (!compilerModeSelect) return;
+    const opt = compilerModeSelect.querySelector('option[value="emscripten"]') as HTMLOptionElement;
+    if (!opt) return;
+    if (emscriptenAvailable) {
+        opt.textContent = 'Emscripten C++ (via Godbolt)';
+        opt.disabled = false;
+    } else {
+        opt.textContent = 'Emscripten C++ (unavailable)';
+        opt.disabled = true;
+        if (compilerModeSelect.value === 'emscripten') {
+            compilerModeSelect.value = 'micropython';
+        }
+    }
+}
+
 // Auto-setup: Create Arduino board with LED on pin 13
 function autoSetupBasicCircuit(forceSetup = false) {
     // Check if there's already saved data, if so, don't auto-setup (unless forced)
@@ -143,6 +228,20 @@ const codeInput = document.getElementById('code-editor');
 const hexInput = document.getElementById('code-compiled');
 const statusMessage = document.getElementById('status-message');
 
+const compilerModeSelect = document.getElementById('compiler-mode') as HTMLSelectElement;
+const boardSelectEl = document.getElementById('board-select') as HTMLSelectElement;
+
+function updateCompilerVisibility() {
+    const board = boardSelectEl?.value;
+    const isESP32 = board === 'esp32' || board === 'custom-esp32' || board === 'handysense-pro';
+    if (compilerModeSelect) {
+        compilerModeSelect.style.display = isESP32 ? 'inline-block' : 'none';
+    }
+}
+boardSelectEl?.addEventListener('change', updateCompilerVisibility);
+updateCompilerVisibility();
+checkEmscriptenStatus();
+
 if(compileButton && executeButton && stopButton && pauseButton && codeInput instanceof HTMLTextAreaElement && hexInput instanceof HTMLTextAreaElement){
 
     const code = localStorage.getItem('hackCable-webExample-inputCode');
@@ -152,73 +251,94 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
 
     compileButton.addEventListener("click", () => compile());
     executeButton.addEventListener("click", () => { clearSerial(); execute(); switchTab('io'); setTimeout(startIOMonitor, 200); });
-    stopButton.addEventListener("click", () => { hackCable.emulatorManager.stop(); stopIOMonitor(); });
+    stopButton.addEventListener("click", () => { hackCable.emulatorManager.stop(); stopIOMonitor(); cleanupWasmInstance(); });
     pauseButton.addEventListener("click", () => {
         hackCable.emulatorManager.setPaused(!hackCable.emulatorManager.isPosed())
     });
 
     function compile(){
-        if(codeInput instanceof HTMLTextAreaElement && hexInput instanceof HTMLTextAreaElement){
-            // Detect board type
-            const boardType = hackCable.editor.canvas.getBoardType();
-            console.log("Detected board type:", boardType);
+        if(!(codeInput instanceof HTMLTextAreaElement && hexInput instanceof HTMLTextAreaElement)) return;
 
-            if (boardType) {
-                hackCable.emulatorManager.setBoardType(boardType);
-            }
-
-            console.log("Compiling...")
-            showStatus('ui.status.compiling', 'info');
-            localStorage.setItem('hackCable-webExample-inputCode', codeInput.value);
-            hackCable.emulatorManager.compileAndLoadCode(codeInput.value).then(() => {})
-
-            if (boardType === 'esp32') {
-                // For ESP32, we don't compile to hex
-                console.log("ESP32 detected - skipping hex compilation");
-                hexInput.value = '// ESP32 uses MicroPython - no hex compilation needed';
-                showStatus('ui.status.compileComplete', 'success');
-            } else {
-                // For Arduino, compile to hex
-                EmulatorManager.compileCode(codeInput.value).then((data: CompileResult) => {
-                    if(data){
-                        console.log("done")
-                        hexInput.value = data.hex
-                        localStorage.setItem('hackCable-webExample-inputHex', data.hex);
-                        showStatus('ui.status.compileComplete', 'success');
-                    } else {
-                        showStatus('ui.status.compileFailed', 'error');
-                    }
-                }).catch(() => {
-                    showStatus('ui.status.compileFailed', 'error');
-                })
-            }
-        }
-
-    }
-    function execute(){
-        hackCable.emulatorManager.stop()
-
-        // Detect board type
         const boardType = hackCable.editor.canvas.getBoardType();
-        console.log("Executing on board type:", boardType);
+        if (boardType) hackCable.emulatorManager.setBoardType(boardType);
 
-        if (boardType) {
-            hackCable.emulatorManager.setBoardType(boardType);
+        const mode = compilerModeSelect?.value ?? 'micropython';
+
+        showStatus('ui.status.compiling', 'info');
+        localStorage.setItem('hackCable-webExample-inputCode', codeInput.value);
+
+        if (boardType === 'esp32' && mode === 'emscripten') {
+            // --- GODBOLT EMSCRIPTEN PATH ---
+            hexInput.value = '// Compiling C++ via Godbolt (Emscripten)...';
+            compileWithGodbolt(codeInput.value)
+                .then(jsGlue => {
+                    lastEmscriptenResult = { js: jsGlue };
+                    hexInput.value = '// Emscripten (via Godbolt) compilation OK. Click Execute.';
+                    showStatus('ui.status.compileComplete', 'success');
+                })
+                .catch((err: Error) => {
+                    hexInput.value = '// Compilation error:\n' + err.message;
+                    showStatus('ui.status.compileFailed', 'error');
+                });
+
+        } else if (boardType === 'esp32') {
+            // --- MICROPYTHON LEGACY PATH ---
+            hackCable.emulatorManager.compileAndLoadCode(codeInput.value).then(() => {});
+            hexInput.value = '// ESP32 uses MicroPython - no hex compilation needed';
+            showStatus('ui.status.compileComplete', 'success');
+
+        } else {
+            // --- ARDUINO AVR PATH ---
+            EmulatorManager.compileCode(codeInput.value).then((data: CompileResult) => {
+                if(data){
+                    hexInput.value = data.hex;
+                    localStorage.setItem('hackCable-webExample-inputHex', data.hex);
+                    showStatus('ui.status.compileComplete', 'success');
+                } else {
+                    showStatus('ui.status.compileFailed', 'error');
+                }
+            }).catch(() => showStatus('ui.status.compileFailed', 'error'));
         }
+    }
 
-        if(hexInput instanceof HTMLTextAreaElement && codeInput instanceof HTMLTextAreaElement){
-            showStatus('ui.status.executing', 'info');
+    function execute(){
+        hackCable.emulatorManager.stop();
 
-            if (boardType === 'esp32') {
-                // For ESP32, pass the code directly
-                console.log("Running MicroPython code on ESP32");
-                hackCable.emulatorManager.run(codeInput.value);
-            } else {
-                // For Arduino, load hex and run
-                localStorage.setItem('hackCable-webExample-inputHex', hexInput.value);
-                hackCable.emulatorManager.loadCode(hexInput.value);
-                hackCable.emulatorManager.run();
+        const boardType = hackCable.editor.canvas.getBoardType();
+        if (boardType) hackCable.emulatorManager.setBoardType(boardType);
+
+        const mode = compilerModeSelect?.value ?? 'micropython';
+
+        if(!(hexInput instanceof HTMLTextAreaElement && codeInput instanceof HTMLTextAreaElement)) return;
+        showStatus('ui.status.executing', 'info');
+
+        if (boardType === 'esp32' && mode === 'emscripten') {
+            // --- EMSCRIPTEN PATH ---
+            if (!lastEmscriptenResult) {
+                appendSerial('Error: No compiled WASM. Click Compile first.\n');
+                showStatus('ui.status.compileFailed', 'error');
+                return;
             }
+            clearSerial();
+            loadEmscriptenWasm(lastEmscriptenResult.js, lastEmscriptenResult.wasm)
+                .then(() => {
+                    showStatus('ui.status.executing', 'info');
+                    autoActivateSensorsFromCode(codeInput.value);
+                })
+                .catch(err => {
+                    appendSerial('WASM load error: ' + err.message + '\n');
+                    showStatus('ui.status.compileFailed', 'error');
+                });
+
+        } else if (boardType === 'esp32') {
+            // --- MICROPYTHON ---
+            hackCable.emulatorManager.run(codeInput.value);
+
+        } else {
+            // --- ARDUINO AVR ---
+            localStorage.setItem('hackCable-webExample-inputHex', hexInput.value);
+            hackCable.emulatorManager.loadCode(hexInput.value);
+            hackCable.emulatorManager.run();
         }
     }
 }
@@ -277,6 +397,10 @@ function getConnectedBoardPin(figure: any): string {
 
 function readElementState(element: any): { state: string; isOn: boolean } {
     try {
+        if (element.ch1 !== undefined) {
+            const on = [element.ch1, element.ch2, element.ch3, element.ch4].filter(Boolean).length;
+            return { state: `${on}/4 ON`, isOn: on > 0 };
+        }
         if (element.isOn !== undefined) {
             return { state: element.isOn ? 'ON' : 'OFF', isOn: !!element.isOn };
         }
@@ -301,6 +425,7 @@ function buildIOList() {
 
     // Use class names (language-independent) to identify actuator outputs
     const OUTPUT_CLASSES = new Set(['MistingPumpElement', 'WaterPumpElement', 'FanElement', 'RelayElement']);
+    const BFARM_OUTPUT_CLASSES = new Set(['FourChannelRelayElement']);
     const figures = hackCable.editor.canvas.getAllFigures();
     let outCount = 0;
     let inCount = 0;
@@ -314,10 +439,12 @@ function buildIOList() {
         const isOutput = info.type === ComponentType.LED
             || info.type === ComponentType.MOTOR
             || info.type === ComponentType.TRANSMITTER
-            || (info.type === ComponentType.CUSTOM && OUTPUT_CLASSES.has(el.constructor.name));
+            || (info.type === ComponentType.CUSTOM && OUTPUT_CLASSES.has(el.constructor.name))
+            || (info.type === ComponentType.BFARM && BFARM_OUTPUT_CLASSES.has(el.constructor.name));
         const isInput = info.type === ComponentType.BUTTON
             || info.type === ComponentType.SENSOR
-            || (info.type === ComponentType.CUSTOM && !OUTPUT_CLASSES.has(el.constructor.name));
+            || (info.type === ComponentType.CUSTOM && !OUTPUT_CLASSES.has(el.constructor.name))
+            || (info.type === ComponentType.BFARM && !BFARM_OUTPUT_CLASSES.has(el.constructor.name));
 
         if (!isOutput && !isInput) return;
 
@@ -355,8 +482,7 @@ function buildIOList() {
 }
 
 function updateIOStates() {
-    ioItems.forEach(({ el, isOutput }, id) => {
-        if (!isOutput) return;
+    ioItems.forEach(({ el }, id) => {
         const stateEl = document.querySelector(`#${id} .io-item-state`);
         if (!stateEl) return;
         const { state, isOn } = readElementState(el);
@@ -375,6 +501,21 @@ function stopIOMonitor() {
     if (ioMonitorInterval) { clearInterval(ioMonitorInterval); ioMonitorInterval = null; }
 }
 
+function autoActivateSensorsFromCode(code: string) {
+    // RS485 sensors use Serial2 (UART) on RXD/TXD pins (default 16/17 on HandySense Pro)
+    if (/ModbusMaster|Serial2/.test(code)) {
+        const rxDef = code.match(/#define\s+RXD\s+(\d+)/);
+        const txDef = code.match(/#define\s+TXD\s+(\d+)/);
+        const rx = rxDef ? parseInt(rxDef[1]) : 16;
+        const tx = txDef ? parseInt(txDef[1]) : 17;
+        hackCable.activateSensorComponent('uart', tx, rx);
+    }
+    // I2C sensors (SHT31, BH1750) on default ESP32 I2C pins (SDA=21, SCL=22)
+    if (/SHT31|BH1750/.test(code)) {
+        hackCable.activateSensorComponent('i2c', 21, 22);
+    }
+}
+
 // Serial Monitor
 function appendSerial(data: string) {
     const output = document.getElementById('serial-output');
@@ -390,6 +531,72 @@ function clearSerial() {
 
 hackCable.serialDataCallback = (data: string) => appendSerial(data);
 document.getElementById('serial-clear')?.addEventListener('click', clearSerial);
+
+// Emscripten WASM ↔ canvas bridge callbacks
+(window as any).hackcable_update_pin = (pin: number, value: boolean) => {
+    hackCable.esp32PinUpdate(pin, value);
+};
+(window as any).hackcable_pin_mode = (_pin: number, _mode: number) => {};
+(window as any).hackcable_read_pin = (_pin: number): boolean => false;
+(window as any).hackcable_analog_read = (_pin: number): number => 0;
+(window as any).hackcable_serial_begin = (_baud: number) => {};
+(window as any).hackcable_serial_data = (text: string) => { appendSerial(text); };
+// Sensor data bridges (called from Emscripten WASM sensor mocks)
+(window as any).hackcable_modbus_read = (_slaveId: number, _regAddr: number): number => 0;
+(window as any).hackcable_sht31_temp = (): number => 25.0;
+(window as any).hackcable_sht31_humidity = (): number => 60.0;
+(window as any).hackcable_bh1750_lux = (): number => 500.0;
+
+// Emscripten WASM cleanup
+async function cleanupWasmInstance() {
+    if (activeWasmModule) {
+        try {
+            if (typeof activeWasmModule.ccall === 'function') {
+                activeWasmModule.ccall('emscripten_cancel_main_loop', null, [], []);
+            }
+        } catch (e) { /* WASM may already be terminated */ }
+        activeWasmModule = null;
+    }
+    if (activeWasmScript) {
+        activeWasmScript.remove();
+        activeWasmScript = null;
+    }
+    delete (window as any).HackCableModule;
+}
+
+// Emscripten WASM loader
+// wasmBase64 is optional: omit when using SINGLE_FILE mode (WASM is embedded in jsGlue)
+async function loadEmscriptenWasm(jsGlue: string, wasmBase64?: string) {
+    await cleanupWasmInstance();
+
+    // Load JS glue via Blob URL (same-origin, no CORS issues)
+    const blobUrl = URL.createObjectURL(new Blob([jsGlue], { type: 'application/javascript' }));
+    await new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = blobUrl;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Failed to load Emscripten JS glue'));
+        document.head.appendChild(script);
+        activeWasmScript = script;
+    });
+    URL.revokeObjectURL(blobUrl);
+
+    // Instantiate WASM module via the factory function
+    const factory = (window as any).HackCableModule;
+    if (!factory) throw new Error('HackCableModule factory not found after script load');
+
+    const factoryOptions: any = {
+        print: (t: string) => appendSerial(t + '\n'),
+        printErr: (t: string) => console.warn('[Emscripten]', t),
+        locateFile: (p: string) => p
+    };
+    if (wasmBase64) {
+        // Decode base64 → ArrayBuffer (backend / non-SINGLE_FILE mode)
+        factoryOptions.wasmBinary = Uint8Array.from(atob(wasmBase64), c => c.charCodeAt(0)).buffer;
+    }
+
+    activeWasmModule = await factory(factoryOptions);
+}
 
 // Initialize sidebar toggle functionality
 function initializeSidebarToggle() {
@@ -966,6 +1173,536 @@ void loop() {
   Serial.println("Relay 4: OFF");
   delay(500);
 }`
+,
+
+    // ============================================
+    // BFarm - Field Sensor Examples
+    // ============================================
+
+    // BFarm 1: RS485 pH Sensor (component ID 35)
+    bfarm_rs485_ph: `// BFarm - RS485 pH Sensor (pH-4502C) - Handysense Pro
+// Connect: VCC→3V3_R3, GND→GND_R3, A+→TX2 (pin 17), B-→RX2 (pin 16)
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+
+#define RXD 16
+#define TXD 17
+
+ModbusMaster PHrs485;
+float PH;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  PHrs485.begin(1, Serial2);
+  Serial.println("RS485 pH Sensor Ready");
+}
+
+void loop() {
+  uint8_t result_PH;
+  result_PH = PHrs485.readHoldingRegisters(0, 2);
+  PH = PHrs485.getResponseBuffer(1) / 10.00f;
+  Serial.print("pH: ");
+  Serial.println(PH);
+  delay(1000);
+}`,
+
+    // BFarm 2: RS485 Light Sensor (component ID 36)
+    bfarm_rs485_light: `// BFarm - RS485 Light Sensor (DT-Par485) - Handysense Pro
+// Connect: VCC→3V3_R3, GND→GND_R3, A+→TX2 (pin 17), B-→RX2 (pin 16)
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+
+#define RXD 16
+#define TXD 17
+
+ModbusMaster rs485_pair;
+float lightValue;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  rs485_pair.begin(1, Serial2);
+  Serial.println("RS485 Light Sensor Ready");
+}
+
+void loop() {
+  uint8_t result_pair;
+  result_pair = rs485_pair.readHoldingRegisters(0, 2);
+  lightValue = rs485_pair.getResponseBuffer(0);
+  Serial.print("Light (lux): ");
+  Serial.println(lightValue);
+  delay(1000);
+}`,
+
+    // BFarm 3: RS485 Rain Sensor (component ID 37)
+    bfarm_rs485_rain: `// BFarm - RS485 Rain Sensor - Handysense Pro
+// Connect: VCC→3V3_R3, GND→GND_R3, A+→TX2 (pin 17), B-→RX2 (pin 16)
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+
+#define RXD 16
+#define TXD 17
+
+ModbusMaster rs485_rain;
+float rain;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  rs485_rain.begin(1, Serial2);
+  Serial.println("RS485 Rain Sensor Ready");
+}
+
+void loop() {
+  uint8_t result_rain;
+  result_rain = rs485_rain.readHoldingRegisters(0, 2);
+  rain = rs485_rain.getResponseBuffer(0) / 10.0f;
+  Serial.print("Rain (mm): ");
+  Serial.println(rain);
+  delay(1000);
+}`,
+
+    // BFarm 4: RS485 Wind Speed Sensor (component ID 38)
+    bfarm_rs485_wind: `// BFarm - RS485 Wind Speed Sensor - Handysense Pro
+// Connect: VCC→3V3_R3, GND→GND_R3, A+→TX2 (pin 17), B-→RX2 (pin 16)
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+
+#define RXD 16
+#define TXD 17
+
+ModbusMaster rs485_winds;
+float windSpeed;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  rs485_winds.begin(1, Serial2);
+  Serial.println("RS485 Wind Speed Sensor Ready");
+}
+
+void loop() {
+  uint8_t result_winds;
+  result_winds = rs485_winds.readHoldingRegisters(0, 2);
+  windSpeed = rs485_winds.getResponseBuffer(0) / 10.0f;
+  Serial.print("Wind Speed (m/s): ");
+  Serial.println(windSpeed);
+  delay(1000);
+}`,
+
+    // BFarm 5: RS485 PAR Sensor (component ID 39)
+    bfarm_rs485_par: `// BFarm - RS485 PAR Sensor - Handysense Pro
+// Connect: VCC→3V3_R3, GND→GND_R3, A+→TX2 (pin 17), B-→RX2 (pin 16)
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+
+#define RXD 16
+#define TXD 17
+
+ModbusMaster rs485_LightPar;
+float LightPar;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  rs485_LightPar.begin(1, Serial2);
+  Serial.println("RS485 PAR Sensor Ready");
+}
+
+void loop() {
+  uint8_t result_LightPar;
+  result_LightPar = rs485_LightPar.readHoldingRegisters(0, 2);
+  LightPar = rs485_LightPar.getResponseBuffer(0);
+  Serial.print("PAR (umol/m2/s): ");
+  Serial.println(LightPar);
+  delay(1000);
+}`,
+
+    // BFarm 6: Weather Sensor HTCo2PLx (component ID 40)
+    bfarm_rs485_weather: `// BFarm - Weather Sensor HTCo2PLx (RS485) - Handysense Pro
+// Connect: VCC→3V3_R3, GND→GND_R3, A+→TX2 (pin 17), B-→RX2 (pin 16)
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+
+#define RXD 16
+#define TXD 17
+
+ModbusMaster rs485_Weather_HTCo2PLx;
+float weatherHumidity, weatherTemp, weatherCO2, weatherPressure;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  rs485_Weather_HTCo2PLx.begin(1, Serial2);
+  Serial.println("Weather Sensor HTCo2PLx Ready");
+}
+
+void loop() {
+  uint8_t result_rs485_Weather_HTCo2PLx;
+  result_rs485_Weather_HTCo2PLx = rs485_Weather_HTCo2PLx.readHoldingRegisters(500, 10);
+  weatherHumidity = rs485_Weather_HTCo2PLx.getResponseBuffer(0) / 10.00f;
+  weatherTemp     = rs485_Weather_HTCo2PLx.getResponseBuffer(1) / 10.00f;
+  weatherCO2      = rs485_Weather_HTCo2PLx.getResponseBuffer(3) / 1.00f;
+  weatherPressure = rs485_Weather_HTCo2PLx.getResponseBuffer(5) / 1.00f;
+  Serial.print("Humidity: ");    Serial.print(weatherHumidity);    Serial.println(" %");
+  Serial.print("Temperature: "); Serial.print(weatherTemp);        Serial.println(" C");
+  Serial.print("CO2: ");         Serial.print(weatherCO2);         Serial.println(" ppm");
+  Serial.print("Pressure: ");    Serial.print(weatherPressure);    Serial.println(" hPa");
+  delay(2000);
+}`,
+
+    // BFarm 7: SHT31 Sensor (component ID 41)
+    bfarm_sht31: `// BFarm - SHT31 Temperature & Humidity Sensor (I2C) - Handysense Pro
+// Connect: VCC→3V3_R1, GND→GND_R1, SDA→SDA_1, SCL→SCL_1
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <SHT31.h>
+
+SHT31 sht31;
+float sht31Temp, sht31Humidity;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  sht31.begin(0x44);
+  Serial.println("SHT31 Sensor Ready");
+}
+
+void loop() {
+  sht31.read();
+  sht31Temp     = sht31.getTemperature();
+  sht31Humidity = sht31.getHumidity();
+  Serial.print("Temperature: "); Serial.print(sht31Temp);     Serial.println(" C");
+  Serial.print("Humidity: ");    Serial.print(sht31Humidity); Serial.println(" %");
+  delay(1000);
+}`,
+
+    // BFarm 8: BH1750 Light Sensor (component ID 42)
+    bfarm_bh1750: `// BFarm - BH1750 Ambient Light Sensor (I2C) - Handysense Pro
+// Connect: VCC→3V3_R1, GND→GND_R1, SDA→SDA_1, SCL→SCL_1
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <BH1750.h>
+
+BH1750 lightMeter;
+float lux;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  lightMeter.begin();
+  Serial.println("BH1750 Light Sensor Ready");
+}
+
+void loop() {
+  lux = lightMeter.readLightLevel();
+  Serial.print("Light: "); Serial.print(lux); Serial.println(" lx");
+  delay(1000);
+}`,
+
+    // BFarm 9: 4-20mA Current Loop (component ID 43)
+    bfarm_current420ma: `// BFarm - 4-20mA Current Loop (MCP3424 I2C ADC) - Handysense Pro
+// Connect: VCC→3V3_R2, GND→GND_R2, SDA→SDA_2, SCL→SCL_2
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+
+// HandySense built-in MCP3424 functions:
+// Read4_20mA_MPC3424(ch)  - reads 4-20mA on channel 1-4
+// Read4_20mA_MPC3424_map(ch, inMin, inMax, outMin, outMax) - scaled read
+float currentMA;
+float scaledValue;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  Serial.println("4-20mA Current Loop Ready");
+}
+
+void loop() {
+  currentMA   = Read4_20mA_MPC3424(1);
+  scaledValue = Read4_20mA_MPC3424_map(1, 4.0, 20.0, 0.0, 100.0);
+  Serial.print("Current (mA): ");   Serial.println(currentMA);
+  Serial.print("Mapped (0-100): "); Serial.println(scaledValue);
+  delay(1000);
+}`,
+
+    // BFarm 10: Soil Moisture Sensor (component ID 44)
+    bfarm_soil_moisture: `// BFarm - Soil Moisture Sensor (Analog) - Handysense Pro
+// Connect: VCC→3V3_2, GND→GND_2, AO→IO36
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+
+const int SOIL_PIN = 36;
+int soilRaw;
+float soilPercent;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  Serial.println("Soil Moisture Sensor Ready");
+}
+
+void loop() {
+  soilRaw     = analogRead(SOIL_PIN);
+  soilPercent = map(soilRaw, 4095, 0, 0, 100);
+  Serial.print("Soil Raw: ");      Serial.println(soilRaw);
+  Serial.print("Soil Moisture: "); Serial.print(soilPercent); Serial.println(" %");
+  delay(1000);
+}`,
+
+    // BFarm 11: Four Channel Relay (component ID 45)
+    bfarm_relay: `// BFarm - 4-Channel Relay Module - Handysense Pro
+// Connect: VCC→VIN_1, GND→GND_5
+//          IN1→IO25, IN2→IO4, IN3→IO12, IN4→IO13
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+
+const int RELAY1 = 25;
+const int RELAY2 = 4;
+const int RELAY3 = 12;
+const int RELAY4 = 13;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  pinMode(RELAY1, OUTPUT); pinMode(RELAY2, OUTPUT);
+  pinMode(RELAY3, OUTPUT); pinMode(RELAY4, OUTPUT);
+  digitalWrite(RELAY1, LOW); digitalWrite(RELAY2, LOW);
+  digitalWrite(RELAY3, LOW); digitalWrite(RELAY4, LOW);
+  Serial.println("4-Channel Relay Ready");
+}
+
+void loop() {
+  digitalWrite(RELAY1, HIGH); Serial.println("Relay 1 ON");  delay(500);
+  digitalWrite(RELAY1, LOW);  Serial.println("Relay 1 OFF"); delay(500);
+  digitalWrite(RELAY2, HIGH); Serial.println("Relay 2 ON");  delay(500);
+  digitalWrite(RELAY2, LOW);  Serial.println("Relay 2 OFF"); delay(500);
+  digitalWrite(RELAY3, HIGH); Serial.println("Relay 3 ON");  delay(500);
+  digitalWrite(RELAY3, LOW);  Serial.println("Relay 3 OFF"); delay(500);
+  digitalWrite(RELAY4, HIGH); Serial.println("Relay 4 ON");  delay(500);
+  digitalWrite(RELAY4, LOW);  Serial.println("Relay 4 OFF"); delay(500);
+}`,
+
+    // BFarm 12: Fertilizer pH Sensor (component ID 46)
+    bfarm_fertilizer_ph: `// BFarm - Fertilizer pH Sensor (RS485) - Handysense Pro
+// Connect: VCC→3V3_R3, GND→GND_R3, A+→TX2 (pin 17), B-→RX2 (pin 16)
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+
+#define RXD 16
+#define TXD 17
+
+ModbusMaster FertPH;
+float fertPH, fertTemp;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  FertPH.begin(1, Serial2);
+  Serial.println("Fertilizer pH Sensor Ready");
+}
+
+void loop() {
+  uint8_t result_FertPH;
+  result_FertPH = FertPH.readHoldingRegisters(0, 2);
+  fertPH   = FertPH.getResponseBuffer(1) / 10.00f;
+  fertTemp = FertPH.getResponseBuffer(0) / 10.00f;
+  Serial.print("Fertilizer pH: ");  Serial.println(fertPH);
+  Serial.print("Solution Temp: "); Serial.print(fertTemp); Serial.println(" C");
+  delay(1000);
+}`,
+
+    // BFarm 13: EC Sensor (component ID 47)
+    bfarm_ec: `// BFarm - EC (Electrical Conductivity) Sensor (RS485) - Handysense Pro
+// Connect: VCC→3V3_R3, GND→GND_R3, A+→TX2 (pin 17), B-→RX2 (pin 16)
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+
+#define RXD 16
+#define TXD 17
+
+ModbusMaster EcSensor;
+float ecValue, ecTemp;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  EcSensor.begin(2, Serial2);
+  Serial.println("EC Sensor Ready");
+}
+
+void loop() {
+  uint8_t result_EC;
+  result_EC = EcSensor.readHoldingRegisters(0, 2);
+  ecValue = EcSensor.getResponseBuffer(0) / 10.00f;
+  ecTemp  = EcSensor.getResponseBuffer(1) / 10.00f;
+  Serial.print("EC: ");   Serial.print(ecValue); Serial.println(" mS/cm");
+  Serial.print("Temp: "); Serial.print(ecTemp);  Serial.println(" C");
+  delay(1000);
+}`,
+
+    // BFarm 14: Fertilizer Temp Sensor (component ID 48)
+    bfarm_fertilizer_temp: `// BFarm - Fertilizer Temperature Sensor (RS485) - Handysense Pro
+// Connect: VCC→3V3_R3, GND→GND_R3, A+→TX2 (pin 17), B-→RX2 (pin 16)
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+
+#define RXD 16
+#define TXD 17
+
+ModbusMaster FertTemp;
+float fertSolTemp;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  FertTemp.begin(3, Serial2);
+  Serial.println("Fertilizer Temp Sensor Ready");
+}
+
+void loop() {
+  uint8_t result_FertTemp;
+  result_FertTemp = FertTemp.readHoldingRegisters(0, 2);
+  fertSolTemp = FertTemp.getResponseBuffer(0) / 10.00f;
+  Serial.print("Fertilizer Solution Temp: ");
+  Serial.print(fertSolTemp); Serial.println(" C");
+  delay(1000);
+}`,
+
+    // BFarm 15: Four Channel Button (component ID 49)
+    bfarm_button: `// BFarm - 4-Channel Button Module - Handysense Pro
+// Connect: VCC→3V3_4, GND→GND_4
+//          B1→IO32, B2→IO33, B3→IO15, B4→IO39
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+
+const int BTN1 = 32;
+const int BTN2 = 33;
+const int BTN3 = 15;
+const int BTN4 = 39;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  pinMode(BTN1, INPUT_PULLUP);
+  pinMode(BTN2, INPUT_PULLUP);
+  pinMode(BTN3, INPUT_PULLUP);
+  pinMode(BTN4, INPUT_PULLUP);
+  Serial.println("4-Channel Button Ready");
+}
+
+void loop() {
+  if (digitalRead(BTN1) == LOW) {
+    Serial.println("Button 1 pressed");
+    delay(200);
+  }
+  if (digitalRead(BTN2) == LOW) {
+    Serial.println("Button 2 pressed");
+    delay(200);
+  }
+  if (digitalRead(BTN3) == LOW) {
+    Serial.println("Button 3 pressed");
+    delay(200);
+  }
+  if (digitalRead(BTN4) == LOW) {
+    Serial.println("Button 4 pressed");
+    delay(200);
+  }
+}`
 };
 
 const codeExamplesSelect = document.getElementById('code-examples') as HTMLSelectElement;
@@ -1003,6 +1740,52 @@ if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
                     break;
                 case 'mcpSmartControl':
                     setupMcpSmartControlCircuit();
+                    break;
+                // BFarm Field Sensor Examples
+                case 'bfarm_rs485_ph':
+                    setupBfarmRs485PhCircuit();
+                    break;
+                case 'bfarm_rs485_light':
+                    setupBfarmRs485LightCircuit();
+                    break;
+                case 'bfarm_rs485_rain':
+                    setupBfarmRs485RainCircuit();
+                    break;
+                case 'bfarm_rs485_wind':
+                    setupBfarmRs485WindCircuit();
+                    break;
+                case 'bfarm_rs485_par':
+                    setupBfarmRs485ParCircuit();
+                    break;
+                case 'bfarm_rs485_weather':
+                    setupBfarmRs485WeatherCircuit();
+                    break;
+                case 'bfarm_sht31':
+                    setupBfarmSht31Circuit();
+                    break;
+                case 'bfarm_bh1750':
+                    setupBfarmBh1750Circuit();
+                    break;
+                case 'bfarm_current420ma':
+                    setupBfarmCurrent420maCircuit();
+                    break;
+                case 'bfarm_soil_moisture':
+                    setupBfarmSoilMoistureCircuit();
+                    break;
+                case 'bfarm_relay':
+                    setupBfarmRelayCircuit();
+                    break;
+                case 'bfarm_fertilizer_ph':
+                    setupBfarmFertilizerPhCircuit();
+                    break;
+                case 'bfarm_ec':
+                    setupBfarmEcCircuit();
+                    break;
+                case 'bfarm_fertilizer_temp':
+                    setupBfarmFertilizerTempCircuit();
+                    break;
+                case 'bfarm_button':
+                    setupBfarmButtonCircuit();
                     break;
             }
         }
@@ -1581,5 +2364,248 @@ function setupMcpSmartControlCircuit() {
         }
     }, 500);
 }
+
+// ============================================
+// BFarm Field Sensor Circuit Setup Functions
+// ============================================
+
+// Helper: create HandysensePro board (ID 28) at center, sensor at right
+function setupBfarmRs485Sensor(sensorId: number, label: string) {
+    hackCable.editor.canvas.clear();
+    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
+    hackCable.editor.canvas.add(boardFigure.setX(150).setY(50));
+    const sensorFigure = new ComponentFigure(wokwiComponentById[sensorId]);
+    hackCable.editor.canvas.add(sensorFigure.setX(470).setY(90));
+    setTimeout(() => {
+        try {
+            connectPorts(sensorFigure, 'VCC', boardFigure, '3V3_R3');
+            connectPorts(sensorFigure, 'GND', boardFigure, 'GND_R3');
+            connectPorts(sensorFigure, 'A+',  boardFigure, 'TX2');
+            connectPorts(sensorFigure, 'B-',  boardFigure, 'RX2');
+            console.log(`${label} circuit setup complete!`);
+        } catch (error) {
+            console.error(`Error during ${label} wiring:`, error);
+        }
+    }, 500);
+}
+
+// BFarm 1: RS485 pH Sensor (ID 35)
+function setupBfarmRs485PhCircuit() {
+    setupBfarmRs485Sensor(35, 'RS485 pH Sensor');
+}
+
+// BFarm 2: RS485 Light Sensor (ID 36)
+function setupBfarmRs485LightCircuit() {
+    setupBfarmRs485Sensor(36, 'RS485 Light Sensor');
+}
+
+// BFarm 3: RS485 Rain Sensor (ID 37)
+function setupBfarmRs485RainCircuit() {
+    setupBfarmRs485Sensor(37, 'RS485 Rain Sensor');
+}
+
+// BFarm 4: RS485 Wind Speed Sensor (ID 38)
+function setupBfarmRs485WindCircuit() {
+    setupBfarmRs485Sensor(38, 'RS485 Wind Speed Sensor');
+}
+
+// BFarm 5: RS485 PAR Sensor (ID 39)
+function setupBfarmRs485ParCircuit() {
+    setupBfarmRs485Sensor(39, 'RS485 PAR Sensor');
+}
+
+// BFarm 6: Weather Sensor HTCo2PLx (ID 40)
+function setupBfarmRs485WeatherCircuit() {
+    setupBfarmRs485Sensor(40, 'Weather Sensor HTCo2PLx');
+}
+
+// BFarm 7: SHT31 I2C Sensor (ID 41)
+function setupBfarmSht31Circuit() {
+    console.log("Setting up SHT31 I2C circuit...");
+    hackCable.editor.canvas.clear();
+    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
+    hackCable.editor.canvas.add(boardFigure.setX(150).setY(50));
+    const sensorFigure = new ComponentFigure(wokwiComponentById[41]);
+    hackCable.editor.canvas.add(sensorFigure.setX(470).setY(90));
+    setTimeout(() => {
+        try {
+            connectPorts(sensorFigure, 'VCC', boardFigure, '3V3_R1');
+            connectPorts(sensorFigure, 'GND', boardFigure, 'GND_R1');
+            connectPorts(sensorFigure, 'SDA', boardFigure, 'SDA_1');
+            connectPorts(sensorFigure, 'SCL', boardFigure, 'SCL_1');
+            console.log("SHT31 circuit setup complete!");
+        } catch (error) {
+            console.error("Error during SHT31 wiring:", error);
+        }
+    }, 500);
+}
+
+// BFarm 8: BH1750 I2C Light Sensor (ID 42)
+function setupBfarmBh1750Circuit() {
+    console.log("Setting up BH1750 I2C circuit...");
+    hackCable.editor.canvas.clear();
+    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
+    hackCable.editor.canvas.add(boardFigure.setX(150).setY(50));
+    const sensorFigure = new ComponentFigure(wokwiComponentById[42]);
+    hackCable.editor.canvas.add(sensorFigure.setX(470).setY(90));
+    setTimeout(() => {
+        try {
+            connectPorts(sensorFigure, 'VCC', boardFigure, '3V3_R1');
+            connectPorts(sensorFigure, 'GND', boardFigure, 'GND_R1');
+            connectPorts(sensorFigure, 'SDA', boardFigure, 'SDA_1');
+            connectPorts(sensorFigure, 'SCL', boardFigure, 'SCL_1');
+            console.log("BH1750 circuit setup complete!");
+        } catch (error) {
+            console.error("Error during BH1750 wiring:", error);
+        }
+    }, 500);
+}
+
+// BFarm 9: 4-20mA Current Loop / MCP3424 I2C ADC (ID 43)
+function setupBfarmCurrent420maCircuit() {
+    console.log("Setting up 4-20mA Current Loop circuit...");
+    hackCable.editor.canvas.clear();
+    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
+    hackCable.editor.canvas.add(boardFigure.setX(150).setY(50));
+    const sensorFigure = new ComponentFigure(wokwiComponentById[43]);
+    hackCable.editor.canvas.add(sensorFigure.setX(470).setY(90));
+    setTimeout(() => {
+        try {
+            connectPorts(sensorFigure, 'VCC', boardFigure, '3V3_R2');
+            connectPorts(sensorFigure, 'GND', boardFigure, 'GND_R2');
+            connectPorts(sensorFigure, 'SDA', boardFigure, 'SDA_2');
+            connectPorts(sensorFigure, 'SCL', boardFigure, 'SCL_2');
+            console.log("4-20mA Current Loop circuit setup complete!");
+        } catch (error) {
+            console.error("Error during 4-20mA wiring:", error);
+        }
+    }, 500);
+}
+
+// BFarm 10: Soil Moisture Sensor (ID 44)
+function setupBfarmSoilMoistureCircuit() {
+    console.log("Setting up Soil Moisture Sensor circuit...");
+    hackCable.editor.canvas.clear();
+    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
+    hackCable.editor.canvas.add(boardFigure.setX(200).setY(50));
+    const sensorFigure = new ComponentFigure(wokwiComponentById[44]);
+    hackCable.editor.canvas.add(sensorFigure.setX(50).setY(80));
+    setTimeout(() => {
+        try {
+            connectPorts(sensorFigure, 'VCC', boardFigure, '3V3_2');
+            connectPorts(sensorFigure, 'GND', boardFigure, 'GND_2');
+            connectPorts(sensorFigure, 'AO',  boardFigure, 'IO36');
+            console.log("Soil Moisture circuit setup complete!");
+        } catch (error) {
+            console.error("Error during Soil Moisture wiring:", error);
+        }
+    }, 500);
+}
+
+// BFarm 11: Four Channel Relay (ID 45)
+function setupBfarmRelayCircuit() {
+    console.log("Setting up 4-Channel Relay circuit...");
+    hackCable.editor.canvas.clear();
+    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
+    hackCable.editor.canvas.add(boardFigure.setX(200).setY(50));
+    const relayFigure = new ComponentFigure(wokwiComponentById[45]);
+    hackCable.editor.canvas.add(relayFigure.setX(500).setY(80));
+    setTimeout(() => {
+        try {
+            connectPorts(relayFigure, 'VCC', boardFigure, 'VIN_1');
+            connectPorts(relayFigure, 'GND', boardFigure, 'GND_5');
+            connectPorts(relayFigure, 'IN1', boardFigure, 'IO25');
+            connectPorts(relayFigure, 'IN2', boardFigure, 'IO4');
+            connectPorts(relayFigure, 'IN3', boardFigure, 'IO12');
+            connectPorts(relayFigure, 'IN4', boardFigure, 'IO13');
+            console.log("4-Channel Relay circuit setup complete!");
+        } catch (error) {
+            console.error("Error during Relay wiring:", error);
+        }
+    }, 500);
+}
+
+// BFarm 12: Fertilizer pH Sensor (ID 46)
+function setupBfarmFertilizerPhCircuit() {
+    setupBfarmRs485Sensor(46, 'Fertilizer pH Sensor');
+}
+
+// BFarm 13: EC Sensor (ID 47)
+function setupBfarmEcCircuit() {
+    setupBfarmRs485Sensor(47, 'EC Sensor');
+}
+
+// BFarm 14: Fertilizer Temp Sensor (ID 48)
+function setupBfarmFertilizerTempCircuit() {
+    setupBfarmRs485Sensor(48, 'Fertilizer Temp Sensor');
+}
+
+// BFarm 15: Four Channel Button (ID 49)
+function setupBfarmButtonCircuit() {
+    console.log("Setting up 4-Channel Button circuit...");
+    hackCable.editor.canvas.clear();
+    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
+    hackCable.editor.canvas.add(boardFigure.setX(200).setY(50));
+    const buttonFigure = new ComponentFigure(wokwiComponentById[49]);
+    hackCable.editor.canvas.add(buttonFigure.setX(50).setY(80));
+    setTimeout(() => {
+        try {
+            connectPorts(buttonFigure, 'VCC', boardFigure, '3V3_4');
+            connectPorts(buttonFigure, 'GND', boardFigure, 'GND_4');
+            connectPorts(buttonFigure, 'B1',  boardFigure, 'IO32');
+            connectPorts(buttonFigure, 'B2',  boardFigure, 'IO33');
+            connectPorts(buttonFigure, 'B3',  boardFigure, 'IO15');
+            connectPorts(buttonFigure, 'B4',  boardFigure, 'IO39');
+            console.log("4-Channel Button circuit setup complete!");
+        } catch (error) {
+            console.error("Error during Button wiring:", error);
+        }
+    }, 500);
+}
+
+// postMessage listener: receive code from BFarm and handle shell resize
+window.addEventListener('message', (e: MessageEvent) => {
+    if (!e.data) return;
+    if (e.data.source === 'bfarm' && e.data.type === 'code-sync' && typeof e.data.code === 'string') {
+        if (codeInput instanceof HTMLTextAreaElement) {
+            codeInput.value = e.data.code;
+            localStorage.setItem('hackCable-webExample-inputCode', e.data.code);
+            showStatus('ui.status.codeReceived', 'success');
+        }
+    }
+    if (e.data.source === 'bfarm' && e.data.type === 'add-component' && typeof e.data.componentId === 'number') {
+        const info = wokwiComponentById[e.data.componentId];
+        if (info) {
+            const figure = new ComponentFigure(info);
+            hackCable.editor.canvas.add(figure.setX(300).setY(200));
+        }
+    }
+    if (e.data.source === 'shell' && e.data.type === 'resize') {
+        window.dispatchEvent(new Event('resize'));
+    }
+});
+
+// Transfer code to Blocks page
+const transferToBlocksBtn = document.getElementById('transfer-to-blocks');
+const autoSyncBlocksCheckbox = document.getElementById('auto-sync-blocks') as HTMLInputElement | null;
+
+function transferToBlocks() {
+    if (codeInput instanceof HTMLTextAreaElement) {
+        window.parent.postMessage({ source: 'hackcable', type: 'code-sync', code: codeInput.value }, '*');
+    }
+}
+
+transferToBlocksBtn?.addEventListener('click', transferToBlocks);
+
+let autoSyncBlocksHandler: (() => void) | null = null;
+autoSyncBlocksCheckbox?.addEventListener('change', () => {
+    if (autoSyncBlocksCheckbox.checked) {
+        autoSyncBlocksHandler = () => transferToBlocks();
+        codeInput?.addEventListener('input', autoSyncBlocksHandler);
+    } else if (autoSyncBlocksHandler) {
+        codeInput?.removeEventListener('input', autoSyncBlocksHandler);
+        autoSyncBlocksHandler = null;
+    }
+});
 
 
