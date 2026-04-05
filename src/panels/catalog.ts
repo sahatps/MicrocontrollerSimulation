@@ -37,6 +37,7 @@ export class Catalog {
         if(this.sorter){
             this.sorter.innerHTML = "<option value=\"-1\">Tout afficher</option>\n" +
                 "<option value=" + ComponentType.CUSTOM + ">Custom</option>\n" +
+                "<option value=" + ComponentType.BFARM + ">Bfarm</option>\n" +
                 "<option value=" + ComponentType.LED + ">LED</option>\n" +
                 "<option value=" + ComponentType.MOTOR + ">Moteur</option>\n" +
                 "<option value=" + ComponentType.TRANSMITTER + ">Émmeteur</option>\n" +

@@ -4,6 +4,10 @@ import {wokwiComponentById, wokwiComponentByClass, ComponentType} from "../src/p
 import {ComponentFigure} from "../src/editor/component-figure";
 import * as draw2d from "draw2d";
 import {DisconnectableConnectionPolicy} from "../src/editor/connections-policies";
+import { ClangWasmRunner } from './clang-runner';
+import { ArduinoWasmShim } from './arduino-wasm-shim';
+import { getArduinoHeaders } from './arduino-headers';
+import { convertBfarmMacroToCpp, hasBfarmMacroMarkers } from './bfarm-macro-converter';
 
 console.log("Running HackCable web interface")
 
@@ -16,67 +20,35 @@ let hackCable = new HackCable(mountingDiv, lang ? lang : 'en_us');
 // Emscripten WASM state
 let activeWasmModule: any = null;
 let activeWasmScript: HTMLScriptElement | null = null;
-let lastEmscriptenResult: { js: string; wasm?: string } | null = null;
+let lastEmscriptenResult: { js: string; wasm: string } | null = null;
 let emscriptenAvailable = false;
 
-// Godbolt API (public Emscripten compiler — no backend needed)
-const GODBOLT_API = 'https://godbolt.org';
-let godboltCompilerId: string | null = null;
+// Clang/LLVM WASM state
+const clangRunner = new ClangWasmRunner();
+let lastClangResult: Uint8Array | null = null;
+let activeClangLoopHandle: ReturnType<typeof setInterval> | null = null;
 
-async function findGodboltEmscriptenCompiler(): Promise<string | null> {
-    try {
-        const res = await fetch(`${GODBOLT_API}/api/compilers/c++`, {
-            headers: { Accept: 'application/json' }
-        });
-        if (!res.ok) return null;
-        const compilers: any[] = await res.json();
-        const em = compilers
-            .filter(c => /emscripten/i.test(c.id) || /emscripten/i.test(c.name ?? ''))
-            .sort((a, b) => b.id.localeCompare(a.id));
-        return em[0]?.id ?? null;
-    } catch {
-        return null;
-    }
-}
+// Native Clang WASM state
+let lastClangNativeResult: Uint8Array | null = null;
+let activeClangNativeLoopHandle: ReturnType<typeof setInterval> | null = null;
+let clangNativeAvailable = false;
 
-async function compileWithGodbolt(code: string): Promise<string> {
-    if (!godboltCompilerId) {
-        godboltCompilerId = await findGodboltEmscriptenCompiler();
-        if (!godboltCompilerId) throw new Error('No Emscripten compiler found on Godbolt');
-    }
-    const res = await fetch(`${GODBOLT_API}/api/compiler/${godboltCompilerId}/compile`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({
-            source: code,
-            options: {
-                userArguments: '-O1 -sSINGLE_FILE=1 -sMODULARIZE=1 -sEXPORT_NAME=HackCableModule --no-entry -sALLOW_MEMORY_GROWTH=1',
-                filters: { binary: false, execute: false, trim: false, libraryCode: true }
-            },
-            lang: 'c++'
-        })
-    });
-    if (!res.ok) throw new Error(`Godbolt API error: HTTP ${res.status}`);
-    const data = await res.json();
-    if (data.code !== 0) {
-        const stderr = (data.stderr ?? []).map((l: any) => l.text).join('\n');
-        throw new Error(stderr.trim() || 'Compilation failed');
-    }
-    const js = (data.asm ?? []).map((l: any) => l.text).join('\n');
-    if (!js.trim()) throw new Error('Godbolt returned empty output');
-    return js;
-}
-
-async function checkEmscriptenStatus(retries = 3, delayMs = 1000) {
+async function checkEmscriptenStatus(retries = 5, delayMs = 1000) {
     for (let attempt = 0; attempt < retries; attempt++) {
-        const id = await findGodboltEmscriptenCompiler();
-        if (id) {
-            godboltCompilerId = id;
-            emscriptenAvailable = true;
-            updateEmscriptenOption();
-            return;
+        try {
+            const res = await fetch('/api/compile/emscripten/status');
+            if (res.ok) {
+                const data = await res.json();
+                emscriptenAvailable = data.available === true;
+                updateEmscriptenOption();
+                return;
+            }
+        } catch {
+            // network error (backend not ready yet) — will retry
         }
-        if (attempt < retries - 1) await new Promise(r => setTimeout(r, delayMs));
+        if (attempt < retries - 1) {
+            await new Promise(r => setTimeout(r, delayMs));
+        }
     }
     emscriptenAvailable = false;
     updateEmscriptenOption();
@@ -87,12 +59,49 @@ function updateEmscriptenOption() {
     const opt = compilerModeSelect.querySelector('option[value="emscripten"]') as HTMLOptionElement;
     if (!opt) return;
     if (emscriptenAvailable) {
-        opt.textContent = 'Emscripten C++ (via Godbolt)';
+        opt.textContent = 'Emscripten C++ - Native';
         opt.disabled = false;
     } else {
         opt.textContent = 'Emscripten C++ (unavailable)';
         opt.disabled = true;
         if (compilerModeSelect.value === 'emscripten') {
+            compilerModeSelect.value = 'micropython';
+        }
+    }
+}
+
+async function checkClangNativeStatus(retries = 5, delayMs = 1000) {
+    for (let attempt = 0; attempt < retries; attempt++) {
+        try {
+            const res = await fetch('/api/compile/clang/status');
+            if (res.ok) {
+                const data = await res.json();
+                clangNativeAvailable = data.available === true;
+                updateClangNativeOption();
+                return;
+            }
+        } catch {
+            // network error — will retry
+        }
+        if (attempt < retries - 1) {
+            await new Promise(r => setTimeout(r, delayMs));
+        }
+    }
+    clangNativeAvailable = false;
+    updateClangNativeOption();
+}
+
+function updateClangNativeOption() {
+    if (!compilerModeSelect) return;
+    const opt = compilerModeSelect.querySelector('option[value="clang-native"]') as HTMLOptionElement;
+    if (!opt) return;
+    if (clangNativeAvailable) {
+        opt.textContent = 'Native Clang WASM';
+        opt.disabled = false;
+    } else {
+        opt.textContent = 'Native Clang WASM (unavailable)';
+        opt.disabled = true;
+        if (compilerModeSelect.value === 'clang-native') {
             compilerModeSelect.value = 'micropython';
         }
     }
@@ -241,6 +250,7 @@ function updateCompilerVisibility() {
 boardSelectEl?.addEventListener('change', updateCompilerVisibility);
 updateCompilerVisibility();
 checkEmscriptenStatus();
+checkClangNativeStatus();
 
 if(compileButton && executeButton && stopButton && pauseButton && codeInput instanceof HTMLTextAreaElement && hexInput instanceof HTMLTextAreaElement){
 
@@ -268,18 +278,96 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
         localStorage.setItem('hackCable-webExample-inputCode', codeInput.value);
 
         if (boardType === 'esp32' && mode === 'emscripten') {
-            // --- GODBOLT EMSCRIPTEN PATH ---
-            hexInput.value = '// Compiling C++ via Godbolt (Emscripten)...';
-            compileWithGodbolt(codeInput.value)
-                .then(jsGlue => {
-                    lastEmscriptenResult = { js: jsGlue };
-                    hexInput.value = '// Emscripten (via Godbolt) compilation OK. Click Execute.';
+            // --- EMSCRIPTEN PATH ---
+            hexInput.value = '// Emscripten C++ compilation in progress...';
+            fetch('/api/compile/emscripten', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: codeInput.value })
+            }).then(async res => {
+                const data = await res.json();
+                if (data.code === 'EMSCRIPTEN_NOT_FOUND' || data.code === 'BACKEND_UNAVAILABLE') {
+                    // Emscripten unavailable — fall back to MicroPython
+                    hexInput.value = '// Emscripten unavailable, using MicroPython fallback...';
+                    showStatus('ui.status.emscriptenFallback', 'info');
+                    emscriptenAvailable = false;
+                    updateEmscriptenOption();
+                    hackCable.emulatorManager.compileAndLoadCode(codeInput.value).then(() => {});
                     showStatus('ui.status.compileComplete', 'success');
-                })
-                .catch((err: Error) => {
-                    hexInput.value = '// Compilation error:\n' + err.message;
+                    return;
+                }
+                if (data.error) {
+                    hexInput.value = '// Compilation error:\n' + data.error;
+                    if (data.stderr) hexInput.value += '\n' + data.stderr;
                     showStatus('ui.status.compileFailed', 'error');
-                });
+                    return;
+                }
+                lastEmscriptenResult = { js: data.js, wasm: data.wasm };
+                hexInput.value = '// Emscripten compilation OK. Click Execute.';
+                showStatus('ui.status.compileComplete', 'success');
+            }).catch(() => {
+                // Network error (backend not running) — fall back to MicroPython
+                hexInput.value = '// Backend unreachable, using MicroPython fallback...';
+                showStatus('ui.status.emscriptenFallback', 'info');
+                emscriptenAvailable = false;
+                updateEmscriptenOption();
+                hackCable.emulatorManager.compileAndLoadCode(codeInput.value).then(() => {});
+                showStatus('ui.status.compileComplete', 'success');
+            });
+
+        } else if (boardType === 'esp32' && mode === 'clang-native') {
+            // --- NATIVE CLANG SERVER-SIDE PATH ---
+            hexInput.value = '// Compiling with Native Clang (server-side)...';
+            fetch('/api/compile/clang', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: codeInput.value })
+            }).then(async res => {
+                const data = await res.json();
+                if (data.code === 'CLANG_NOT_FOUND') {
+                    hexInput.value = '// Native Clang unavailable.';
+                    clangNativeAvailable = false;
+                    updateClangNativeOption();
+                    showStatus('ui.status.compileFailed', 'error');
+                    return;
+                }
+                if (data.error) {
+                    hexInput.value = '// Compilation error:\n' + data.error;
+                    if (data.stderr) hexInput.value += '\n' + data.stderr;
+                    showStatus('ui.status.compileFailed', 'error');
+                    return;
+                }
+                const wasmBytes = await fetch(`data:application/octet-stream;base64,${data.wasm}`)
+                    .then(r => r.arrayBuffer())
+                    .then(b => new Uint8Array(b));
+                lastClangNativeResult = wasmBytes;
+                hexInput.value = '// Native Clang compilation OK. Click Execute.';
+                showStatus('ui.status.compileComplete', 'success');
+            }).catch(() => {
+                hexInput.value = '// Backend unreachable.';
+                showStatus('ui.status.compileFailed', 'error');
+            });
+
+        } else if (boardType === 'esp32' && mode === 'clang-llvm') {
+            // --- CLANG/LLVM IN-BROWSER PATH ---
+            hexInput.value = '// Loading Clang/LLVM (~35 MB first use)...';
+            clangRunner.load((loaded, total, label) => {
+                if (total > 0) {
+                    const pct = Math.round(loaded / total * 100);
+                    hexInput.value = `// Downloading ${label}: ${pct}%`;
+                }
+            }).then(() => {
+                hexInput.value = '// Compiling with Clang/LLVM...';
+                return clangRunner.compile(codeInput.value, getArduinoHeaders());
+            }).then(result => {
+                if (result.stderr) console.warn('[clang]', result.stderr);
+                lastClangResult = result.wasmBytes;
+                hexInput.value = '// Clang/LLVM compilation OK. Click Execute.';
+                showStatus('ui.status.compileComplete', 'success');
+            }).catch(err => {
+                hexInput.value = '// Clang/LLVM error:\n' + err.message;
+                showStatus('ui.status.compileFailed', 'error');
+            });
 
         } else if (boardType === 'esp32') {
             // --- MICROPYTHON LEGACY PATH ---
@@ -330,6 +418,82 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                     showStatus('ui.status.compileFailed', 'error');
                 });
 
+        } else if (boardType === 'esp32' && mode === 'clang-native') {
+            // --- NATIVE CLANG EXECUTE ---
+            if (!lastClangNativeResult) {
+                appendSerial('Error: No compiled WASM. Click Compile first.\n');
+                showStatus('ui.status.compileFailed', 'error');
+                return;
+            }
+            cleanupWasmInstance();
+            const shimNative = new ArduinoWasmShim(
+                (pin, value) => hackCable.esp32PinUpdate(pin, value),
+                (text) => appendSerial(text),
+                (_slaveId, _reg) => 0,
+                () => 0,
+                () => 0,
+                () => 0,
+            );
+            WebAssembly.instantiate(lastClangNativeResult, shimNative.buildImports())
+                .then(({ instance }) => {
+                    const exp = instance.exports as any;
+                    if (exp.memory) shimNative.setWasmMemory(exp.memory);
+                    if (typeof exp.sim_run_setup === 'function') exp.sim_run_setup();
+                    if (typeof exp.sim_run_loop === 'function') {
+                        activeClangNativeLoopHandle = setInterval(() => {
+                            try { exp.sim_run_loop(); } catch (e) {
+                                clearInterval(activeClangNativeLoopHandle!);
+                                activeClangNativeLoopHandle = null;
+                                appendSerial('Runtime error: ' + (e as Error).message + '\n');
+                            }
+                        }, 16);
+                    }
+                    autoActivateSensorsFromCode(codeInput.value);
+                    showStatus('ui.status.executing', 'info');
+                })
+                .catch(err => {
+                    appendSerial('WASM load error: ' + err.message + '\n');
+                    showStatus('ui.status.compileFailed', 'error');
+                });
+
+        } else if (boardType === 'esp32' && mode === 'clang-llvm') {
+            // --- CLANG/LLVM EXECUTE ---
+            if (!lastClangResult) {
+                appendSerial('Error: No compiled WASM. Click Compile first.\n');
+                showStatus('ui.status.compileFailed', 'error');
+                return;
+            }
+            cleanupWasmInstance();
+            const shim = new ArduinoWasmShim(
+                (pin, value) => hackCable.esp32PinUpdate(pin, value),
+                (text) => appendSerial(text),
+                (_slaveId, _reg) => 0,
+                () => 0,
+                () => 0,
+                () => 0,
+            );
+            WebAssembly.instantiate(lastClangResult, shim.buildImports())
+                .then(({ instance }) => {
+                    const exp = instance.exports as any;
+                    if (exp.memory) shim.setWasmMemory(exp.memory);
+                    if (typeof exp.setup === 'function') exp.setup();
+                    if (typeof exp.loop === 'function') {
+                        activeClangLoopHandle = setInterval(() => {
+                            try { exp.loop(); } catch (e) {
+                                clearInterval(activeClangLoopHandle!);
+                                activeClangLoopHandle = null;
+                                appendSerial('Runtime error: ' + (e as Error).message + '\n');
+                            }
+                        }, 16);
+                    }
+                    autoActivateSensorsFromCode(codeInput.value);
+                    showStatus('ui.status.executing', 'info');
+                })
+                .catch(err => {
+                    appendSerial('WASM load error: ' + err.message + '\n');
+                    showStatus('ui.status.compileFailed', 'error');
+                });
+
         } else if (boardType === 'esp32') {
             // --- MICROPYTHON ---
             hackCable.emulatorManager.run(codeInput.value);
@@ -351,6 +515,7 @@ function switchTab(tabName: 'code' | 'io') {
     document.querySelectorAll('.tab-panel').forEach(panel => {
         panel.classList.toggle('active', panel.classList.contains(`${tabName}-panel`));
     });
+    if (tabName === 'io') resizePlotterCanvas();
 }
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -529,8 +694,156 @@ function clearSerial() {
     if (output) output.textContent = '';
 }
 
-hackCable.serialDataCallback = (data: string) => appendSerial(data);
+// ── Serial Plotter ──────────────────────────────────────────────
+const PLOTTER_MAX_POINTS = 100;
+const PLOTTER_COLORS = ['#00ff00', '#ff6b6b', '#61dafb', '#ffd700', '#ff9f43', '#a29bfe'];
+
+interface PlotterSeries { label: string; data: number[]; }
+let plotterSeries: PlotterSeries[] = [];
+let serialLineBuffer = '';
+
+function parsePlotterLine(line: string): { label: string; value: number }[] | null {
+    const labelPairs = [...line.matchAll(/(\w+)\s*[=:]\s*([+-]?\d+\.?\d*)/g)];
+    if (labelPairs.length > 0)
+        return labelPairs.map(m => ({ label: m[1], value: parseFloat(m[2]) }));
+    const nums = line.trim().split(/[\s,]+/).map(Number).filter(n => !isNaN(n) && line.trim() !== '');
+    if (nums.length > 0)
+        return nums.map((v, i) => ({ label: String(i + 1), value: v }));
+    return null;
+}
+
+function pushPlotterData(parsed: { label: string; value: number }[]) {
+    parsed.forEach(({ label, value }, i) => {
+        if (!plotterSeries[i]) plotterSeries[i] = { label, data: [] };
+        plotterSeries[i].label = label;
+        plotterSeries[i].data.push(value);
+        if (plotterSeries[i].data.length > PLOTTER_MAX_POINTS)
+            plotterSeries[i].data.shift();
+    });
+    plotterSeries.length = parsed.length;
+    drawPlotter();
+}
+
+function drawPlotter() {
+    const canvas = document.getElementById('serial-plotter-canvas') as HTMLCanvasElement | null;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, W, H);
+
+    if (plotterSeries.length === 0 || plotterSeries.every(s => s.data.length === 0)) {
+        ctx.fillStyle = '#555';
+        ctx.font = '11px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('Waiting for numeric data...', W / 2, H / 2);
+        return;
+    }
+
+    let minVal = Infinity, maxVal = -Infinity;
+    for (const s of plotterSeries)
+        for (const v of s.data) { if (v < minVal) minVal = v; if (v > maxVal) maxVal = v; }
+    if (minVal === maxVal) { minVal -= 1; maxVal += 1; }
+
+    const pad = { top: 8, bottom: 20, left: 36, right: 4 };
+    const gW = W - pad.left - pad.right;
+    const gH = H - pad.top - pad.bottom;
+
+    ctx.strokeStyle = '#2a2a2a';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+        const y = pad.top + (gH * i / 4);
+        ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+        const val = maxVal - ((maxVal - minVal) * i / 4);
+        ctx.fillStyle = '#555';
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(val.toFixed(1), pad.left - 3, y + 3);
+    }
+
+    plotterSeries.forEach((series, si) => {
+        if (series.data.length < 2) return;
+        ctx.strokeStyle = PLOTTER_COLORS[si % PLOTTER_COLORS.length];
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        series.data.forEach((v, idx) => {
+            const x = pad.left + (idx / (PLOTTER_MAX_POINTS - 1)) * gW;
+            const y = pad.top + gH - ((v - minVal) / (maxVal - minVal)) * gH;
+            idx === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        ctx.fillStyle = PLOTTER_COLORS[si % PLOTTER_COLORS.length];
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(series.label, pad.left + si * 50, H - 6);
+    });
+}
+
+function clearPlotter() {
+    plotterSeries = [];
+    serialLineBuffer = '';
+    drawPlotter();
+}
+
+function feedPlotter(data: string) {
+    serialLineBuffer += data;
+    let nl: number;
+    while ((nl = serialLineBuffer.indexOf('\n')) !== -1) {
+        const line = serialLineBuffer.slice(0, nl);
+        serialLineBuffer = serialLineBuffer.slice(nl + 1);
+        const parsed = parsePlotterLine(line);
+        if (parsed) pushPlotterData(parsed);
+    }
+}
+
+function resizePlotterCanvas() {
+    const canvas = document.getElementById('serial-plotter-canvas') as HTMLCanvasElement | null;
+    if (!canvas) return;
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    drawPlotter();
+}
+window.addEventListener('resize', resizePlotterCanvas);
+setTimeout(resizePlotterCanvas, 100);
+
+hackCable.serialDataCallback = (data: string) => { appendSerial(data); feedPlotter(data); };
 document.getElementById('serial-clear')?.addEventListener('click', clearSerial);
+document.getElementById('serial-plotter-clear')?.addEventListener('click', clearPlotter);
+
+const simHttpPathInput = document.getElementById('sim-http-path') as HTMLInputElement | null;
+const simHttpSendBtn = document.getElementById('sim-http-send') as HTMLButtonElement | null;
+const simHttpResponseEl = document.getElementById('sim-http-response') as HTMLElement | null;
+
+function renderSimulatedHttpResponse(text: string) {
+    if (simHttpResponseEl) simHttpResponseEl.textContent = text;
+}
+
+async function runSimulatedHttpGet(path: string) {
+    const rawPath = (path || '').trim() || '/';
+    renderSimulatedHttpResponse(`GET ${rawPath}\n(waiting...)`);
+    const response = await hackCable.simulatedHttpGet(rawPath);
+    renderSimulatedHttpResponse(
+        `GET ${rawPath}\nstatus: ${response.status}\ncontent-type: ${response.contentType}\n\n${response.body}`
+    );
+    return response;
+}
+
+simHttpSendBtn?.addEventListener('click', async () => {
+    try {
+        await runSimulatedHttpGet(simHttpPathInput?.value || '/');
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        renderSimulatedHttpResponse(`Error: ${message}`);
+    }
+});
+
+simHttpPathInput?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    simHttpSendBtn?.click();
+});
 
 // Emscripten WASM ↔ canvas bridge callbacks
 (window as any).hackcable_update_pin = (pin: number, value: boolean) => {
@@ -538,14 +851,43 @@ document.getElementById('serial-clear')?.addEventListener('click', clearSerial);
 };
 (window as any).hackcable_pin_mode = (_pin: number, _mode: number) => {};
 (window as any).hackcable_read_pin = (_pin: number): boolean => false;
-(window as any).hackcable_analog_read = (_pin: number): number => 0;
+(window as any).hackcable_analog_read = (pin: number): number => {
+    if (pin === 36) return getMock('soil', 50) * 40.95; // 0-100% → 0-4095 ADC
+    return 0;
+};
+(window as any).hackcable_http_get = async (path: string) => {
+    return runSimulatedHttpGet(path);
+};
 (window as any).hackcable_serial_begin = (_baud: number) => {};
-(window as any).hackcable_serial_data = (text: string) => { appendSerial(text); };
+(window as any).hackcable_serial_data = (text: string) => { appendSerial(text); feedPlotter(text); };
+// Sensor mock input parser
+function parseMockValues(): Record<string, number> {
+    const el = document.getElementById('sensor-mock-input') as HTMLTextAreaElement | null;
+    if (!el) return {};
+    const result: Record<string, number> = {};
+    for (const line of el.value.split('\n')) {
+        const m = line.match(/^\s*(\w+)\s*=\s*([+-]?\d+\.?\d*)\s*$/);
+        if (m) result[m[1].toLowerCase()] = parseFloat(m[2]);
+    }
+    return result;
+}
+
+function getMock(key: string, defaultVal: number): number {
+    const v = parseMockValues()[key];
+    return v !== undefined ? v : defaultVal;
+}
+
 // Sensor data bridges (called from Emscripten WASM sensor mocks)
-(window as any).hackcable_modbus_read = (_slaveId: number, _regAddr: number): number => 0;
-(window as any).hackcable_sht31_temp = (): number => 25.0;
-(window as any).hackcable_sht31_humidity = (): number => 60.0;
-(window as any).hackcable_bh1750_lux = (): number => 500.0;
+(window as any).hackcable_modbus_read = (_slaveId: number, regAddr: number): number => {
+    const weatherKeys: Record<number, [string, number]> = {
+        0: ['temperature', 25.0], 1: ['humidity', 60.0], 2: ['co2', 400.0], 3: ['pressure', 1013.0]
+    };
+    if (weatherKeys[regAddr]) return getMock(weatherKeys[regAddr][0], weatherKeys[regAddr][1]);
+    return getMock('ph', 7.0);
+};
+(window as any).hackcable_sht31_temp = (): number => getMock('temperature', 25.0);
+(window as any).hackcable_sht31_humidity = (): number => getMock('humidity', 60.0);
+(window as any).hackcable_bh1750_lux = (): number => getMock('lux', 500.0);
 
 // Emscripten WASM cleanup
 async function cleanupWasmInstance() {
@@ -562,12 +904,23 @@ async function cleanupWasmInstance() {
         activeWasmScript = null;
     }
     delete (window as any).HackCableModule;
+    if (activeClangLoopHandle !== null) {
+        clearInterval(activeClangLoopHandle);
+        activeClangLoopHandle = null;
+    }
+    if (activeClangNativeLoopHandle !== null) {
+        clearInterval(activeClangNativeLoopHandle);
+        activeClangNativeLoopHandle = null;
+    }
 }
 
 // Emscripten WASM loader
-// wasmBase64 is optional: omit when using SINGLE_FILE mode (WASM is embedded in jsGlue)
-async function loadEmscriptenWasm(jsGlue: string, wasmBase64?: string) {
+async function loadEmscriptenWasm(jsGlue: string, wasmBase64: string) {
     await cleanupWasmInstance();
+
+    // Decode base64 → ArrayBuffer
+    const bytes = Uint8Array.from(atob(wasmBase64), c => c.charCodeAt(0));
+    const wasmBinary = bytes.buffer; // Emscripten expects ArrayBuffer
 
     // Load JS glue via Blob URL (same-origin, no CORS issues)
     const blobUrl = URL.createObjectURL(new Blob([jsGlue], { type: 'application/javascript' }));
@@ -585,17 +938,12 @@ async function loadEmscriptenWasm(jsGlue: string, wasmBase64?: string) {
     const factory = (window as any).HackCableModule;
     if (!factory) throw new Error('HackCableModule factory not found after script load');
 
-    const factoryOptions: any = {
+    activeWasmModule = await factory({
+        wasmBinary,
         print: (t: string) => appendSerial(t + '\n'),
         printErr: (t: string) => console.warn('[Emscripten]', t),
         locateFile: (p: string) => p
-    };
-    if (wasmBase64) {
-        // Decode base64 → ArrayBuffer (backend / non-SINGLE_FILE mode)
-        factoryOptions.wasmBinary = Uint8Array.from(atob(wasmBase64), c => c.charCodeAt(0)).buffer;
-    }
-
-    activeWasmModule = await factory(factoryOptions);
+    });
 }
 
 // Initialize sidebar toggle functionality
@@ -1702,16 +2050,737 @@ void loop() {
     Serial.println("Button 4 pressed");
     delay(200);
   }
-}`
+}`,
+
+    // ── TEST BFARM 1: SHT31 + WiFi + Cronjob + Fan ──────────────────────────
+    test_bfarm_greenhouse: `// TEST BFARM - Greenhouse Controller
+// Blocks: Sensor(SHT31 I2C) + WiFi + Cronjob(every 30s) + Actuator(Fan pin 4)
+// Logic:  humidity > 80% → Fan ON,  else → Fan OFF
+// WiFi:   GET /status → { "temp": x, "humidity": y, "fan": 0|1 }
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <WiFi.h>
+#include <WebServer.h>
+#include "SHT31.h"
+#include <Wire.h>
+#include <time.h>
+#include "cjob.h"
+
+#define FAN_PIN 4
+#define WIFI_SSID "YourSSID"
+#define WIFI_PASS "YourPassword"
+
+SHT31 sht;
+WebServer server(80);
+CronID_t id_checkClimate;
+bool fanState = false;
+
+void checkClimate() {
+  sht.read();
+  float humidity = sht.getHumidity();
+  if (humidity > 80.0f) {
+    digitalWrite(FAN_PIN, HIGH);
+    fanState = true;
+  } else {
+    digitalWrite(FAN_PIN, LOW);
+    fanState = false;
+  }
+  Serial.printf("Temp: %.1f C  Humidity: %.1f%%  Fan: %s\\n",
+    sht.getTemperature(), humidity, fanState ? "ON" : "OFF");
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(FAN_PIN, OUTPUT);
+  digitalWrite(FAN_PIN, LOW);
+
+  Wire.begin();
+  Wire.setClock(10000);
+  sht.begin(0x44);
+
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  while (WiFi.status() != WL_CONNECTED) { delay(500); }
+  Serial.print("WiFi IP: "); Serial.println(WiFi.localIP());
+
+  server.on("/status", []() {
+    sht.read();
+    String json = "{\\"temp\\":" + String(sht.getTemperature(), 1)
+                + ",\\"humidity\\":" + String(sht.getHumidity(), 1)
+                + ",\\"fan\\":" + String(fanState ? 1 : 0) + "}";
+    server.send(200, "application/json", json);
+  });
+  server.begin();
+
+  id_checkClimate = Cron.create("30 * * * * *", checkClimate, false);
+}
+
+void loop() {
+  server.handleClient();
+  Cron.delay();
+}`,
+
+    // ── TEST BFARM 2: RS485 pH + Cronjob + Misting Pump ────────────────────
+    test_bfarm_ph_mist_auto: `// TEST BFARM - pH Auto-Mist Controller
+// Blocks: Sensor(RS485 pH) + Cronjob(every 60s) + Actuator(Misting Pump pin 25)
+// Logic:  pH > 7.0 → pump ON 5 s → pump OFF
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+#include <time.h>
+#include "cjob.h"
+
+#define RXD 16
+#define TXD 17
+#define PUMP_PIN 25
+
+ModbusMaster PHrs485;
+float PH;
+CronID_t id_phCheck;
+
+void phCheck() {
+  uint8_t result = PHrs485.readHoldingRegisters(0, 2);
+  if (result == ModbusMaster::ku8MBSuccess) {
+    PH = PHrs485.getResponseBuffer(1) / 10.00f;
+    Serial.printf("pH: %.2f\\n", PH);
+    if (PH > 7.0f) {
+      Serial.println("pH high → Misting pump ON");
+      digitalWrite(PUMP_PIN, HIGH);
+      delay(5000);
+      digitalWrite(PUMP_PIN, LOW);
+      Serial.println("Misting pump OFF");
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  pinMode(PUMP_PIN, OUTPUT);
+  digitalWrite(PUMP_PIN, LOW);
+
+  Wire.begin();
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  PHrs485.begin(1, Serial2);
+
+  id_phCheck = Cron.create("0 * * * * *", phCheck, false);
+  Serial.println("pH Auto-Mist Ready");
+}
+
+void loop() {
+  Cron.delay();
+}`,
+
+    // ── TEST BFARM 3: Soil Moisture + Daily Cronjob + Water Pump ───────────
+    test_bfarm_soil_irrigation: `// TEST BFARM - Daily Soil Irrigation
+// Blocks: Sensor(Soil Moisture analog pin 36) + Cronjob(daily 06:00) + Actuator(Water Pump pin 32)
+// Logic:  at 06:00 every day → if soil < 40% → pump ON 10 s → pump OFF
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <WiFi.h>
+#include <time.h>
+#include "cjob.h"
+
+#define SOIL_PIN 36
+#define PUMP_PIN 32
+#define WIFI_SSID "YourSSID"
+#define WIFI_PASS "YourPassword"
+
+CronID_t id_irrigate;
+
+void irrigate() {
+  int raw = analogRead(SOIL_PIN);
+  int soilPct = map(raw, 4095, 0, 0, 100);
+  Serial.printf("Soil moisture: %d%% (raw: %d)\\n", soilPct, raw);
+  if (soilPct < 40) {
+    Serial.println("Soil dry → Water pump ON");
+    digitalWrite(PUMP_PIN, HIGH);
+    delay(10000);
+    digitalWrite(PUMP_PIN, LOW);
+    Serial.println("Water pump OFF");
+  } else {
+    Serial.println("Soil OK → No irrigation needed");
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  pinMode(PUMP_PIN, OUTPUT);
+  digitalWrite(PUMP_PIN, LOW);
+
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  while (WiFi.status() != WL_CONNECTED) { delay(500); }
+  configTime(7 * 3600, 0, "pool.ntp.org");
+  Serial.println("NTP synced — waiting for time...");
+  delay(2000);
+
+  // Daily at 06:00:00
+  id_irrigate = Cron.create("0 0 6 * * *", irrigate, false);
+  Serial.println("Daily Irrigation Scheduler Ready");
+}
+
+void loop() {
+  Cron.delay();
+}`,
+
+    // ── TEST BFARM 4: BH1750 + NeoPixel Grow-Light Indicator ───────────────
+    test_bfarm_light_neopixel: `// TEST BFARM - Light Monitor with NeoPixel Indicator
+// Blocks: Sensor(BH1750 I2C) + Components>Display&LED(NeoPixel pin 4)
+// Logic:  lux < 200 → RED,  200-600 → YELLOW,  > 600 → GREEN
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <BH1750.h>
+#include <Adafruit_NeoPixel.h>
+
+#define NEO_PIN   4
+#define NEO_COUNT 8
+
+BH1750 lightMeter;
+Adafruit_NeoPixel strip(NEO_COUNT, NEO_PIN, NEO_GRB + NEO_KHZ800);
+
+void setAllPixels(uint8_t r, uint8_t g, uint8_t b) {
+  for (int i = 0; i < NEO_COUNT; i++) {
+    strip.setPixelColor(i, strip.Color(r, g, b));
+  }
+  strip.show();
+}
+
+void setup() {
+  Serial.begin(115200);
+  Wire.begin();
+  Wire.setClock(10000);
+  lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE);
+  strip.begin();
+  strip.show();
+  Serial.println("Light Monitor Ready");
+}
+
+void loop() {
+  float lux = lightMeter.readLightLevel();
+  Serial.printf("Light: %.1f lux\\n", lux);
+  if (lux < 200.0f) {
+    setAllPixels(255, 0, 0);        // RED  — too dark
+  } else if (lux < 600.0f) {
+    setAllPixels(255, 180, 0);      // YELLOW — moderate
+  } else {
+    setAllPixels(0, 255, 0);        // GREEN — bright enough
+  }
+  delay(1000);
+}`,
+
+    // ── TEST BFARM 5: Weather RS485 (HTCo2PLx) + WiFi Server ───────────────
+    test_bfarm_weather_wifi: `// TEST BFARM - Weather Station (RS485 HTCo2PLx) + WiFi JSON Server
+// Blocks: Sensor(Weather RS485) + WiFi(connect + server)
+// Endpoint: GET /weather → { temp, humidity, co2, pressure }
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <WiFi.h>
+#include <WebServer.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+
+#define RXD 16
+#define TXD 17
+#define WIFI_SSID "YourSSID"
+#define WIFI_PASS "YourPassword"
+
+ModbusMaster weatherSensor;
+WebServer server(80);
+
+float w_temp, w_humidity, w_co2, w_pressure;
+
+void readWeather() {
+  uint8_t result = weatherSensor.readHoldingRegisters(0, 8);
+  if (result == ModbusMaster::ku8MBSuccess) {
+    w_temp     = weatherSensor.getResponseBuffer(0) / 10.0f;
+    w_humidity = weatherSensor.getResponseBuffer(1) / 10.0f;
+    w_co2      = weatherSensor.getResponseBuffer(2) * 1.0f;
+    w_pressure = weatherSensor.getResponseBuffer(3) / 10.0f;
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+
+  Wire.begin();
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  weatherSensor.begin(1, Serial2);
+
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  while (WiFi.status() != WL_CONNECTED) { delay(500); }
+  Serial.print("WiFi IP: "); Serial.println(WiFi.localIP());
+
+  server.on("/weather", []() {
+    readWeather();
+    String json = "{\\"temp\\":" + String(w_temp, 1)
+                + ",\\"humidity\\":" + String(w_humidity, 1)
+                + ",\\"co2\\":" + String(w_co2, 0)
+                + ",\\"pressure\\":" + String(w_pressure, 1) + "}";
+    server.send(200, "application/json", json);
+    Serial.printf("Served: %s\\n", json.c_str());
+  });
+  server.begin();
+  Serial.println("Weather Station Ready — GET /weather");
+}
+
+void loop() {
+  server.handleClient();
+  readWeather();
+  Serial.printf("Temp:%.1fC  Hum:%.1f%%  CO2:%.0fppm  Press:%.1fhPa\\n",
+    w_temp, w_humidity, w_co2, w_pressure);
+  delay(2000);
+}`,
+
+    // ============================================
+    // new Bfarm Test - Canonical #block.md format
+    // ============================================
+    new_bfarm_smart_greenhouse: `// new Bfarm Test - Smart Greenhouse End-to-End
+// Blocks used: HandySense_Setup, HandySense_setPin_Relay, sht31_begin_i2c, sht31_read_init_i2c, sht31_read_humid_i2c, sht31_read_temp_i2c, bh1750_begin, bh1750_read, wifi_connect, wifi_start_server, wifi_server_on, wifi_server_send, controls_if, logic_compare, relay_on, relay_off, time_delay
+// Coverage: HS Generic, Sensor, WiFi, Electronic, Logic, Time
+
+// HandySense_Setup
+#SETUP setup_HandySense();#END
+#SETUP Serial.begin(115200);#END
+// HandySense_setPin_Relay
+#SETUP setPin_Relay(32,33,25,26);#END
+#SETUP setPin_SW(36,39,34,35);#END
+#SETUP setPin_ErrorSensor(19,18,5);#END
+
+// sht31_begin_i2c
+#EXTINC#include "SHT31.h"#END
+#EXTINC#include <Wire.h>#END
+#VARIABLE SHT31 sht;#END
+#SETUP Wire.begin();#END
+#SETUP Wire.setClock(10000);#END
+#SETUP sht.begin(0x44);#END
+
+// bh1750_begin
+#EXTINC#include <BH1750.h>#END
+#VARIABLE BH1750 lightMeter;#END
+#SETUP lightMeter.begin();#END
+
+// wifi_connect + wifi_start_server
+#EXTINC#include <WiFi.h>#END
+#EXTINC#include <WebServer.h>#END
+#VARIABLE WebServer server(80);#END
+#VARIABLE float ghHumidity = 0;#END
+#VARIABLE float ghTemp = 0;#END
+#VARIABLE float ghLux = 0;#END
+#VARIABLE bool fanOn = false;#END
+#FUNCTION void connectGreenhouseWifi(){ WiFi.begin("FarmSSID","FarmPass123"); while(WiFi.status() != WL_CONNECTED){ delay(500); } }#END
+#SETUP connectGreenhouseWifi();#END
+#SETUP server.begin();#END
+#LOOP_EXT_CODE server.handleClient();#END
+
+// wifi_server_on + wifi_server_send
+#SETUP server.on("/status", [](){#END
+#SETUP   String payload = String("humidity=") + String(ghHumidity,1) + String(",temp=") + String(ghTemp,1) + String(",lux=") + String(ghLux,0);#END
+#SETUP   server.send(200, "text/plain", payload);#END
+#SETUP });#END
+
+// sht31_read_init_i2c
+#LOOP_EXT_CODE sht.read();#END
+// sht31_read_humid_i2c
+#LOOP_EXT_CODE ghHumidity = sht.getHumidity();#END
+// sht31_read_temp_i2c
+#LOOP_EXT_CODE ghTemp = sht.getTemperature();#END
+// bh1750_read
+#LOOP_EXT_CODE ghLux = lightMeter.readLightLevel();#END
+
+// controls_if + logic_compare + relay_on + relay_off
+#LOOP_EXT_CODE if ((ghHumidity > 82.0f) || (ghTemp > 32.0f)) {#END
+#LOOP_EXT_CODE   digitalWrite(const_relay_pin[1], HIGH);#END
+#LOOP_EXT_CODE   fanOn = true;#END
+#LOOP_EXT_CODE } else {#END
+#LOOP_EXT_CODE   digitalWrite(const_relay_pin[1], LOW);#END
+#LOOP_EXT_CODE   fanOn = false;#END
+#LOOP_EXT_CODE }#END
+#LOOP_EXT_CODE Serial.println(String("humidity=") + String(ghHumidity,1) + String(",temp=") + String(ghTemp,1) + String(",lux=") + String(ghLux,0) + String(",fan=") + String(fanOn ? 1 : 0));#END
+// time_delay
+#LOOP_EXT_CODE delay(1000);#END`,
+
+    new_bfarm_awd_automation: `// new Bfarm Test - Paddy Field AWD Automation
+// Blocks used: HandySense_awdv1, CJOB_begin, CJOB_addschedule_every_minutes, CJOB_enable_schedule, io_analog_read, math_arithmetic, controls_if, logic_compare, relay_on, relay_off, time_sync, time_get_hour, time_get_minute, pub_topic
+// Coverage: Solution, Cronjob, GPIO, Math, Logic, Time, Cloud
+
+// HandySense_awdv1 scaffold fragments
+#EXTINC#include <WiFi.h>#END
+#EXTINC#include <ThingSpeakWriter_asukiaaa.h>#END
+#EXTINC#include <mqtt_client.h>#END
+#EXTINC#include <pub_topic.h>#END
+#FUNCTION void connectWifiIfNotConnected(){ if (WiFi.status() != WL_CONNECTED) { WiFi.begin("FarmSSID","FarmPass123"); while(WiFi.status() != WL_CONNECTED){ delay(500); } } }#END
+#FUNCTION void Netpiecallback(String topic,byte* payload,unsigned int length){ }#END
+#SETUP Serial.begin(115200);#END
+#SETUP setupMQTT();#END
+
+// CJOB_begin
+#EXTINC#include <time.h>#END
+#EXTINC#include "cjob.h"#END
+#VARIABLE int CJOB_begin;#END
+#LOOP_EXT_CODE Cron.delay();#END
+
+// time_sync + time_get_hour/minute
+#EXTINC#include "BFarmTime.h"#END
+#VARIABLE BFarmTime bfarmtime;#END
+#SETUP bfarmtime.sync();#END
+
+#VARIABLE CronID_t id_awdCycle;#END
+#VARIABLE int soilRaw = 0;#END
+#VARIABLE float waterDepthCm = 0;#END
+#VARIABLE bool valveOpen = false;#END
+#VARIABLE const int AWD_RELAY_INDEX = 0;#END
+#VARIABLE int awdNowHour = 0;#END
+#VARIABLE int awdNowMinute = 0;#END
+#VARIABLE unsigned long awdLastStatusMs = 0;#END
+#VARIABLE void awdCycle();#END
+#FUNCTION void awdCycle(){#END
+#FUNCTION   soilRaw = analogRead(36);#END
+#FUNCTION   waterDepthCm = ((4095 - soilRaw) / 4095.0f) * 15.0f;#END
+#FUNCTION   if (waterDepthCm < 3.0f) {#END
+#FUNCTION     digitalWrite(const_relay_pin[AWD_RELAY_INDEX], HIGH);#END
+#FUNCTION     valveOpen = true;#END
+#FUNCTION   } else {#END
+#FUNCTION     digitalWrite(const_relay_pin[AWD_RELAY_INDEX], LOW);#END
+#FUNCTION     valveOpen = false;#END
+#FUNCTION   }#END
+#FUNCTION   pub_topic("@msg/awd/depth", waterDepthCm);#END
+#FUNCTION }#END
+
+#SETUP setPin_Relay(25,4,12,13);#END
+#SETUP setPin_SW(36,39,34,35);#END
+#SETUP setPin_ErrorSensor(19,18,5);#END
+#SETUP soilRaw = 0;#END
+#SETUP waterDepthCm = 0;#END
+#SETUP valveOpen = false;#END
+#SETUP awdNowHour = 0;#END
+#SETUP awdNowMinute = 0;#END
+#SETUP awdLastStatusMs = 0;#END
+// CJOB_addschedule_every_minutes
+#SETUP id_awdCycle = Cron.create("0 */15 * * * *", awdCycle, false);#END
+// CJOB_enable_schedule
+#SETUP Cron.enable(id_awdCycle);#END
+
+#LOOP_EXT_CODE connectWifiIfNotConnected();#END
+#LOOP_EXT_CODE awdCycle();#END
+#LOOP_EXT_CODE awdNowHour = bfarmtime.getHour();#END
+#LOOP_EXT_CODE awdNowMinute = bfarmtime.getMinute();#END
+#LOOP_EXT_CODE Netpieclient.loop();#END
+#LOOP_EXT_CODE if (millis() - awdLastStatusMs >= 1000UL) {#END
+#LOOP_EXT_CODE   awdLastStatusMs = millis();#END
+#LOOP_EXT_CODE   Serial.println(String("soil_raw=") + String(soilRaw) + String(",depth_cm=") + String(waterDepthCm,2) + String(",valve=") + String(valveOpen ? 1 : 0) + String(",pump=") + String(valveOpen ? 1 : 0) + String(",hour=") + String(awdNowHour) + String(",minute=") + String(awdNowMinute));#END
+#LOOP_EXT_CODE }#END
+#LOOP_EXT_CODE delay(200);#END`,
+
+    new_bfarm_fertigation_lab: `// new Bfarm Test - Fertigation Controller Lab
+// Blocks used: Initial_Fertilizer, Load_preferences, Read_pH, Read_EC, Read_temp, control_pH, control_EC, set_preferences, serial_usb_init, serial_write_data, controls_if, math_arithmetic
+// Coverage: Solution(Fertilizer Control), Variables, Math, Serial, Logic
+
+// Initial_Fertilizer
+#EXTINC#include <Preferences.h>#END
+#EXTINC#include <fertilizer.h>#END
+#VARIABLE Preferences preferences;#END
+#SETUP preferences = Preferences();#END
+#SETUP preferences.begin("credentials", false);#END
+#SETUP load_preferences();#END
+
+#VARIABLE int adcPH = 1800;#END
+#VARIABLE int adcEC = 2000;#END
+#VARIABLE int adcTemp = 1700;#END
+#VARIABLE float phValue = 0;#END
+#VARIABLE float tempValue = 0;#END
+#VARIABLE int ecValue = 0;#END
+#VARIABLE int phPumpState = 0;#END
+#VARIABLE int ecPumpState = 0;#END
+#VARIABLE int mixValveState = 0;#END
+#VARIABLE unsigned long fertLastRunMs = 0;#END
+#VARIABLE unsigned long fertLastStatusMs = 0;#END
+
+// serial_usb_init
+#SETUP Serial.begin(115200);#END
+#SETUP setPin_Relay(25,4,12,13);#END
+// set_preferences
+#SETUP calTemp = 25;#END
+#SETUP calPH4 = 1500;#END
+#SETUP calPH7 = 2000;#END
+#SETUP calPH10 = 2500;#END
+#SETUP calEC0 = 100;#END
+#SETUP calEC1413 = 1300;#END
+#SETUP PHthresh_min = 5.8;#END
+#SETUP PHthresh_max = 6.6;#END
+#SETUP ECthresh_min = 900;#END
+#SETUP PHdura_value = 3;#END
+#SETUP ECdura_value = 4;#END
+#SETUP set_preferences();#END
+#SETUP adcPH = 1800;#END
+#SETUP adcEC = 2000;#END
+#SETUP adcTemp = 1700;#END
+#SETUP phValue = 0;#END
+#SETUP tempValue = 0;#END
+#SETUP ecValue = 0;#END
+#SETUP phPumpState = 0;#END
+#SETUP ecPumpState = 0;#END
+#SETUP mixValveState = 0;#END
+#SETUP fertLastRunMs = 0;#END
+#SETUP fertLastStatusMs = 0;#END
+
+#FUNCTION void fertigationStep(){#END
+// Read_pH
+#FUNCTION phValue = (float)(PHcompute(adcPH));#END
+// Read_temp
+#FUNCTION tempValue = (float)(Tempcompute(adcTemp));#END
+// Read_EC
+#FUNCTION ecValue = (int)(ECcompute(adcEC,adcTemp));#END
+// control_pH
+#FUNCTION control_pH(phValue);#END
+// control_EC
+#FUNCTION control_EC(ecValue);#END
+#FUNCTION }#END
+
+// Load_preferences
+#LOOP_EXT_CODE load_preferences();#END
+#LOOP_EXT_CODE if (millis() - fertLastRunMs >= 1500UL) {#END
+#LOOP_EXT_CODE   fertLastRunMs = millis();#END
+#LOOP_EXT_CODE   adcPH = analogRead(36);#END
+#LOOP_EXT_CODE   adcEC = analogRead(39);#END
+#LOOP_EXT_CODE   adcTemp = analogRead(34);#END
+#LOOP_EXT_CODE   fertigationStep();#END
+#LOOP_EXT_CODE   if ((phValue < PHthresh_min) || (phValue > PHthresh_max)) { Serial.println("pH out of range"); }#END
+#LOOP_EXT_CODE   phPumpState = digitalRead(const_relay_pin[0]);#END
+#LOOP_EXT_CODE   ecPumpState = digitalRead(const_relay_pin[1]);#END
+#LOOP_EXT_CODE   mixValveState = digitalRead(const_relay_pin[2]);#END
+#LOOP_EXT_CODE }#END
+// serial_write_data
+#LOOP_EXT_CODE if (millis() - fertLastStatusMs >= 1000UL) {#END
+#LOOP_EXT_CODE   fertLastStatusMs = millis();#END
+#LOOP_EXT_CODE   Serial.println(String("pH=") + String(phValue,2) + String(",EC=") + String(ecValue) + String(",Temp=") + String(tempValue,1) + String(",ph_pump=") + String(phPumpState) + String(",ec_pump=") + String(ecPumpState) + String(",mix_valve=") + String(mixValveState));#END
+#LOOP_EXT_CODE }#END
+#LOOP_EXT_CODE delay(100);#END`,
+
+    new_bfarm_weather_station_sim: `// new Bfarm Test - Edge Weather Station Simulator
+// Blocks used: Weather_HTCo2PLx_begin_rs485, Weather_HTCo2PLx_read_humidity_rs485, Weather_HTCo2PLx_read_temperature_rs485, Weather_HTCo2PLx_read_co2_rs485, Weather_HTCo2PLx_read_pressure_rs485, wifi_connect, netpie_begin, netpie_connect, pub_topic, serial_write_data
+// Coverage: Sensor(RS485), WiFi, Cloud, Serial
+
+// Weather_HTCo2PLx_begin_rs485
+#EXTINC#include <ModbusMaster.h>#END
+#VARIABLE ModbusMaster rs485_Weather_HTCo2PLx;#END
+#VARIABLE float Weather_HTCo2PLx;#END
+#VARIABLE #define RXD 16#END
+#VARIABLE #define TXD 17#END
+#SETUP Serial.begin(115200);#END
+#SETUP pinMode(25, OUTPUT);#END
+#SETUP Serial2.begin(9600, SERIAL_8N1, RXD, TXD);#END
+#SETUP rs485_Weather_HTCo2PLx.begin(1, Serial2);#END
+
+// wifi_connect
+#EXTINC#include <WiFi.h>#END
+#SETUP WiFi.begin("FarmSSID","FarmPass123");#END
+#SETUP while(WiFi.status() != WL_CONNECTED){ delay(500); }#END
+
+// netpie_begin
+#EXTINC#include <pub_topic.h>#END
+#EXTINC#include <mqtt_client.h>#END
+#FUNCTION const char* Netpiemqtt_server = "broker.netpie.io";#END
+#FUNCTION const int Netpiemqtt_port = 1883;#END
+#SETUP setupMQTT();#END
+#SETUP Netpieclient.setServer(Netpiemqtt_server, Netpiemqtt_port);#END
+
+#VARIABLE int weatherReadResult = 0;#END
+#VARIABLE float weatherHumidity = 0;#END
+#VARIABLE float weatherTemp = 0;#END
+#VARIABLE float weatherCO2 = 0;#END
+#VARIABLE float weatherPressure = 0;#END
+#VARIABLE int weatherLedState = 0;#END
+#VARIABLE unsigned long weatherLastPollMs = 0;#END
+#VARIABLE unsigned long weatherLastStatusMs = 0;#END
+#VARIABLE int weatherRs485Ok = 0;#END
+#SETUP weatherReadResult = 0;#END
+#SETUP weatherHumidity = 0;#END
+#SETUP weatherTemp = 0;#END
+#SETUP weatherCO2 = 0;#END
+#SETUP weatherPressure = 0;#END
+#SETUP weatherLedState = 0;#END
+#SETUP weatherLastPollMs = 0;#END
+#SETUP weatherLastStatusMs = 0;#END
+#SETUP weatherRs485Ok = 0;#END
+
+// Weather_HTCo2PLx_read_*_rs485 + netpie_connect + pub_topic
+#LOOP_EXT_CODE if (millis() - weatherLastPollMs >= 3000UL) {#END
+#LOOP_EXT_CODE   weatherLastPollMs = millis();#END
+#LOOP_EXT_CODE   weatherReadResult = rs485_Weather_HTCo2PLx.readHoldingRegisters(500, 10);#END
+#LOOP_EXT_CODE   weatherRs485Ok = 0;#END
+#LOOP_EXT_CODE   if (weatherReadResult == 0) {#END
+#LOOP_EXT_CODE     weatherRs485Ok = 1;#END
+#LOOP_EXT_CODE     weatherHumidity = ((rs485_Weather_HTCo2PLx.getResponseBuffer(0) / 10.00f));#END
+#LOOP_EXT_CODE     weatherTemp = ((rs485_Weather_HTCo2PLx.getResponseBuffer(1) / 10.00f));#END
+#LOOP_EXT_CODE     weatherCO2 = ((rs485_Weather_HTCo2PLx.getResponseBuffer(3) / 1.00f));#END
+#LOOP_EXT_CODE     weatherPressure = ((rs485_Weather_HTCo2PLx.getResponseBuffer(5) / 1.00f));#END
+#LOOP_EXT_CODE   }#END
+#LOOP_EXT_CODE   if (!Netpieclient.connected()) Netpieclient.connect("weather-sim");#END
+#LOOP_EXT_CODE   Netpieclient.loop();#END
+#LOOP_EXT_CODE   pub_topic("@msg/weather/temp", weatherTemp);#END
+#LOOP_EXT_CODE   pub_topic("@msg/weather/humidity", weatherHumidity);#END
+#LOOP_EXT_CODE   pub_topic("@msg/weather/co2", weatherCO2);#END
+#LOOP_EXT_CODE   if (weatherLedState == 0) {#END
+#LOOP_EXT_CODE     weatherLedState = 1;#END
+#LOOP_EXT_CODE   } else {#END
+#LOOP_EXT_CODE     weatherLedState = 0;#END
+#LOOP_EXT_CODE   }#END
+#LOOP_EXT_CODE   if (weatherLedState == 1) {#END
+#LOOP_EXT_CODE     digitalWrite(25, HIGH);#END
+#LOOP_EXT_CODE   } else {#END
+#LOOP_EXT_CODE     digitalWrite(25, LOW);#END
+#LOOP_EXT_CODE   }#END
+#LOOP_EXT_CODE }#END
+// serial_write_data
+#LOOP_EXT_CODE if (millis() - weatherLastStatusMs >= 1000UL) {#END
+#LOOP_EXT_CODE   weatherLastStatusMs = millis();#END
+#LOOP_EXT_CODE   Serial.println(String("W:temp=") + String(weatherTemp,1) + String(",humidity=") + String(weatherHumidity,1) + String(",co2=") + String(weatherCO2,0) + String(",pressure=") + String(weatherPressure,1) + String(",led=") + String(weatherLedState) + String(",rs485_ok=") + String(weatherRs485Ok));#END
+#LOOP_EXT_CODE }#END
+#LOOP_EXT_CODE delay(100);#END`,
+
+    new_bfarm_hybrid_connectivity: `// new Bfarm Test - Hybrid Connectivity Testbed
+// Blocks used: serial_usb_init, bt_start, bt_read_line, task_timer_interrupt_ext, io_setpin, io_digital_write, io_pwm_write, text_join, text_length, math_arithmetic, math_constrain, controls_if, logic_compare, logic_operation, controls_repeat_ext
+// Coverage: Serial, Bluetooth, Task, GPIO, Text, Math, Logic, Loops
+
+#EXTINC#include "BluetoothSerial.h"#END
+#EXTINC#include "BFarmEvent.h"#END
+#VARIABLE BluetoothSerial SerialBT;#END
+#VARIABLE BFarmEvent bfarmevt;#END
+#VARIABLE int blinkPin = 25;#END
+#VARIABLE int pwmPin = 4;#END
+#VARIABLE String latestLine = "";#END
+#VARIABLE int commandPercent = 0;#END
+#VARIABLE int currentPwmValue = 0;#END
+#VARIABLE int relay1State = 0;#END
+#VARIABLE int relay2State = 0;#END
+#VARIABLE unsigned long hybridLastStatusMs = 0;#END
+
+// serial_usb_init
+#SETUP Serial.begin(115200);#END
+// bt_start
+#SETUP SerialBT.begin("HybridTestbed");#END
+#SETUP setPin_Relay(25,4,12,13);#END
+#SETUP latestLine = "";#END
+#SETUP commandPercent = 0;#END
+#SETUP currentPwmValue = 0;#END
+#SETUP relay1State = 0;#END
+#SETUP relay2State = 0;#END
+#SETUP hybridLastStatusMs = 0;#END
+// io_setpin
+#SETUP pinMode(blinkPin, OUTPUT);#END
+#SETUP pinMode(pwmPin, OUTPUT);#END
+
+// task_timer_interrupt_ext
+#BLOCKSETUP
+bfarmevt.attach("hybrid_tick",BFarmEventType::EVERY, [](){
+  SerialBT.println(String("tick:") + String(millis()));
+}, 1000, 2048);
+#END
+
+#FUNCTION int parsePercent(String line){ int raw = line.toInt(); return constrain(raw, 0, 100); }#END
+
+// bt_read_line + controls_if + logic_compare + logic_operation + math_arithmetic + math_constrain
+#LOOP_EXT_CODE while(SerialBT.available()){#END
+#LOOP_EXT_CODE   latestLine = SerialBT.readStringUntil('\\n');#END
+#LOOP_EXT_CODE   commandPercent = parsePercent(latestLine);#END
+#LOOP_EXT_CODE   currentPwmValue = (commandPercent * 255) / 100;#END
+#LOOP_EXT_CODE   if ((latestLine.length() > 0) && (latestLine != "stop")) {#END
+// io_pwm_write + io_digital_write + text_join
+#LOOP_EXT_CODE     analogWrite(pwmPin, currentPwmValue);#END
+#LOOP_EXT_CODE     digitalWrite(blinkPin, HIGH);#END
+#LOOP_EXT_CODE     relay1State = 1;#END
+#LOOP_EXT_CODE     if (currentPwmValue > 0) {#END
+#LOOP_EXT_CODE       relay2State = 1;#END
+#LOOP_EXT_CODE     } else {#END
+#LOOP_EXT_CODE       relay2State = 0;#END
+#LOOP_EXT_CODE     }#END
+#LOOP_EXT_CODE     Serial.println(String("BT cmd=") + latestLine + String(", pwm=") + String(currentPwmValue));#END
+#LOOP_EXT_CODE   } else {#END
+#LOOP_EXT_CODE     analogWrite(pwmPin, 0);#END
+#LOOP_EXT_CODE     digitalWrite(blinkPin, LOW);#END
+#LOOP_EXT_CODE     currentPwmValue = 0;#END
+#LOOP_EXT_CODE     relay1State = 0;#END
+#LOOP_EXT_CODE     relay2State = 0;#END
+#LOOP_EXT_CODE     Serial.println(String("BT cmd ignored: ") + latestLine);#END
+#LOOP_EXT_CODE   }#END
+#LOOP_EXT_CODE }#END
+// controls_repeat_ext + serial plotter status
+#LOOP_EXT_CODE if (millis() - hybridLastStatusMs >= 1000UL) {#END
+#LOOP_EXT_CODE   hybridLastStatusMs = millis();#END
+#LOOP_EXT_CODE   Serial.println(String("BT cmd=") + String(commandPercent) + String(",pwm=") + String(currentPwmValue) + String(",relay1=") + String(relay1State) + String(",relay2=") + String(relay2State) + String(",bt_rx_chars=") + String(latestLine.length()));#END
+#LOOP_EXT_CODE }#END
+#LOOP_EXT_CODE delay(200);#END`
 };
 
+function isNewBfarmExample(exampleKey: string): boolean {
+    return exampleKey.startsWith('new_bfarm_');
+}
+
+function preprocessExampleCode(exampleKey: string, rawCode: string): string {
+    if (!isNewBfarmExample(exampleKey)) {
+        return rawCode;
+    }
+
+    if (!hasBfarmMacroMarkers(rawCode)) {
+        return rawCode;
+    }
+
+    return convertBfarmMacroToCpp(rawCode);
+}
+
+function isBrokenCachedAwdCode(code: string): boolean {
+    if (!code) return false;
+    if (!code.includes('Paddy Field AWD Automation')) return false;
+    const awdStart = code.indexOf('void awdCycle(){');
+    const setupStart = code.indexOf('void setup() {');
+    const pubLine = code.indexOf('pub_topic("@msg/awd/depth", waterDepthCm);');
+    const missingRuntimeInit = !code.includes('awdLastStatusMs = 0');
+    if (missingRuntimeInit) return true;
+    if (awdStart < 0 || setupStart < 0 || pubLine < 0) return false;
+    // Broken output had setup() directly after pub_topic() inside awdCycle().
+    return awdStart < pubLine && pubLine < setupStart;
+}
+
+function repairCachedNewBfarmCodeIfNeeded(): void {
+    const cachedCode = localStorage.getItem('hackCable-webExample-inputCode');
+    if (!cachedCode || !isBrokenCachedAwdCode(cachedCode)) return;
+
+    const fixedCode = preprocessExampleCode(
+        'new_bfarm_awd_automation',
+        codeExamples['new_bfarm_awd_automation']
+    );
+
+    localStorage.setItem('hackCable-webExample-inputCode', fixedCode);
+    if (codeInput instanceof HTMLTextAreaElement) {
+        codeInput.value = fixedCode;
+    }
+    console.log('Repaired stale cached code for new_bfarm_awd_automation.');
+}
+
 const codeExamplesSelect = document.getElementById('code-examples') as HTMLSelectElement;
+repairCachedNewBfarmCodeIfNeeded();
 
 if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
     codeExamplesSelect.addEventListener('change', () => {
         const selectedExample = codeExamplesSelect.value;
         if (selectedExample && codeExamples[selectedExample]) {
-            codeInput.value = codeExamples[selectedExample];
+            const rawExampleCode = codeExamples[selectedExample];
+            const preparedExampleCode = preprocessExampleCode(selectedExample, rawExampleCode);
+            codeInput.value = preparedExampleCode;
             localStorage.setItem('hackCable-webExample-inputCode', codeInput.value);
             console.log(`Loaded example: ${selectedExample}`);
 
@@ -1786,6 +2855,38 @@ if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
                     break;
                 case 'bfarm_button':
                     setupBfarmButtonCircuit();
+                    break;
+                // TEST BFARM Examples
+                case 'test_bfarm_greenhouse':
+                    setupTestBfarmGreenhouseCircuit();
+                    break;
+                case 'test_bfarm_ph_mist_auto':
+                    setupTestBfarmPhMistAutoCircuit();
+                    break;
+                case 'test_bfarm_soil_irrigation':
+                    setupTestBfarmSoilIrrigationCircuit();
+                    break;
+                case 'test_bfarm_light_neopixel':
+                    setupTestBfarmLightNeopixelCircuit();
+                    break;
+                case 'test_bfarm_weather_wifi':
+                    setupTestBfarmWeatherWifiCircuit();
+                    break;
+                // new Bfarm Test Examples
+                case 'new_bfarm_smart_greenhouse':
+                    setupNewBfarmSmartGreenhouseCircuit();
+                    break;
+                case 'new_bfarm_awd_automation':
+                    setupNewBfarmAwdAutomationCircuit();
+                    break;
+                case 'new_bfarm_fertigation_lab':
+                    setupNewBfarmFertigationLabCircuit();
+                    break;
+                case 'new_bfarm_weather_station_sim':
+                    setupNewBfarmWeatherStationSimCircuit();
+                    break;
+                case 'new_bfarm_hybrid_connectivity':
+                    setupNewBfarmHybridConnectivityCircuit();
                     break;
             }
         }
@@ -2514,6 +3615,7 @@ function setupBfarmRelayCircuit() {
         try {
             connectPorts(relayFigure, 'VCC', boardFigure, 'VIN_1');
             connectPorts(relayFigure, 'GND', boardFigure, 'GND_5');
+            // Match code: setPin_Relay(25,4,12,13) => IN1..IN4 map to IO25, IO4, IO12, IO13.
             connectPorts(relayFigure, 'IN1', boardFigure, 'IO25');
             connectPorts(relayFigure, 'IN2', boardFigure, 'IO4');
             connectPorts(relayFigure, 'IN3', boardFigure, 'IO12');
@@ -2563,6 +3665,327 @@ function setupBfarmButtonCircuit() {
     }, 500);
 }
 
+// TEST BFARM 1: Greenhouse — SHT31 + Fan
+function setupTestBfarmGreenhouseCircuit() {
+    console.log("Setting up TEST BFARM Greenhouse circuit...");
+    hackCable.editor.canvas.clear();
+    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
+    hackCable.editor.canvas.add(boardFigure.setX(200).setY(50));
+    const sht31Figure = new ComponentFigure(wokwiComponentById[41]);
+    hackCable.editor.canvas.add(sht31Figure.setX(500).setY(50));
+    const fanFigure = new ComponentFigure(wokwiComponentById[33]);
+    hackCable.editor.canvas.add(fanFigure.setX(500).setY(180));
+    setTimeout(() => {
+        try {
+            connectPorts(sht31Figure, 'VCC', boardFigure, '3V3_R1');
+            connectPorts(sht31Figure, 'GND', boardFigure, 'GND_R1');
+            connectPorts(sht31Figure, 'SDA', boardFigure, 'SDA_1');
+            connectPorts(sht31Figure, 'SCL', boardFigure, 'SCL_1');
+            connectPorts(fanFigure, 'VCC', boardFigure, 'VIN_2');
+            connectPorts(fanFigure, 'GND', boardFigure, 'GND_6');
+            connectPorts(fanFigure, 'SIG', boardFigure, 'IO4');
+            console.log("TEST BFARM Greenhouse circuit setup complete!");
+        } catch (error) {
+            console.error("Error during TEST BFARM Greenhouse wiring:", error);
+        }
+    }, 500);
+}
+
+// TEST BFARM 2: pH Auto-Mist — RS485 pH + Misting Pump
+function setupTestBfarmPhMistAutoCircuit() {
+    console.log("Setting up TEST BFARM pH Auto-Mist circuit...");
+    hackCable.editor.canvas.clear();
+    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
+    hackCable.editor.canvas.add(boardFigure.setX(200).setY(50));
+    const phSensorFigure = new ComponentFigure(wokwiComponentById[35]);
+    hackCable.editor.canvas.add(phSensorFigure.setX(500).setY(50));
+    const mistPumpFigure = new ComponentFigure(wokwiComponentById[31]);
+    hackCable.editor.canvas.add(mistPumpFigure.setX(500).setY(190));
+    setTimeout(() => {
+        try {
+            connectPorts(phSensorFigure, 'VCC', boardFigure, '3V3_R3');
+            connectPorts(phSensorFigure, 'GND', boardFigure, 'GND_R3');
+            connectPorts(phSensorFigure, 'A+',  boardFigure, 'TX2');
+            connectPorts(phSensorFigure, 'B-',  boardFigure, 'RX2');
+            connectPorts(mistPumpFigure, 'VCC', boardFigure, 'VIN_1');
+            connectPorts(mistPumpFigure, 'GND', boardFigure, 'GND_5');
+            connectPorts(mistPumpFigure, 'SIG', boardFigure, 'IO25');
+            console.log("TEST BFARM pH Auto-Mist circuit setup complete!");
+        } catch (error) {
+            console.error("Error during TEST BFARM pH Auto-Mist wiring:", error);
+        }
+    }, 500);
+}
+
+// TEST BFARM 3: Soil Irrigation — Soil Moisture + Water Pump
+function setupTestBfarmSoilIrrigationCircuit() {
+    console.log("Setting up TEST BFARM Soil Irrigation circuit...");
+    hackCable.editor.canvas.clear();
+    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
+    hackCable.editor.canvas.add(boardFigure.setX(200).setY(50));
+    const soilFigure = new ComponentFigure(wokwiComponentById[44]);
+    hackCable.editor.canvas.add(soilFigure.setX(50).setY(80));
+    const pumpFigure = new ComponentFigure(wokwiComponentById[32]);
+    hackCable.editor.canvas.add(pumpFigure.setX(500).setY(130));
+    setTimeout(() => {
+        try {
+            connectPorts(soilFigure, 'VCC', boardFigure, '3V3_2');
+            connectPorts(soilFigure, 'GND', boardFigure, 'GND_2');
+            connectPorts(soilFigure, 'AO',  boardFigure, 'IO36');
+            connectPorts(pumpFigure, 'VCC', boardFigure, 'VIN_1');
+            connectPorts(pumpFigure, 'GND', boardFigure, 'GND_5');
+            connectPorts(pumpFigure, 'SIG', boardFigure, 'IO32');
+            console.log("TEST BFARM Soil Irrigation circuit setup complete!");
+        } catch (error) {
+            console.error("Error during TEST BFARM Soil Irrigation wiring:", error);
+        }
+    }, 500);
+}
+
+// TEST BFARM 4: Light NeoPixel — BH1750 + NeoPixel
+function setupTestBfarmLightNeopixelCircuit() {
+    console.log("Setting up TEST BFARM Light NeoPixel circuit...");
+    hackCable.editor.canvas.clear();
+    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
+    hackCable.editor.canvas.add(boardFigure.setX(200).setY(50));
+    const bh1750Figure = new ComponentFigure(wokwiComponentById[42]);
+    hackCable.editor.canvas.add(bh1750Figure.setX(500).setY(50));
+    const neopixelFigure = new ComponentFigure(wokwiComponentById[4]);
+    hackCable.editor.canvas.add(neopixelFigure.setX(500).setY(180));
+    setTimeout(() => {
+        try {
+            connectPorts(bh1750Figure, 'VCC', boardFigure, '3V3_R1');
+            connectPorts(bh1750Figure, 'GND', boardFigure, 'GND_R1');
+            connectPorts(bh1750Figure, 'SDA', boardFigure, 'SDA_1');
+            connectPorts(bh1750Figure, 'SCL', boardFigure, 'SCL_1');
+            connectPorts(neopixelFigure, 'VDD', boardFigure, 'VIN_1');
+            connectPorts(neopixelFigure, 'VSS', boardFigure, 'GND_5');
+            connectPorts(neopixelFigure, 'DIN', boardFigure, 'IO4');
+            console.log("TEST BFARM Light NeoPixel circuit setup complete!");
+        } catch (error) {
+            console.error("Error during TEST BFARM Light NeoPixel wiring:", error);
+        }
+    }, 500);
+}
+
+// TEST BFARM 5: Weather WiFi — Weather RS485 HTCo2PLx
+function setupTestBfarmWeatherWifiCircuit() {
+    console.log("Setting up TEST BFARM Weather WiFi circuit...");
+    hackCable.editor.canvas.clear();
+    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
+    hackCable.editor.canvas.add(boardFigure.setX(150).setY(50));
+    const weatherFigure = new ComponentFigure(wokwiComponentById[40]);
+    hackCable.editor.canvas.add(weatherFigure.setX(470).setY(90));
+    setTimeout(() => {
+        try {
+            connectPorts(weatherFigure, 'VCC', boardFigure, '3V3_R3');
+            connectPorts(weatherFigure, 'GND', boardFigure, 'GND_R3');
+            connectPorts(weatherFigure, 'A+',  boardFigure, 'TX2');
+            connectPorts(weatherFigure, 'B-',  boardFigure, 'RX2');
+            console.log("TEST BFARM Weather WiFi circuit setup complete!");
+        } catch (error) {
+            console.error("Error during TEST BFARM Weather WiFi wiring:", error);
+        }
+    }, 500);
+}
+
+// ============================================
+// new Bfarm Test Circuit Setup Functions
+// ============================================
+
+function setupNewBfarmSmartGreenhouseCircuit() {
+    console.log("Setting up new Bfarm Smart Greenhouse circuit...");
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
+    hackCable.editor.canvas.add(boardFigure.setX(180).setY(40));
+    const sht31Figure = new ComponentFigure(wokwiComponentById[41]);
+    hackCable.editor.canvas.add(sht31Figure.setX(480).setY(40));
+    const bh1750Figure = new ComponentFigure(wokwiComponentById[42]);
+    hackCable.editor.canvas.add(bh1750Figure.setX(480).setY(150));
+    const fanFigure = new ComponentFigure(wokwiComponentById[33]);
+    hackCable.editor.canvas.add(fanFigure.setX(480).setY(260));
+    const relayFigure = new ComponentFigure(wokwiComponentById[45]);
+    hackCable.editor.canvas.add(relayFigure.setX(20).setY(180));
+
+    setTimeout(() => {
+        try {
+            connectPorts(sht31Figure, 'VCC', boardFigure, '3V3_R1');
+            connectPorts(sht31Figure, 'GND', boardFigure, 'GND_R1');
+            connectPorts(sht31Figure, 'SDA', boardFigure, 'SDA_1');
+            connectPorts(sht31Figure, 'SCL', boardFigure, 'SCL_1');
+
+            connectPorts(bh1750Figure, 'VCC', boardFigure, '3V3_R2');
+            connectPorts(bh1750Figure, 'GND', boardFigure, 'GND_R2');
+            connectPorts(bh1750Figure, 'SDA', boardFigure, 'SDA_2');
+            connectPorts(bh1750Figure, 'SCL', boardFigure, 'SCL_2');
+
+            connectPorts(fanFigure, 'VCC', boardFigure, 'VIN_2');
+            connectPorts(fanFigure, 'GND', boardFigure, 'GND_6');
+            // Match code: setPin_Relay(32,33,25,26) and control const_relay_pin[1] => IO33.
+            connectPorts(fanFigure, 'SIG', boardFigure, 'IO33');
+
+            connectPorts(relayFigure, 'VCC', boardFigure, 'VIN_1');
+            connectPorts(relayFigure, 'GND', boardFigure, 'GND_5');
+            // Match the same relay mapping used in generated code.
+            connectPorts(relayFigure, 'IN1', boardFigure, 'IO32');
+            connectPorts(relayFigure, 'IN2', boardFigure, 'IO33');
+            connectPorts(relayFigure, 'IN3', boardFigure, 'IO25');
+            connectPorts(relayFigure, 'IN4', boardFigure, 'IO26');
+
+            console.log("new Bfarm Smart Greenhouse circuit setup complete!");
+        } catch (error) {
+            console.error("Error during new Bfarm Smart Greenhouse wiring:", error);
+        }
+    }, 500);
+}
+
+function setupNewBfarmAwdAutomationCircuit() {
+    console.log("Setting up new Bfarm AWD Automation circuit...");
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
+    hackCable.editor.canvas.add(boardFigure.setX(200).setY(50));
+    const soilFigure = new ComponentFigure(wokwiComponentById[44]);
+    hackCable.editor.canvas.add(soilFigure.setX(40).setY(90));
+    const pumpFigure = new ComponentFigure(wokwiComponentById[32]);
+    hackCable.editor.canvas.add(pumpFigure.setX(500).setY(120));
+    const relayFigure = new ComponentFigure(wokwiComponentById[45]);
+    hackCable.editor.canvas.add(relayFigure.setX(500).setY(240));
+
+    setTimeout(() => {
+        try {
+            connectPorts(soilFigure, 'VCC', boardFigure, '3V3_2');
+            connectPorts(soilFigure, 'GND', boardFigure, 'GND_2');
+            connectPorts(soilFigure, 'AO', boardFigure, 'IO36');
+
+            connectPorts(pumpFigure, 'VCC', boardFigure, 'VIN_1');
+            connectPorts(pumpFigure, 'GND', boardFigure, 'GND_5');
+            connectPorts(pumpFigure, 'SIG', boardFigure, 'IO25');
+
+            connectPorts(relayFigure, 'VCC', boardFigure, 'VIN_2');
+            connectPorts(relayFigure, 'GND', boardFigure, 'GND_6');
+            // Match code: setPin_Relay(25,4,12,13) => IN1..IN4 map to IO25, IO4, IO12, IO13.
+            connectPorts(relayFigure, 'IN1', boardFigure, 'IO25');
+            connectPorts(relayFigure, 'IN2', boardFigure, 'IO4');
+            connectPorts(relayFigure, 'IN3', boardFigure, 'IO12');
+            connectPorts(relayFigure, 'IN4', boardFigure, 'IO13');
+
+            console.log("new Bfarm AWD Automation circuit setup complete!");
+        } catch (error) {
+            console.error("Error during new Bfarm AWD Automation wiring:", error);
+        }
+    }, 500);
+}
+
+function setupNewBfarmFertigationLabCircuit() {
+    console.log("Setting up new Bfarm Fertigation Lab circuit...");
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
+    hackCable.editor.canvas.add(boardFigure.setX(160).setY(40));
+    const fertPhFigure = new ComponentFigure(wokwiComponentById[46]);
+    hackCable.editor.canvas.add(fertPhFigure.setX(500).setY(40));
+    const ecFigure = new ComponentFigure(wokwiComponentById[47]);
+    hackCable.editor.canvas.add(ecFigure.setX(500).setY(150));
+    const tempFigure = new ComponentFigure(wokwiComponentById[48]);
+    hackCable.editor.canvas.add(tempFigure.setX(500).setY(260));
+    const relayFigure = new ComponentFigure(wokwiComponentById[45]);
+    hackCable.editor.canvas.add(relayFigure.setX(20).setY(130));
+
+    setTimeout(() => {
+        try {
+            [fertPhFigure, ecFigure, tempFigure].forEach((sensorFigure) => {
+                connectPorts(sensorFigure, 'VCC', boardFigure, '3V3_R3');
+                connectPorts(sensorFigure, 'GND', boardFigure, 'GND_R3');
+                connectPorts(sensorFigure, 'A+', boardFigure, 'TX2');
+                connectPorts(sensorFigure, 'B-', boardFigure, 'RX2');
+            });
+
+            connectPorts(relayFigure, 'VCC', boardFigure, 'VIN_1');
+            connectPorts(relayFigure, 'GND', boardFigure, 'GND_5');
+            // Match code: setPin_Relay(25,4,12,13) => IN1..IN4 map to IO25, IO4, IO12, IO13.
+            connectPorts(relayFigure, 'IN1', boardFigure, 'IO25');
+            connectPorts(relayFigure, 'IN2', boardFigure, 'IO4');
+            connectPorts(relayFigure, 'IN3', boardFigure, 'IO12');
+            connectPorts(relayFigure, 'IN4', boardFigure, 'IO13');
+
+            console.log("new Bfarm Fertigation Lab circuit setup complete!");
+        } catch (error) {
+            console.error("Error during new Bfarm Fertigation Lab wiring:", error);
+        }
+    }, 500);
+}
+
+function setupNewBfarmWeatherStationSimCircuit() {
+    console.log("Setting up new Bfarm Weather Station Simulator circuit...");
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
+    hackCable.editor.canvas.add(boardFigure.setX(150).setY(50));
+    const weatherFigure = new ComponentFigure(wokwiComponentById[40]);
+    hackCable.editor.canvas.add(weatherFigure.setX(470).setY(90));
+    const ledFigure = new ComponentFigure(wokwiComponentById[1]);
+    hackCable.editor.canvas.add(ledFigure.setX(40).setY(150));
+
+    setTimeout(() => {
+        try {
+            connectPorts(weatherFigure, 'VCC', boardFigure, '3V3_R3');
+            connectPorts(weatherFigure, 'GND', boardFigure, 'GND_R3');
+            connectPorts(weatherFigure, 'A+', boardFigure, 'TX2');
+            connectPorts(weatherFigure, 'B-', boardFigure, 'RX2');
+
+            connectPorts(ledFigure, 'A', boardFigure, 'IO25');
+            connectPorts(ledFigure, 'C', boardFigure, 'GND_5');
+
+            console.log("new Bfarm Weather Station Simulator circuit setup complete!");
+        } catch (error) {
+            console.error("Error during new Bfarm Weather Station Simulator wiring:", error);
+        }
+    }, 500);
+}
+
+function setupNewBfarmHybridConnectivityCircuit() {
+    console.log("Setting up new Bfarm Hybrid Connectivity circuit...");
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
+    hackCable.editor.canvas.add(boardFigure.setX(180).setY(40));
+    const buttonFigure = new ComponentFigure(wokwiComponentById[49]);
+    hackCable.editor.canvas.add(buttonFigure.setX(20).setY(70));
+    const relayFigure = new ComponentFigure(wokwiComponentById[45]);
+    hackCable.editor.canvas.add(relayFigure.setX(500).setY(80));
+    const neopixelFigure = new ComponentFigure(wokwiComponentById[4]);
+    hackCable.editor.canvas.add(neopixelFigure.setX(500).setY(260));
+
+    setTimeout(() => {
+        try {
+            connectPorts(buttonFigure, 'VCC', boardFigure, '3V3_4');
+            connectPorts(buttonFigure, 'GND', boardFigure, 'GND_4');
+            connectPorts(buttonFigure, 'B1', boardFigure, 'IO32');
+            connectPorts(buttonFigure, 'B2', boardFigure, 'IO33');
+            connectPorts(buttonFigure, 'B3', boardFigure, 'IO15');
+            connectPorts(buttonFigure, 'B4', boardFigure, 'IO39');
+
+            connectPorts(relayFigure, 'VCC', boardFigure, 'VIN_1');
+            connectPorts(relayFigure, 'GND', boardFigure, 'GND_5');
+            // Match code: setPin_Relay(25,4,12,13) with blinkPin=IO25 and pwmPin=IO4.
+            connectPorts(relayFigure, 'IN1', boardFigure, 'IO25');
+            connectPorts(relayFigure, 'IN2', boardFigure, 'IO4');
+            connectPorts(relayFigure, 'IN3', boardFigure, 'IO12');
+            connectPorts(relayFigure, 'IN4', boardFigure, 'IO13');
+
+            connectPorts(neopixelFigure, 'VDD', boardFigure, 'VIN_1');
+            connectPorts(neopixelFigure, 'VSS', boardFigure, 'GND_5');
+            connectPorts(neopixelFigure, 'DIN', boardFigure, 'IO4');
+
+            console.log("new Bfarm Hybrid Connectivity circuit setup complete!");
+        } catch (error) {
+            console.error("Error during new Bfarm Hybrid Connectivity wiring:", error);
+        }
+    }, 500);
+}
+
 // postMessage listener: receive code from BFarm and handle shell resize
 window.addEventListener('message', (e: MessageEvent) => {
     if (!e.data) return;
@@ -2607,5 +4030,3 @@ autoSyncBlocksCheckbox?.addEventListener('change', () => {
         autoSyncBlocksHandler = null;
     }
 });
-
-

@@ -28,6 +28,12 @@
             <div class="buttonBar">
                 <p data-i18n="ui.code">Code:</p>
                 <button id="compile" data-i18n="ui.compile">Compile</button>
+                <select id="compiler-mode" title="Compilation method" style="display:none">
+                    <option value="micropython" selected>MicroPython - Legacy</option>
+                    <option value="emscripten">Emscripten C++ - Native</option>
+                    <option value="clang-llvm">Clang/LLVM WASM (first use: ~35MB)</option>
+                    <option value="clang-native">Native Clang WASM</option>
+                </select>
                 <button id="execute" data-i18n="ui.execute">Execute</button>
                 <button id="stop" data-i18n="ui.stop">Stop</button>
                 <button id="pause" data-i18n="ui.pause">Pause</button>
@@ -69,7 +75,57 @@
                         <option value="relaySequentialBlink" data-i18n="examples.relaySequentialBlink">Relay Sequential Blink</option>
                         <option value="mcpSmartControl" data-i18n="examples.mcpSmartControl">MCP23008 Smart Control</option>
                     </optgroup>
+                    <optgroup label="BFarm - Field Sensors" data-i18n-label="examples.bfarmGroup">
+                        <option value="bfarm_rs485_ph" data-i18n="examples.bfarmRs485Ph">RS485 pH Sensor</option>
+                        <option value="bfarm_rs485_light" data-i18n="examples.bfarmRs485Light">RS485 Light Sensor</option>
+                        <option value="bfarm_rs485_rain" data-i18n="examples.bfarmRs485Rain">RS485 Rain Sensor</option>
+                        <option value="bfarm_rs485_wind" data-i18n="examples.bfarmRs485Wind">RS485 Wind Speed</option>
+                        <option value="bfarm_rs485_par" data-i18n="examples.bfarmRs485Par">RS485 PAR Sensor</option>
+                        <option value="bfarm_rs485_weather" data-i18n="examples.bfarmRs485Weather">Weather HTCo2PLx</option>
+                        <option value="bfarm_sht31" data-i18n="examples.bfarmSht31">SHT31 Temp+Humidity</option>
+                        <option value="bfarm_bh1750" data-i18n="examples.bfarmBh1750">BH1750 Light (I2C)</option>
+                        <option value="bfarm_current420ma" data-i18n="examples.bfarmCurrent420ma">4-20mA Current Loop</option>
+                        <option value="bfarm_soil_moisture" data-i18n="examples.bfarmSoilMoisture">Soil Moisture</option>
+                        <option value="bfarm_relay" data-i18n="examples.bfarmRelay">4-Channel Relay</option>
+                        <option value="bfarm_fertilizer_ph" data-i18n="examples.bfarmFertilizerPh">Fertilizer pH Sensor</option>
+                        <option value="bfarm_ec" data-i18n="examples.bfarmEc">EC Sensor</option>
+                        <option value="bfarm_fertilizer_temp" data-i18n="examples.bfarmFertilizerTemp">Fertilizer Temp Sensor</option>
+                        <option value="bfarm_button" data-i18n="examples.bfarmButton">4-Channel Button</option>
+                    </optgroup>
+                    <optgroup label="TEST BFARM">
+                        <option value="test_bfarm_greenhouse">Greenhouse: SHT31 + WiFi + Cronjob + Fan</option>
+                        <option value="test_bfarm_ph_mist_auto">pH Auto-Mist: RS485 pH + Cronjob + Pump</option>
+                        <option value="test_bfarm_soil_irrigation">Soil Irrigation: Moisture + Daily Cronjob + Pump</option>
+                        <option value="test_bfarm_light_neopixel">Light Monitor: BH1750 + NeoPixel</option>
+                        <option value="test_bfarm_weather_wifi">Weather Station: RS485 Multi-Sensor + WiFi</option>
+                    </optgroup>
+                    <optgroup label="new Bfarm Test">
+                        <option value="new_bfarm_smart_greenhouse">Smart Greenhouse End-to-End</option>
+                        <option value="new_bfarm_awd_automation">Paddy Field AWD Automation</option>
+                        <option value="new_bfarm_fertigation_lab">Fertigation Controller Lab</option>
+                        <option value="new_bfarm_weather_station_sim">Edge Weather Station Simulator</option>
+                        <option value="new_bfarm_hybrid_connectivity">Hybrid Connectivity Testbed</option>
+                    </optgroup>
                 </select>
+            </div>
+            <div class="buttonBar" id="sensor-mock-container">
+                <p>Mock Sensors:</p>
+                <textarea id="sensor-mock-input" rows="5" style="width:100%;font-family:monospace;font-size:12px;resize:vertical">humidity = 60
+temperature = 25
+ph = 7.0
+lux = 500
+soil = 50</textarea>
+            </div>
+            <div class="buttonBar" id="sim-http-container">
+                <p>Simulated HTTP:</p>
+                <input id="sim-http-path" type="text" value="/status" />
+                <button id="sim-http-send">GET</button>
+                <pre id="sim-http-response" class="sim-http-response">Ready</pre>
+            </div>
+            <div class="buttonBar">
+                <p>Sync:</p>
+                <button id="transfer-to-blocks">Transfer to Blocks</button>
+                <label><input type="checkbox" id="auto-sync-blocks"> Auto-sync</label>
             </div>
             <label for="code-editor" data-i18n="ui.codeLabel">Code:</label>
             <textarea id="code-editor" rows="10"></textarea>
@@ -91,6 +147,13 @@
                     <button id="serial-clear" data-i18n="ui.serial.clear">Clear</button>
                 </div>
                 <div id="serial-output" class="serial-output"></div>
+            </div>
+            <div class="io-section serial-plotter-section">
+                <div class="serial-plotter-header">
+                    <span class="serial-plotter-title" data-i18n="ui.serialPlotter.title">Serial Plotter</span>
+                    <button id="serial-plotter-clear" data-i18n="ui.serial.clear">Clear</button>
+                </div>
+                <canvas id="serial-plotter-canvas" class="serial-plotter-canvas"></canvas>
             </div>
         </div>
     </div>

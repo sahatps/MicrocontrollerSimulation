@@ -1,7 +1,13 @@
 {
-  "buildCommand": "npm run build:web",
+  "buildCommand": "npm run build:all",
   "outputDirectory": "dist/web",
   "framework": null,
+  "rewrites": [
+    {
+      "source": "/wasm-clang/:path*",
+      "destination": "https://binji.github.io/wasm-clang/:path*"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
@@ -12,7 +18,7 @@
         },
         {
           "key": "Cross-Origin-Embedder-Policy",
-          "value": "require-corp"
+          "value": "credentialless"
         }
       ]
     }

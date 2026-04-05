@@ -7,20 +7,131 @@ export interface PinState {
     value: boolean;
 }
 
+export interface SimulatedHttpResponse {
+    id: number;
+    path: string;
+    status: number;
+    contentType: string;
+    body: string;
+}
+
+interface PendingHttpRequest {
+    id: number;
+    path: string;
+    query: Record<string, string>;
+}
+
+interface PendingHttpResolver {
+    path: string;
+    resolve: (value: SimulatedHttpResponse) => void;
+    timer: ReturnType<typeof setTimeout>;
+}
+
 export class MicroPythonRunner {
     private mp: any;
     private taskScheduler = new MicroTaskScheduler();
     public pins: Map<number, PinState> = new Map();
     private pinCallbacks: Map<number, (value: boolean) => void> = new Map();
     public onSerialData: ((data: string) => void) | null = null;
+    public onSensorActivate: ((busType: string, pin1: number, pin2: number) => void) | null = null;
+    private httpRequestQueue: PendingHttpRequest[] = [];
+    private pendingHttpResolvers: Map<number, PendingHttpResolver> = new Map();
+    private nextHttpRequestId = 1;
+    private supportedPins: Set<number>;
+    private unsupportedWriteWarnings: Set<number> = new Set();
 
     // ESP32 common GPIO pins
     private readonly availablePins = [2, 4, 5, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33];
 
     constructor() {
+        this.supportedPins = new Set(this.availablePins);
         // Initialize all pins as INPUT
         this.availablePins.forEach(pin => {
             this.pins.set(pin, { mode: 'INPUT', value: false });
+        });
+    }
+
+    private ensurePinState(pin: number): PinState {
+        let pinState = this.pins.get(pin);
+        if (!pinState) {
+            pinState = { mode: 'INPUT', value: false };
+            this.pins.set(pin, pinState);
+        }
+        return pinState;
+    }
+
+    private warnUnsupportedPinWrite(pin: number): void {
+        if (this.supportedPins.size === 0 || this.supportedPins.has(pin) || this.unsupportedWriteWarnings.has(pin)) {
+            return;
+        }
+        this.unsupportedWriteWarnings.add(pin);
+        const msg = `[Wiring Warning] GPIO${pin} is not a supported pin on the selected board.`;
+        console.warn(`[MicroPython] ${msg}`);
+        if (this.onSerialData) this.onSerialData(`${msg}\n`);
+    }
+
+    private parseHttpPath(rawPath: string): { path: string; query: Record<string, string> } {
+        const pathText = (rawPath || '').trim();
+        const withSlash = pathText.length === 0 ? '/' : (pathText.startsWith('/') ? pathText : `/${pathText}`);
+        const qIdx = withSlash.indexOf('?');
+        const path = qIdx >= 0 ? withSlash.slice(0, qIdx) : withSlash;
+        const queryPart = qIdx >= 0 ? withSlash.slice(qIdx + 1) : '';
+        const query: Record<string, string> = {};
+        if (queryPart) {
+            for (const token of queryPart.split('&')) {
+                if (!token) continue;
+                const eqIdx = token.indexOf('=');
+                const rawKey = eqIdx >= 0 ? token.slice(0, eqIdx) : token;
+                const rawValue = eqIdx >= 0 ? token.slice(eqIdx + 1) : '';
+                const decode = (v: string): string => {
+                    try {
+                        return decodeURIComponent(v.replace(/\+/g, ' '));
+                    } catch {
+                        return v;
+                    }
+                };
+                const key = decode(rawKey);
+                if (!key) continue;
+                query[key] = decode(rawValue);
+            }
+        }
+        return { path, query };
+    }
+
+    private resetHttpBridge(resolvePending = false): void {
+        this.httpRequestQueue = [];
+        if (!resolvePending) return;
+        for (const [id, pending] of this.pendingHttpResolvers.entries()) {
+            clearTimeout(pending.timer);
+            pending.resolve({
+                id,
+                path: pending.path,
+                status: 499,
+                contentType: 'text/plain',
+                body: 'Request cancelled',
+            });
+        }
+        this.pendingHttpResolvers.clear();
+    }
+
+    async httpGet(path: string): Promise<SimulatedHttpResponse> {
+        const parsed = this.parseHttpPath(path);
+        const id = this.nextHttpRequestId++;
+        return new Promise<SimulatedHttpResponse>((resolve) => {
+            const timer = setTimeout(() => {
+                const pending = this.pendingHttpResolvers.get(id);
+                if (!pending) return;
+                this.pendingHttpResolvers.delete(id);
+                resolve({
+                    id,
+                    path: parsed.path,
+                    status: 504,
+                    contentType: 'text/plain',
+                    body: 'Simulated HTTP timeout',
+                });
+            }, 5000);
+            this.pendingHttpResolvers.set(id, { path: parsed.path, resolve, timer });
+            this.httpRequestQueue.push({ id, path: parsed.path, query: parsed.query });
         });
     }
 
@@ -73,7 +184,7 @@ export class MicroPythonRunner {
             // Create a script element to load the MicroPython module
             const script = document.createElement('script');
             script.type = 'module';
-            script.src = '/micropython.mjs';
+            script.src = './micropython.mjs';
 
             script.onload = () => {
                 console.log('[MicroPython] micropython.mjs loaded successfully');
@@ -170,6 +281,94 @@ class ADC:
         # Read as 16-bit value (0-65535)
         return int(self.read() * 16)
 
+class I2C:
+    def __init__(self, id=0, scl=None, sda=None, freq=400000):
+        self._scl = scl.pin_num if hasattr(scl, 'pin_num') else scl
+        self._sda = sda.pin_num if hasattr(sda, 'pin_num') else sda
+        js._micropython_i2c_activate(self._sda if self._sda is not None else -1, self._scl if self._scl is not None else -1)
+
+    def readfrom_mem(self, addr, reg, nbytes):
+        return bytes(nbytes)
+
+    def writeto_mem(self, addr, reg, buf):
+        pass
+
+    def readfrom(self, addr, nbytes, stop=True):
+        return bytes(nbytes)
+
+    def writeto(self, addr, buf, stop=True):
+        pass
+
+    def scan(self):
+        return []
+
+class UART:
+    def __init__(self, id=1, baudrate=9600, tx=None, rx=None, **kw):
+        self._tx = tx.pin_num if hasattr(tx, 'pin_num') else tx
+        self._rx = rx.pin_num if hasattr(rx, 'pin_num') else rx
+        js._micropython_uart_activate(self._tx if self._tx is not None else -1, self._rx if self._rx is not None else -1)
+
+    def write(self, data):
+        pass
+
+    def read(self, nbytes=None):
+        return b''
+
+    def readline(self):
+        return b''
+
+    def any(self):
+        return 0
+
+# Simulated sensor libraries
+class SHT31:
+    def __init__(self, i2c, addr=0x44):
+        self._i2c = i2c
+
+    # Arduino SHT31 libraries often require an explicit .read() call before accessing
+    # temperature/humidity. In this simulator we compute values on-demand, so read() is a no-op.
+    def read(self):
+        return True
+
+    def temperature(self):
+        try:
+            return float(js._micropython_sht31_temp())
+        except Exception:
+            return round(25.0 + (js._micropython_adc_read(0) / 4095.0) * 5.0, 1)
+
+    def humidity(self):
+        try:
+            return float(js._micropython_sht31_humidity())
+        except Exception:
+            return round(60.0 + (js._micropython_adc_read(0) / 4095.0) * 20.0, 1)
+
+class BH1750:
+    CONT_HRES_MODE = 0x10
+
+    def __init__(self, i2c, addr=0x23):
+        self._i2c = i2c
+
+    def luminance(self, mode=None):
+        try:
+            return float(js._micropython_bh1750_lux())
+        except Exception:
+            return round(200.0 + (js._micropython_adc_read(0) / 4095.0) * 800.0, 1)
+
+    def measurement(self, mode=None):
+        return self.luminance(mode)
+
+class RS485Sensor:
+    def __init__(self, uart, slave_id=1, name='RS485'):
+        self._uart = uart
+        self._slave_id = slave_id
+        self._name = name
+
+    def read_register(self, reg=0):
+        try:
+            return float(js._micropython_modbus_read(self._slave_id, reg))
+        except Exception:
+            return round((js._micropython_adc_read(0) / 4095.0) * 14.0, 2)
+
 # Create module objects using simple classes
 import sys
 
@@ -177,8 +376,18 @@ class MachineModule:
     Pin = Pin
     PWM = PWM
     ADC = ADC
+    I2C = I2C
+    UART = UART
 
 class TimeModule:
+    @staticmethod
+    def time():
+        # Provide Unix time (seconds) for Arduino-style millis() helpers.
+        try:
+            return js.Date.now() / 1000.0
+        except Exception:
+            return 0.0
+
     @staticmethod
     def sleep_ms(ms):
         # Sleep is handled by the JavaScript execution engine
@@ -224,9 +433,65 @@ Serial = SerialClass()
 sys.modules['machine'] = MachineModule()
 sys.modules['time'] = TimeModule()
 
-# Make Serial available globally using builtins
+# Arduino-style global compatibility helpers (function-only API)
+def pinMode(pin, mode):
+    p = Pin(pin, mode)
+    return p
+
+def digitalWrite(pin, value):
+    js._micropython_set_pin_value(pin, 1 if value else 0)
+
+def digitalRead(pin):
+    return 1 if js._micropython_get_pin_value(pin) else 0
+
+def analogRead(pin):
+    return js._micropython_adc_read(pin)
+
+def analogWrite(pin, value):
+    # Arduino PWM range is typically 0-255. Map to simulator duty 0-1023.
+    v = int(value)
+    if v < 0:
+        v = 0
+    if v > 255:
+        v = 255
+    duty = int((v / 255.0) * 1023)
+    js._micropython_pwm_duty(pin, duty)
+
+def delay(ms):
+    # Non-blocking in this simulator environment (no-op placeholder)
+    pass
+
+# Make globals available using builtins as early as possible
 import builtins
 builtins.Serial = Serial
+builtins.RS485Sensor = RS485Sensor
+builtins.pinMode = pinMode
+builtins.digitalWrite = digitalWrite
+builtins.digitalRead = digitalRead
+builtins.analogRead = analogRead
+builtins.analogWrite = analogWrite
+builtins.delay = delay
+builtins.SHT31 = SHT31
+builtins.BH1750 = BH1750
+
+# Register simulated sensor libraries (best-effort, never fail injection)
+try:
+    class SHT31Module:
+        pass
+    _sht31_mod = SHT31Module()
+    _sht31_mod.SHT31 = SHT31
+    sys.modules['sht31'] = _sht31_mod
+except Exception:
+    pass
+
+try:
+    class BH1750Module:
+        pass
+    _bh1750_mod = BH1750Module()
+    _bh1750_mod.BH1750 = BH1750
+    sys.modules['bh1750'] = _bh1750_mod
+except Exception:
+    pass
 `;
 
         try {
@@ -244,37 +509,37 @@ builtins.Serial = Serial
             await this.initialize();
         }
 
+        this.unsupportedWriteWarnings.clear();
+
         // Clear any existing loop
         if (this.loopIntervalId) {
             clearInterval(this.loopIntervalId);
             this.loopIntervalId = null;
         }
+        this.resetHttpBridge(true);
 
         try {
             // Expose pin control functions to Python
             (globalThis as any)._micropython_set_pin_mode = (pin: number, mode: number, pull: number) => {
-                const pinState = this.pins.get(pin);
-                if (pinState) {
-                    pinState.mode = mode === 1 ? 'OUTPUT' : (pull === 2 ? 'INPUT_PULLUP' : 'INPUT');
-                }
-                console.log(`[MicroPython] Pin ${pin} mode set to ${pinState?.mode}`);
+                const pinState = this.ensurePinState(pin);
+                pinState.mode = mode === 1 ? 'OUTPUT' : (pull === 2 ? 'INPUT_PULLUP' : 'INPUT');
+                console.log(`[MicroPython] Pin ${pin} mode set to ${pinState.mode}`);
             };
 
             (globalThis as any)._micropython_get_pin_value = (pin: number): number => {
-                const pinState = this.pins.get(pin);
-                return pinState ? (pinState.value ? 1 : 0) : 0;
+                const pinState = this.ensurePinState(pin);
+                return pinState.value ? 1 : 0;
             };
 
             (globalThis as any)._micropython_set_pin_value = (pin: number, value: number) => {
-                const pinState = this.pins.get(pin);
-                if (pinState) {
-                    pinState.value = value !== 0;
-                    console.log(`[MicroPython] Pin ${pin} set to ${value ? 'HIGH' : 'LOW'}`);
-                    // Notify any listeners
-                    const callback = this.pinCallbacks.get(pin);
-                    if (callback) {
-                        callback(pinState.value);
-                    }
+                const pinState = this.ensurePinState(pin);
+                this.warnUnsupportedPinWrite(pin);
+                pinState.value = value !== 0;
+                console.log(`[MicroPython] Pin ${pin} set to ${value ? 'HIGH' : 'LOW'}`);
+                // Notify any listeners
+                const callback = this.pinCallbacks.get(pin);
+                if (callback) {
+                    callback(pinState.value);
                 }
             };
 
@@ -289,13 +554,12 @@ builtins.Serial = Serial
             (globalThis as any)._micropython_pwm_duty = (pin: number, duty: number) => {
                 console.log(`PWM duty on pin ${pin}: ${duty}`);
                 // Convert duty cycle (0-1023) to boolean for LED
-                const pinState = this.pins.get(pin);
-                if (pinState) {
-                    pinState.value = duty > 512;
-                    const callback = this.pinCallbacks.get(pin);
-                    if (callback) {
-                        callback(pinState.value);
-                    }
+                const pinState = this.ensurePinState(pin);
+                this.warnUnsupportedPinWrite(pin);
+                pinState.value = duty > 512;
+                const callback = this.pinCallbacks.get(pin);
+                if (callback) {
+                    callback(pinState.value);
                 }
             };
 
@@ -314,11 +578,30 @@ builtins.Serial = Serial
             };
 
             (globalThis as any)._micropython_adc_read = (pin: number): number => {
-                // Simulate analog reading - return random value for now
-                // In a real implementation, this would come from a sensor simulation
-                const value = Math.floor(Math.random() * 4096); // 0-4095 for 12-bit ADC
-                console.log(`[MicroPython] ADC read pin ${pin}: ${value}`);
+                try {
+                    const hook = (globalThis as any).hackcable_analog_read;
+                    if (typeof hook === 'function') {
+                        const v = Number(hook(pin));
+                        const clamped = Math.max(0, Math.min(4095, Math.floor(isNaN(v) ? 0 : v)));
+                        console.log(`[MicroPython] ADC read pin ${pin}: ${clamped} (from mock)`);
+                        return clamped;
+                    }
+                } catch {}
+                // Fallback: random value
+                const value = Math.floor(Math.random() * 4096);
+                console.log(`[MicroPython] ADC read pin ${pin}: ${value} (random)`);
                 return value;
+            };
+
+            // I2C / UART sensor activation callbacks
+            (globalThis as any)._micropython_i2c_activate = (sda: number, scl: number) => {
+                console.log(`[MicroPython] I2C activated sda=${sda} scl=${scl}`);
+                if (this.onSensorActivate) this.onSensorActivate('i2c', sda, scl);
+            };
+
+            (globalThis as any)._micropython_uart_activate = (tx: number, rx: number) => {
+                console.log(`[MicroPython] UART activated tx=${tx} rx=${rx}`);
+                if (this.onSensorActivate) this.onSensorActivate('uart', tx, rx);
             };
 
             // Serial communication callbacks
@@ -330,6 +613,55 @@ builtins.Serial = Serial
                 const output = newline ? text + '\n' : text;
                 if (this.onSerialData) this.onSerialData(output);
                 console.log(`[Serial] ${text}`);
+            };
+
+            // Sensor mock bridge callbacks (align with Emscripten bridges if present)
+            (globalThis as any)._micropython_sht31_temp = (): number => {
+                const hook = (globalThis as any).hackcable_sht31_temp;
+                if (typeof hook === 'function') return Number(hook());
+                // Derive from ADC as a loose fallback
+                return 25.0 + ((globalThis as any)._micropython_adc_read(0) / 4095.0) * 5.0;
+            };
+            (globalThis as any)._micropython_sht31_humidity = (): number => {
+                const hook = (globalThis as any).hackcable_sht31_humidity;
+                if (typeof hook === 'function') return Number(hook());
+                return 60.0 + ((globalThis as any)._micropython_adc_read(0) / 4095.0) * 20.0;
+            };
+            (globalThis as any)._micropython_bh1750_lux = (): number => {
+                const hook = (globalThis as any).hackcable_bh1750_lux;
+                if (typeof hook === 'function') return Number(hook());
+                return 200.0 + ((globalThis as any)._micropython_adc_read(0) / 4095.0) * 800.0;
+            };
+            (globalThis as any)._micropython_modbus_read = (slaveId: number, regAddr: number): number => {
+                const hook = (globalThis as any).hackcable_modbus_read;
+                if (typeof hook === 'function') return Number(hook(slaveId, regAddr));
+                // Weather-ish fallback mapping
+                if (regAddr === 0) return 25.0;
+                if (regAddr === 1) return 60.0;
+                if (regAddr === 2) return 400.0;
+                if (regAddr === 3) return 1013.0;
+                return 7.0;
+            };
+
+            // Virtual HTTP bridge callbacks for simulated WebServer.
+            (globalThis as any)._micropython_http_poll = (): string => {
+                const req = this.httpRequestQueue.shift();
+                if (!req) return '';
+                return JSON.stringify(req);
+            };
+            (globalThis as any)._micropython_http_respond = (reqId: number, status: number, contentType: string, body: string): void => {
+                const id = Number(reqId);
+                const pending = this.pendingHttpResolvers.get(id);
+                if (!pending) return;
+                clearTimeout(pending.timer);
+                this.pendingHttpResolvers.delete(id);
+                pending.resolve({
+                    id,
+                    path: pending.path,
+                    status: Number(status) || 200,
+                    contentType: String(contentType ?? 'text/plain'),
+                    body: String(body ?? ''),
+                });
             };
 
             // Check if code has a "while True:" loop
@@ -451,6 +783,11 @@ builtins.Serial = Serial
                     this.taskScheduler.start();
                     console.log('[MicroPython] Loop execution started');
                     executeNextStatement();
+                } else {
+                    const msg = '[MicroPython] Could not parse while True loop body; running code directly.';
+                    console.warn(msg);
+                    if (this.onSerialData) this.onSerialData(msg + '\n');
+                    this.mp.runPython(code);
                 }
             } else {
                 // No loop, just run once
@@ -464,12 +801,19 @@ builtins.Serial = Serial
     }
 
     setPinListener(pin: number, callback: (value: boolean) => void): void {
+        this.ensurePinState(pin);
         this.pinCallbacks.set(pin, callback);
     }
 
+    setSupportedPins(pins: number[]): void {
+        this.supportedPins = pins.length > 0 ? new Set(pins) : new Set(this.availablePins);
+        this.unsupportedWriteWarnings.clear();
+        this.supportedPins.forEach(pin => this.ensurePinState(pin));
+    }
+
     setInputPin(pin: number, value: boolean): void {
-        const pinState = this.pins.get(pin);
-        if (pinState && pinState.mode !== 'OUTPUT') {
+        const pinState = this.ensurePinState(pin);
+        if (pinState.mode !== 'OUTPUT') {
             pinState.value = value;
         }
     }
@@ -488,6 +832,7 @@ builtins.Serial = Serial
 
     stop(): void {
         this.taskScheduler.stop();
+        this.resetHttpBridge(true);
         if (this.loopIntervalId) {
             clearInterval(this.loopIntervalId);
             this.loopIntervalId = null;

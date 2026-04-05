@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HackCable + bfarm</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; font-family: sans-serif; }
+
+    #nav {
+      display: flex;
+      align-items: center;
+      height: 40px;
+      background: #30343F;
+      padding: 0 16px;
+      gap: 8px;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+    #nav .title {
+      color: #fff;
+      font-size: 15px;
+      font-weight: bold;
+      margin-right: 8px;
+      letter-spacing: 0.5px;
+    }
+    #nav .sep {
+      width: 1px;
+      height: 20px;
+      background: #444;
+      margin: 0 4px;
+    }
+    #nav button {
+      padding: 4px 18px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      background: transparent;
+      color: #aab0c0;
+      transition: background 0.15s, color 0.15s;
+    }
+    #nav button.active { background: #4a90d9; color: #fff; }
+    #nav button:hover:not(.active) { background: #3a3f4c; color: #fff; }
+
+    #frames { flex: 1; overflow: hidden; position: relative; }
+    .pane {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    .pane iframe { width: 100%; height: 100%; border: none; display: block; }
+    .pane.hidden { display: none; }
+  </style>
+</head>
+<body>
+  <nav id="nav">
+    <span class="title">HackCable</span>
+    <div class="sep"></div>
+    <button id="btn-circuit" onclick="switchCanvas('circuit')">⬡ Circuit</button>
+    <button id="btn-blocks"  onclick="switchCanvas('blocks')">⬢ Blocks</button>
+  </nav>
+
+  <div id="frames">
+    <div id="pane-hackcable" class="pane">
+      <iframe id="frame-hackcable" src="./hackcable/index.html" allow="cross-origin-isolated"></iframe>
+    </div>
+    <div id="pane-bfarm" class="pane hidden">
+      <iframe id="frame-bfarm" src="./bfarm/index.html"></iframe>
+    </div>
+  </div>
+
+  <script>
+    var hcPane  = document.getElementById('pane-hackcable');
+    var bfPane  = document.getElementById('pane-bfarm');
+    var btnCircuit = document.getElementById('btn-circuit');
+    var btnBlocks  = document.getElementById('btn-blocks');
+
+    function switchCanvas(which) {
+      if (which === 'circuit') {
+        hcPane.classList.remove('hidden');
+        bfPane.classList.add('hidden');
+        btnCircuit.classList.add('active');
+        btnBlocks.classList.remove('active');
+      } else {
+        hcPane.classList.add('hidden');
+        bfPane.classList.remove('hidden');
+        btnBlocks.classList.add('active');
+        btnCircuit.classList.remove('active');
+      }
+      localStorage.setItem('activeCanvas', which);
+      location.hash = which;
+      notifyResize();
+    }
+
+    function notifyResize() {
+      var msg = { source: 'shell', type: 'resize' };
+      var hcFrame = document.getElementById('frame-hackcable');
+      var bfFrame = document.getElementById('frame-bfarm');
+      if (hcFrame.contentWindow) hcFrame.contentWindow.postMessage(msg, '*');
+      if (bfFrame.contentWindow) bfFrame.contentWindow.postMessage(msg, '*');
+    }
+
+    // Relay bfarm messages → HackCable
+    window.addEventListener('message', function(e) {
+      if (!e.data || e.data.source !== 'bfarm') return;
+      if (e.data.type !== 'code-sync' && e.data.type !== 'add-component') return;
+
+      // Adding a component: switch to circuit so the canvas is visible
+      if (e.data.type === 'add-component') {
+        switchCanvas('circuit');
+      }
+
+      var hcFrame = document.getElementById('frame-hackcable');
+      if (hcFrame.contentWindow) hcFrame.contentWindow.postMessage(e.data, '*');
+    });
+
+    // Relay HackCable messages → bfarm
+    window.addEventListener('message', function(e) {
+      if (!e.data || e.data.source !== 'hackcable') return;
+      if (e.data.type !== 'code-sync') return;
+
+      var bfFrame = document.getElementById('frame-bfarm');
+      if (bfFrame.contentWindow) bfFrame.contentWindow.postMessage(e.data, '*');
+    });
+
+    // Initial view — support legacy hashes (hackcable, bfarm, combine) and new ones
+    var hash = location.hash.slice(1) || localStorage.getItem('activeCanvas') || 'circuit';
+    var initial = (hash === 'blocks' || hash === 'bfarm') ? 'blocks' : 'circuit';
+    switchCanvas(initial);
+  </script>
+</body>
+</html>
