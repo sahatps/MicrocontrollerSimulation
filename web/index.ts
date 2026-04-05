@@ -198,7 +198,7 @@ setTimeout(() => {
         } else if (selectedBoard === 'custom-esp32') {
             setupCustomESP32Circuit();
         } else if (selectedBoard === 'handysense-pro') {
-            setupPhFullControlCircuit();
+            setupNewBfarmSmartGreenhouseCircuit();
         } else {
             autoSetupBasicCircuit();
         }
@@ -219,11 +219,14 @@ setTimeout(() => {
     // Set default example selection and load its code
     const examplesSelect = document.getElementById('code-examples') as HTMLSelectElement;
     if (examplesSelect) {
-        examplesSelect.value = 'phFullControl';
+        examplesSelect.value = 'new_bfarm_smart_greenhouse';
     }
     setTimeout(() => {
         if (codeInput instanceof HTMLTextAreaElement && !codeInput.value.trim()) {
-            codeInput.value = codeExamples['phFullControl'];
+            codeInput.value = preprocessExampleCode(
+                'new_bfarm_smart_greenhouse',
+                codeExamples['new_bfarm_smart_greenhouse']
+            );
             localStorage.setItem('hackCable-webExample-inputCode', codeInput.value);
         }
     }, 1000);
