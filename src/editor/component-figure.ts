@@ -12,6 +12,8 @@ export class ComponentFigure extends draw2d.shape.basic.Rectangle{
 
     private readonly component: WokwiComponentInfo;
     public readonly componentElement: WokwiComponent;
+    private overlayBaseWidth = 0;
+    private overlayBaseHeight = 0;
 
     constructor(component: WokwiComponentInfo){
         super();
@@ -43,13 +45,13 @@ export class ComponentFigure extends draw2d.shape.basic.Rectangle{
 
             setTimeout(() => {
                 let svg = this.overlay.shadowRoot?.querySelector("svg")
-                this.setWidth(unitToPx(svg.getAttribute('width')))
-                this.setHeight(unitToPx(svg.getAttribute('height')))
-
-                // Force ports to relocate now that dimensions are set
-                this.getPorts().data.forEach((port: Port) => {
-                    port.getLocator().relocate(0, port);
-                });
+                this.overlayBaseWidth = unitToPx(svg.getAttribute('width'));
+                this.overlayBaseHeight = unitToPx(svg.getAttribute('height'));
+                this.setWidth(this.overlayBaseWidth)
+                this.setHeight(this.overlayBaseHeight)
+                css(this.overlay, {top: this.getY(), left: this.getX()});
+                this.syncOverlayTransform();
+                this.refreshPortsAndConnections();
             })
         })
         this.on("removed", (_emitter: any, _event: any) => {
@@ -79,6 +81,67 @@ export class ComponentFigure extends draw2d.shape.basic.Rectangle{
         if (container && container.firstChild !== this.overlay) {
             container.insertBefore(this.overlay, container.firstChild);
         }
+    }
+
+    public setRotationAngle(angle: any): any {
+        const result = super.setRotationAngle(angle);
+        this.syncOverlayTransform();
+        this.refreshPortsAndConnections();
+        return result;
+    }
+
+    public setDimension(w: any, h: any): any {
+        const result = super.setDimension(w, h);
+        this.syncOverlayTransform();
+        this.refreshPortsAndConnections();
+        return result;
+    }
+
+    private syncOverlayTransform(): void {
+        if (!this.overlay) return;
+
+        const angle = this.normalizeRightAngle(Number(this.getRotationAngle?.() ?? 0));
+        let transform = `rotate(${angle}deg)`;
+        const baseWidth = this.overlayBaseWidth || Number(this.getWidth?.() ?? 0);
+        const baseHeight = this.overlayBaseHeight || Number(this.getHeight?.() ?? 0);
+
+        if ((angle === 90 || angle === 270) && baseWidth > 0 && baseHeight > 0) {
+            // Keep the rotated overlay anchored to the figure top-left even though draw2d swaps dimensions.
+            const halfDelta = (baseWidth - baseHeight) / 2;
+            // For both 90 and 270, the rotated bounding box shifts by the same top-left delta.
+            const translateX = -halfDelta;
+            const translateY = halfDelta;
+            // CSS applies right-to-left: rotate first, then apply the anchoring translation.
+            transform = `translate(${translateX}px, ${translateY}px) rotate(${angle}deg)`;
+        }
+
+        css(this.overlay, {
+            transformOrigin: "center center",
+            transform
+        });
+    }
+
+    private normalizeRightAngle(angle: number): number {
+        const snapped = Math.round(angle / 90) * 90;
+        return ((snapped % 360) + 360) % 360;
+    }
+
+    private refreshPortsAndConnections(): void {
+        if (!this.getCanvas?.()) return;
+        const repaintedConnections = new Set<string>();
+
+        this.getPorts().data.forEach((port: Port) => {
+            // Recompute exact port coordinates after angle changes.
+            port.getLocator().relocate(0, port);
+
+            port.getConnections().data.forEach((connection: any) => {
+                const id = connection.getId?.();
+                if (id && repaintedConnections.has(id)) return;
+                if (id) repaintedConnections.add(id);
+                connection.routingRequired = true;
+                connection.repaint?.();
+            });
+        });
     }
 
     public getPortByName(name: string): Port{
