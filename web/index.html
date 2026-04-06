@@ -19,48 +19,24 @@
         </div>
     </main>
     <div class="controlBar">
-        <div id="status-message" class="status-message"></div>
-        <div class="tab-bar">
-            <button class="tab-btn active" data-tab="code" data-i18n="ui.tab.code">Code</button>
-            <button class="tab-btn" data-tab="io" data-i18n="ui.tab.io">I/O</button>
-        </div>
-        <div class="tab-panel code-panel active">
-            <div class="buttonBar">
-                <p data-i18n="ui.code">Code:</p>
-                <button id="compile" data-i18n="ui.compile">Compile</button>
-                <select id="compiler-mode" title="Compilation method" style="display:none">
-                    <option value="micropython" selected>MicroPython - Legacy</option>
-                    <option value="emscripten">Emscripten C++ - Native</option>
-                    <option value="clang-llvm">Clang/LLVM WASM (first use: ~35MB)</option>
-                    <option value="clang-native">Native Clang WASM</option>
-                </select>
-                <button id="execute" data-i18n="ui.execute">Execute</button>
-                <button id="stop" data-i18n="ui.stop">Stop</button>
-                <button id="pause" data-i18n="ui.pause">Pause</button>
-            </div>
-            <div class="buttonBar">
-                <p data-i18n="ui.wiring">Wiring:</p>
-                <button id="save" data-i18n="ui.save">Save</button>
-                <button id="restore" data-i18n="ui.load">Load</button>
-                <button id="clear-all" data-i18n="ui.clearAll">Clear All</button>
-            </div>
-            <div class="buttonBar">
-                <p data-i18n="ui.language">Language:</p>
-                <button id="language-en">English</button>
-                <button id="language-th">ไทย</button>
-            </div>
-            <div class="buttonBar">
-                <p data-i18n="ui.board">Board:</p>
-                <select id="board-select">
+        <div class="controlbar-topright">
+            <div class="controlbar-topright-row controlbar-topright-main">
+                <select id="board-select" class="controlbar-select-corner board-mode-corner">
                     <option value="arduino">Arduino Uno</option>
                     <option value="esp32">ESP32</option>
                     <option value="custom-esp32">Custom ESP32</option>
                     <option value="handysense-pro" selected>Handysense pro</option>
                 </select>
+                <select id="compiler-mode" class="controlbar-select-corner compiler-mode-corner" title="Compilation method" style="display:none">
+                    <option value="micropython" selected>MicroPython - Legacy</option>
+                    <option value="emscripten">Emscripten C++ - Native</option>
+                    <option value="clang-llvm">Clang/LLVM WASM (first use: ~35MB)</option>
+                    <option value="clang-native">Native Clang WASM</option>
+                </select>
+                <button id="language-toggle" class="language-toggle-btn language-toggle-corner" aria-label="Toggle language">EN</button>
             </div>
-            <div class="buttonBar">
-                <p data-i18n="ui.examples">Examples:</p>
-                <select id="code-examples">
+            <div class="controlbar-topright-row controlbar-topright-examples">
+                <select id="code-examples" class="controlbar-select-corner examples-mode-corner">
                     <option value="" data-i18n="ui.selectExample">Select an example...</option>
                     <optgroup label="new Bfarm Test">
                         <option value="new_bfarm_smart_greenhouse" selected>Smart Greenhouse End-to-End</option>
@@ -71,29 +47,89 @@
                     </optgroup>
                 </select>
             </div>
-            <div class="buttonBar" id="sensor-mock-container">
-                <p>Mock Sensors:</p>
-                <textarea id="sensor-mock-input" rows="5" style="width:100%;font-family:monospace;font-size:12px;resize:vertical">humidity = 60
+        </div>
+        <div id="status-message" class="status-message"></div>
+        <div class="tab-panel code-panel active">
+            <div class="buttonBar run-controls">
+                <div class="run-controls-row">
+                    <button id="compile" class="run-circle-btn" data-i18n="ui.compile">Compile</button>
+                    <button id="execute" class="run-circle-btn" data-i18n="ui.execute">Execute</button>
+                    <button id="stop" class="run-circle-btn" data-i18n="ui.stop">Stop</button>
+                    <button id="pause" class="run-circle-btn" data-i18n="ui.pause">Pause</button>
+                    <button id="sim-http-toggle" class="sim-http-toggle-btn" type="button" aria-label="Simulated HTTP settings" aria-expanded="false">
+                        <svg class="sim-http-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <path d="M12 18.4l-2.5-2.5a3.5 3.5 0 0 1 5 0L12 18.4zm-5.1-5.1-2-2a10.6 10.6 0 0 1 14.2 0l-2 2a7.6 7.6 0 0 0-10.2 0zm-4.1-4.1-2-2a16.6 16.6 0 0 1 22.4 0l-2 2a13.6 13.6 0 0 0-18.4 0z"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="buttonBar sim-http-settings" id="sim-http-container" hidden>
+                    <input id="sim-http-path" type="text" value="/status" />
+                    <button id="sim-http-send">GET</button>
+                    <pre id="sim-http-response" class="sim-http-response">Ready</pre>
+                </div>
+            </div>
+            <div class="buttonBar wiring-controls" hidden>
+                <p data-i18n="ui.wiring">Wiring:</p>
+                <button id="save" data-i18n="ui.save">Save</button>
+                <button id="restore" data-i18n="ui.load">Load</button>
+                <button id="clear-all" data-i18n="ui.clearAll">Clear All</button>
+            </div>
+            <div class="buttonBar" id="editor-code-mock-container">
+                <div class="editor-tab-buttons">
+                    <button type="button" class="editor-tab-btn active" data-editor-tab="code">Code</button>
+                    <button type="button" class="editor-tab-btn" data-editor-tab="mock">Mock Sensors</button>
+                </div>
+                <div class="editor-tab-panel active" data-editor-panel="code">
+                    <div class="code-editor-shell">
+                        <textarea id="code-editor" rows="7" spellcheck="false" wrap="off"></textarea>
+                        <div id="code-editor-resize-handle" class="code-editor-resize-handle" aria-hidden="true"></div>
+                    </div>
+                </div>
+                <div class="editor-tab-panel" data-editor-panel="mock" hidden>
+                    <textarea id="sensor-mock-input" rows="7">humidity = 60
 temperature = 25
 ph = 7.0
 lux = 500
 soil = 50</textarea>
+                </div>
             </div>
-            <div class="buttonBar" id="sim-http-container">
-                <p>Simulated HTTP:</p>
-                <input id="sim-http-path" type="text" value="/status" />
-                <button id="sim-http-send">GET</button>
-                <pre id="sim-http-response" class="sim-http-response">Ready</pre>
+            <div class="buttonBar" id="compiled-io-container">
+                <div class="compiled-tab-toolbar">
+                    <div class="compiled-tab-buttons">
+                        <button type="button" class="compiled-tab-btn active" data-output-tab="compiled">Compiled</button>
+                        <button type="button" class="compiled-tab-btn" data-output-tab="serial" data-i18n="ui.serial.title">Serial Monitor</button>
+                        <button type="button" class="compiled-tab-btn" data-output-tab="plotter" data-i18n="ui.serialPlotter.title">Serial Plotter</button>
+                    </div>
+                </div>
+                <div class="compiled-window-actions">
+                    <button type="button" id="output-float-open" class="compiled-window-icon-btn" aria-label="Float window" title="Float window">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <path d="M3 3h11a3 3 0 0 1 3 3v6a1 1 0 1 1-2 0V6a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 1 1 0 2H4a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3zm7.29 7.29a1 1 0 0 1 1.42 0L13 11.59V10a1 1 0 1 1 2 0v4a1 1 0 0 1-1 1h-4a1 1 0 1 1 0-2h1.59l-1.3-1.29a1 1 0 0 1 0-1.42zM15 14h5a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3h-5a3 3 0 0 1-3-3v-3a3 3 0 0 1 3-3zm0 2a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-5z"></path>
+                        </svg>
+                    </button>
+                    <button type="button" id="output-clear-btn" class="compiled-window-icon-btn" aria-label="Clear output" title="Clear output" hidden>
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <path d="M9 3h6a2 2 0 0 1 2 2v1h3a1 1 0 1 1 0 2h-1v11a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V8H4a1 1 0 1 1 0-2h3V5a2 2 0 0 1 2-2zm0 3h6V5H9v1zm-2 2v11a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8H7zm3 2a1 1 0 0 1 1 1v6a1 1 0 1 1-2 0v-6a1 1 0 0 1 1-1zm4 0a1 1 0 0 1 1 1v6a1 1 0 1 1-2 0v-6a1 1 0 0 1 1-1z"></path>
+                        </svg>
+                    </button>
+                    <button type="button" id="output-float-close" class="compiled-window-btn" hidden>Close</button>
+                    <button type="button" id="output-float-drag" class="compiled-window-drag" hidden title="Drag window">::</button>
+                </div>
+                <div class="compiled-tab-panel active" data-output-panel="compiled">
+                    <textarea id="code-compiled" rows="10" wrap="off"></textarea>
+                </div>
+                <div class="compiled-tab-panel" data-output-panel="serial" hidden>
+                    <div id="serial-output" class="serial-output"></div>
+                </div>
+                <div class="compiled-tab-panel" data-output-panel="plotter" hidden>
+                    <canvas id="serial-plotter-canvas" class="serial-plotter-canvas"></canvas>
+                </div>
             </div>
             <div class="buttonBar">
                 <p>Sync:</p>
                 <button id="transfer-to-blocks">Transfer to Blocks</button>
                 <label><input type="checkbox" id="auto-sync-blocks"> Auto-sync</label>
             </div>
-            <label for="code-editor" data-i18n="ui.codeLabel">Code:</label>
-            <textarea id="code-editor" rows="10"></textarea>
-            <label for="code-compiled" data-i18n="ui.compiledCode">Compiled Code:</label>
-            <textarea id="code-compiled" rows="10" wrap="off"></textarea>
         </div>
         <div class="tab-panel io-panel">
             <div class="io-section">
@@ -104,24 +140,10 @@ soil = 50</textarea>
                 <h4 class="io-section-title" data-i18n="ui.io.inputs">Inputs</h4>
                 <div id="io-inputs-list" class="io-list"></div>
             </div>
-            <div class="io-section serial-in-io">
-                <div class="serial-monitor-header">
-                    <span class="serial-monitor-title" data-i18n="ui.serial.title">Serial Monitor</span>
-                    <button id="serial-clear" data-i18n="ui.serial.clear">Clear</button>
-                </div>
-                <div id="serial-output" class="serial-output"></div>
-            </div>
-            <div class="io-section serial-plotter-section">
-                <div class="serial-plotter-header">
-                    <span class="serial-plotter-title" data-i18n="ui.serialPlotter.title">Serial Plotter</span>
-                    <button id="serial-plotter-clear" data-i18n="ui.serial.clear">Clear</button>
-                </div>
-                <canvas id="serial-plotter-canvas" class="serial-plotter-canvas"></canvas>
-            </div>
         </div>
     </div>
     <button class="toggle-controlbar" title="Hide/Show panel">
-        <span class="toggle-icon">▶</span>
+        <span class="toggle-icon">&#9654;</span>
     </button>
     <footer>
         <div>
@@ -130,3 +152,4 @@ soil = 50</textarea>
     </footer>
 </body>
 </html>
+

@@ -1,4 +1,8 @@
 import "./css/main.styl"
+import CodeMirror from "codemirror";
+import "codemirror/lib/codemirror.css";
+import "codemirror/theme/material-darker.css";
+import "codemirror/mode/clike/clike";
 import {CompileResult, EmulatorManager, HackCable} from "../src/main";
 import {wokwiComponentById, wokwiComponentByClass, ComponentType} from "../src/panels/component";
 import {ComponentFigure} from "../src/editor/component-figure";
@@ -208,9 +212,9 @@ setTimeout(() => {
     hackCable.editor.canvas.setOnCircuitChangeCallback((generatedCode: string) => {
         if (codeInput instanceof HTMLTextAreaElement) {
             // Only update if user hasn't written custom code
-            const currentCode = codeInput.value.trim();
+            const currentCode = getCodeEditorValue().trim();
             if (!currentCode || currentCode.includes('// Auto-generated code based on circuit design')) {
-                codeInput.value = generatedCode;
+                setCodeEditorValue(generatedCode);
                 console.log('Code automatically generated from circuit');
             }
         }
@@ -222,12 +226,12 @@ setTimeout(() => {
         examplesSelect.value = 'new_bfarm_smart_greenhouse';
     }
     setTimeout(() => {
-        if (codeInput instanceof HTMLTextAreaElement && !codeInput.value.trim()) {
-            codeInput.value = preprocessExampleCode(
+        if (codeInput instanceof HTMLTextAreaElement && !getCodeEditorValue().trim()) {
+            setCodeEditorValue(preprocessExampleCode(
                 'new_bfarm_smart_greenhouse',
                 codeExamples['new_bfarm_smart_greenhouse']
-            );
-            localStorage.setItem('hackCable-webExample-inputCode', codeInput.value);
+            ));
+            localStorage.setItem('hackCable-webExample-inputCode', getCodeEditorValue());
         }
     }, 1000);
 }, 100);
@@ -239,9 +243,138 @@ const pauseButton = document.getElementById('pause');
 const codeInput = document.getElementById('code-editor');
 const hexInput = document.getElementById('code-compiled');
 const statusMessage = document.getElementById('status-message');
+const codeEditorShell = document.querySelector('.editor-tab-panel[data-editor-panel="code"] .code-editor-shell') as HTMLElement | null;
+const codeEditorResizeHandle = document.getElementById('code-editor-resize-handle') as HTMLDivElement | null;
 
 const compilerModeSelect = document.getElementById('compiler-mode') as HTMLSelectElement;
 const boardSelectEl = document.getElementById('board-select') as HTMLSelectElement;
+
+type RunControlState = 'needs-compile' | 'compiling' | 'compiled' | 'executing';
+let runControlState: RunControlState = 'needs-compile';
+let isCompilingCode = false;
+let codeMirrorEditor: any = null;
+const CODE_EDITOR_MIN_HEIGHT = 220;
+
+function getCodeEditorInput(): HTMLTextAreaElement | null {
+    return codeInput instanceof HTMLTextAreaElement ? codeInput : null;
+}
+
+function getCodeEditorValue(): string {
+    if (codeMirrorEditor) return codeMirrorEditor.getValue();
+    const editor = getCodeEditorInput();
+    return editor ? editor.value : '';
+}
+
+function setCodeEditorValue(nextCode: string): void {
+    if (codeMirrorEditor) {
+        codeMirrorEditor.setValue(nextCode);
+        return;
+    }
+    const editor = getCodeEditorInput();
+    if (!editor) return;
+    editor.value = nextCode;
+}
+
+function setCodeEditorHeight(nextHeight: number): void {
+    if (!codeEditorShell || !codeMirrorEditor) return;
+    const maxHeight = Math.max(CODE_EDITOR_MIN_HEIGHT, Math.floor(window.innerHeight * 0.75));
+    const clampedHeight = Math.max(CODE_EDITOR_MIN_HEIGHT, Math.min(Math.round(nextHeight), maxHeight));
+    codeEditorShell.style.height = `${clampedHeight}px`;
+    codeMirrorEditor.setSize(null, clampedHeight);
+}
+
+const codeEditorInputEl = getCodeEditorInput();
+if (codeEditorInputEl) {
+    codeMirrorEditor = CodeMirror.fromTextArea(codeEditorInputEl, {
+        mode: 'text/x-c++src',
+        theme: 'material-darker',
+        lineNumbers: true,
+        lineWrapping: false,
+        indentUnit: 4,
+        tabSize: 4
+    });
+    codeMirrorEditor.on('change', () => markCompileStale());
+
+    if (codeEditorShell) {
+        const currentHeight = codeEditorShell.getBoundingClientRect().height || 260;
+        setCodeEditorHeight(currentHeight);
+    }
+}
+
+codeEditorResizeHandle?.addEventListener('mousedown', (event: MouseEvent) => {
+    if (!codeEditorShell || !codeMirrorEditor) return;
+    event.preventDefault();
+
+    const startY = event.clientY;
+    const startHeight = codeEditorShell.getBoundingClientRect().height;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+        const deltaY = moveEvent.clientY - startY;
+        setCodeEditorHeight(startHeight + deltaY);
+    };
+
+    const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = previousCursor;
+        document.body.style.userSelect = previousUserSelect;
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+});
+
+window.addEventListener('resize', () => {
+    if (!codeEditorShell) return;
+    setCodeEditorHeight(codeEditorShell.getBoundingClientRect().height);
+});
+
+function setRunControlState(state: RunControlState) {
+    if (!(compileButton instanceof HTMLButtonElement) ||
+        !(executeButton instanceof HTMLButtonElement) ||
+        !(stopButton instanceof HTMLButtonElement) ||
+        !(pauseButton instanceof HTMLButtonElement)) {
+        return;
+    }
+
+    runControlState = state;
+
+    switch (state) {
+        case 'needs-compile':
+            compileButton.disabled = false;
+            executeButton.disabled = true;
+            stopButton.disabled = true;
+            pauseButton.disabled = true;
+            break;
+        case 'compiling':
+            compileButton.disabled = false;
+            executeButton.disabled = true;
+            stopButton.disabled = true;
+            pauseButton.disabled = true;
+            break;
+        case 'compiled':
+            compileButton.disabled = false;
+            executeButton.disabled = false;
+            stopButton.disabled = true;
+            pauseButton.disabled = true;
+            break;
+        case 'executing':
+            compileButton.disabled = false;
+            executeButton.disabled = false;
+            stopButton.disabled = false;
+            pauseButton.disabled = false;
+            break;
+    }
+}
+
+function markCompileStale() {
+    if (isCompilingCode) return;
+    setRunControlState('needs-compile');
+}
 
 function updateCompilerVisibility() {
     const board = boardSelectEl?.value;
@@ -250,7 +383,11 @@ function updateCompilerVisibility() {
         compilerModeSelect.style.display = isESP32 ? 'inline-block' : 'none';
     }
 }
-boardSelectEl?.addEventListener('change', updateCompilerVisibility);
+boardSelectEl?.addEventListener('change', () => {
+    updateCompilerVisibility();
+    markCompileStale();
+});
+compilerModeSelect?.addEventListener('change', markCompileStale);
 updateCompilerVisibility();
 checkEmscriptenStatus();
 checkClangNativeStatus();
@@ -258,27 +395,51 @@ checkClangNativeStatus();
 if(compileButton && executeButton && stopButton && pauseButton && codeInput instanceof HTMLTextAreaElement && hexInput instanceof HTMLTextAreaElement){
 
     const code = localStorage.getItem('hackCable-webExample-inputCode');
-    if(code) codeInput.value = code;
+    if(code) setCodeEditorValue(code);
     const hex = localStorage.getItem('hackCable-webExample-inputHex');
     if(hex) hexInput.value = hex;
 
+    setRunControlState('needs-compile');
+
     compileButton.addEventListener("click", () => compile());
-    executeButton.addEventListener("click", () => { clearSerial(); execute(); switchTab('io'); setTimeout(startIOMonitor, 200); });
-    stopButton.addEventListener("click", () => { hackCable.emulatorManager.stop(); stopIOMonitor(); cleanupWasmInstance(); });
+    executeButton.addEventListener("click", () => { clearSerial(); execute(); setTimeout(startIOMonitor, 200); });
+    stopButton.addEventListener("click", () => {
+        if ((stopButton as HTMLButtonElement).disabled) return;
+        hackCable.emulatorManager.stop();
+        stopIOMonitor();
+        cleanupWasmInstance();
+        setRunControlState('compiled');
+    });
     pauseButton.addEventListener("click", () => {
+        if ((pauseButton as HTMLButtonElement).disabled) return;
         hackCable.emulatorManager.setPaused(!hackCable.emulatorManager.isPosed())
     });
 
     function compile(){
         if(!(codeInput instanceof HTMLTextAreaElement && hexInput instanceof HTMLTextAreaElement)) return;
+        if (isCompilingCode) return;
+        const sourceCode = getCodeEditorValue();
 
         const boardType = hackCable.editor.canvas.getBoardType();
         if (boardType) hackCable.emulatorManager.setBoardType(boardType);
 
         const mode = compilerModeSelect?.value ?? 'micropython';
 
+        isCompilingCode = true;
+        setRunControlState('compiling');
         showStatus('ui.status.compiling', 'info');
-        localStorage.setItem('hackCable-webExample-inputCode', codeInput.value);
+        localStorage.setItem('hackCable-webExample-inputCode', sourceCode);
+
+        const onCompileSuccess = () => {
+            isCompilingCode = false;
+            setRunControlState('compiled');
+            showStatus('ui.status.compileComplete', 'success');
+        };
+        const onCompileFailure = () => {
+            isCompilingCode = false;
+            setRunControlState('needs-compile');
+            showStatus('ui.status.compileFailed', 'error');
+        };
 
         if (boardType === 'esp32' && mode === 'emscripten') {
             // --- EMSCRIPTEN PATH ---
@@ -286,7 +447,7 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
             fetch('/api/compile/emscripten', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: codeInput.value })
+                body: JSON.stringify({ code: sourceCode })
             }).then(async res => {
                 const data = await res.json();
                 if (data.code === 'EMSCRIPTEN_NOT_FOUND' || data.code === 'BACKEND_UNAVAILABLE') {
@@ -295,27 +456,33 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                     showStatus('ui.status.emscriptenFallback', 'info');
                     emscriptenAvailable = false;
                     updateEmscriptenOption();
-                    hackCable.emulatorManager.compileAndLoadCode(codeInput.value).then(() => {});
-                    showStatus('ui.status.compileComplete', 'success');
+                    hackCable.emulatorManager.compileAndLoadCode(sourceCode).then(() => {
+                        onCompileSuccess();
+                    }).catch(() => {
+                        onCompileFailure();
+                    });
                     return;
                 }
                 if (data.error) {
                     hexInput.value = '// Compilation error:\n' + data.error;
                     if (data.stderr) hexInput.value += '\n' + data.stderr;
-                    showStatus('ui.status.compileFailed', 'error');
+                    onCompileFailure();
                     return;
                 }
                 lastEmscriptenResult = { js: data.js, wasm: data.wasm };
                 hexInput.value = '// Emscripten compilation OK. Click Execute.';
-                showStatus('ui.status.compileComplete', 'success');
+                onCompileSuccess();
             }).catch(() => {
                 // Network error (backend not running) — fall back to MicroPython
                 hexInput.value = '// Backend unreachable, using MicroPython fallback...';
                 showStatus('ui.status.emscriptenFallback', 'info');
                 emscriptenAvailable = false;
                 updateEmscriptenOption();
-                hackCable.emulatorManager.compileAndLoadCode(codeInput.value).then(() => {});
-                showStatus('ui.status.compileComplete', 'success');
+                hackCable.emulatorManager.compileAndLoadCode(sourceCode).then(() => {
+                    onCompileSuccess();
+                }).catch(() => {
+                    onCompileFailure();
+                });
             });
 
         } else if (boardType === 'esp32' && mode === 'clang-native') {
@@ -324,20 +491,20 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
             fetch('/api/compile/clang', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: codeInput.value })
+                body: JSON.stringify({ code: sourceCode })
             }).then(async res => {
                 const data = await res.json();
                 if (data.code === 'CLANG_NOT_FOUND') {
                     hexInput.value = '// Native Clang unavailable.';
                     clangNativeAvailable = false;
                     updateClangNativeOption();
-                    showStatus('ui.status.compileFailed', 'error');
+                    onCompileFailure();
                     return;
                 }
                 if (data.error) {
                     hexInput.value = '// Compilation error:\n' + data.error;
                     if (data.stderr) hexInput.value += '\n' + data.stderr;
-                    showStatus('ui.status.compileFailed', 'error');
+                    onCompileFailure();
                     return;
                 }
                 const wasmBytes = await fetch(`data:application/octet-stream;base64,${data.wasm}`)
@@ -345,10 +512,10 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                     .then(b => new Uint8Array(b));
                 lastClangNativeResult = wasmBytes;
                 hexInput.value = '// Native Clang compilation OK. Click Execute.';
-                showStatus('ui.status.compileComplete', 'success');
+                onCompileSuccess();
             }).catch(() => {
                 hexInput.value = '// Backend unreachable.';
-                showStatus('ui.status.compileFailed', 'error');
+                onCompileFailure();
             });
 
         } else if (boardType === 'esp32' && mode === 'clang-llvm') {
@@ -361,38 +528,45 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                 }
             }).then(() => {
                 hexInput.value = '// Compiling with Clang/LLVM...';
-                return clangRunner.compile(codeInput.value, getArduinoHeaders());
+                return clangRunner.compile(sourceCode, getArduinoHeaders());
             }).then(result => {
                 if (result.stderr) console.warn('[clang]', result.stderr);
                 lastClangResult = result.wasmBytes;
                 hexInput.value = '// Clang/LLVM compilation OK. Click Execute.';
-                showStatus('ui.status.compileComplete', 'success');
+                onCompileSuccess();
             }).catch(err => {
                 hexInput.value = '// Clang/LLVM error:\n' + err.message;
-                showStatus('ui.status.compileFailed', 'error');
+                onCompileFailure();
             });
 
         } else if (boardType === 'esp32') {
             // --- MICROPYTHON LEGACY PATH ---
-            hackCable.emulatorManager.compileAndLoadCode(codeInput.value).then(() => {});
+            hackCable.emulatorManager.compileAndLoadCode(sourceCode).then(() => {
+                onCompileSuccess();
+            }).catch(() => {
+                onCompileFailure();
+            });
             hexInput.value = '// ESP32 uses MicroPython - no hex compilation needed';
-            showStatus('ui.status.compileComplete', 'success');
 
         } else {
             // --- ARDUINO AVR PATH ---
-            EmulatorManager.compileCode(codeInput.value).then((data: CompileResult) => {
+            EmulatorManager.compileCode(sourceCode).then((data: CompileResult) => {
                 if(data){
                     hexInput.value = data.hex;
                     localStorage.setItem('hackCable-webExample-inputHex', data.hex);
-                    showStatus('ui.status.compileComplete', 'success');
+                    onCompileSuccess();
                 } else {
-                    showStatus('ui.status.compileFailed', 'error');
+                    onCompileFailure();
                 }
-            }).catch(() => showStatus('ui.status.compileFailed', 'error'));
+            }).catch(() => onCompileFailure());
         }
     }
 
     function execute(){
+        if ((executeButton as HTMLButtonElement).disabled) return;
+        if (runControlState === 'needs-compile' || runControlState === 'compiling') return;
+        const sourceCode = getCodeEditorValue();
+
         hackCable.emulatorManager.stop();
 
         const boardType = hackCable.editor.canvas.getBoardType();
@@ -407,17 +581,20 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
             // --- EMSCRIPTEN PATH ---
             if (!lastEmscriptenResult) {
                 appendSerial('Error: No compiled WASM. Click Compile first.\n');
+                setRunControlState('needs-compile');
                 showStatus('ui.status.compileFailed', 'error');
                 return;
             }
+            setRunControlState('executing');
             clearSerial();
             loadEmscriptenWasm(lastEmscriptenResult.js, lastEmscriptenResult.wasm)
                 .then(() => {
                     showStatus('ui.status.executing', 'info');
-                    autoActivateSensorsFromCode(codeInput.value);
+                    autoActivateSensorsFromCode(sourceCode);
                 })
                 .catch(err => {
                     appendSerial('WASM load error: ' + err.message + '\n');
+                    setRunControlState('compiled');
                     showStatus('ui.status.compileFailed', 'error');
                 });
 
@@ -425,9 +602,11 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
             // --- NATIVE CLANG EXECUTE ---
             if (!lastClangNativeResult) {
                 appendSerial('Error: No compiled WASM. Click Compile first.\n');
+                setRunControlState('needs-compile');
                 showStatus('ui.status.compileFailed', 'error');
                 return;
             }
+            setRunControlState('executing');
             cleanupWasmInstance();
             const shimNative = new ArduinoWasmShim(
                 (pin, value) => hackCable.esp32PinUpdate(pin, value),
@@ -451,11 +630,12 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                             }
                         }, 16);
                     }
-                    autoActivateSensorsFromCode(codeInput.value);
+                    autoActivateSensorsFromCode(sourceCode);
                     showStatus('ui.status.executing', 'info');
                 })
                 .catch(err => {
                     appendSerial('WASM load error: ' + err.message + '\n');
+                    setRunControlState('compiled');
                     showStatus('ui.status.compileFailed', 'error');
                 });
 
@@ -463,9 +643,11 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
             // --- CLANG/LLVM EXECUTE ---
             if (!lastClangResult) {
                 appendSerial('Error: No compiled WASM. Click Compile first.\n');
+                setRunControlState('needs-compile');
                 showStatus('ui.status.compileFailed', 'error');
                 return;
             }
+            setRunControlState('executing');
             cleanupWasmInstance();
             const shim = new ArduinoWasmShim(
                 (pin, value) => hackCable.esp32PinUpdate(pin, value),
@@ -489,20 +671,23 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                             }
                         }, 16);
                     }
-                    autoActivateSensorsFromCode(codeInput.value);
+                    autoActivateSensorsFromCode(sourceCode);
                     showStatus('ui.status.executing', 'info');
                 })
                 .catch(err => {
                     appendSerial('WASM load error: ' + err.message + '\n');
+                    setRunControlState('compiled');
                     showStatus('ui.status.compileFailed', 'error');
                 });
 
         } else if (boardType === 'esp32') {
             // --- MICROPYTHON ---
-            hackCable.emulatorManager.run(codeInput.value);
+            setRunControlState('executing');
+            hackCable.emulatorManager.run(sourceCode);
 
         } else {
             // --- ARDUINO AVR ---
+            setRunControlState('executing');
             localStorage.setItem('hackCable-webExample-inputHex', hexInput.value);
             hackCable.emulatorManager.loadCode(hexInput.value);
             hackCable.emulatorManager.run();
@@ -527,6 +712,147 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
         switchTab(tab);
         if (tab === 'io') buildIOList();
     });
+});
+
+type EditorTabName = 'code' | 'mock';
+
+function switchEditorTab(tabName: EditorTabName) {
+    document.querySelectorAll('.editor-tab-btn').forEach((btn) => {
+        const isActive = (btn as HTMLElement).dataset.editorTab === tabName;
+        btn.classList.toggle('active', isActive);
+    });
+
+    document.querySelectorAll('.editor-tab-panel').forEach((panel) => {
+        const isActive = (panel as HTMLElement).dataset.editorPanel === tabName;
+        panel.classList.toggle('active', isActive);
+        (panel as HTMLElement).hidden = !isActive;
+    });
+}
+
+document.querySelectorAll('.editor-tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+        const tab = (btn as HTMLElement).dataset.editorTab as EditorTabName | undefined;
+        if (!tab) return;
+        switchEditorTab(tab);
+    });
+});
+
+// Default active tab: Code
+switchEditorTab('code');
+
+type OutputTabName = 'compiled' | 'serial' | 'plotter';
+let activeOutputTab: OutputTabName = 'compiled';
+const outputClearBtn = document.getElementById('output-clear-btn') as HTMLButtonElement | null;
+
+function updateOutputClearButton(tabName: OutputTabName) {
+    if (!outputClearBtn) return;
+    const shouldShow = tabName === 'serial' || tabName === 'plotter';
+    outputClearBtn.hidden = !shouldShow;
+}
+
+function switchOutputTab(tabName: OutputTabName) {
+    activeOutputTab = tabName;
+    document.querySelectorAll('.compiled-tab-btn').forEach((btn) => {
+        const isActive = (btn as HTMLElement).dataset.outputTab === tabName;
+        btn.classList.toggle('active', isActive);
+    });
+
+    document.querySelectorAll('.compiled-tab-panel').forEach((panel) => {
+        const isActive = (panel as HTMLElement).dataset.outputPanel === tabName;
+        panel.classList.toggle('active', isActive);
+        (panel as HTMLElement).hidden = !isActive;
+    });
+
+    if (tabName === 'plotter') {
+        setTimeout(() => resizePlotterCanvas(), 0);
+    }
+
+    updateOutputClearButton(tabName);
+}
+
+document.querySelectorAll('.compiled-tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+        const tab = (btn as HTMLElement).dataset.outputTab as OutputTabName | undefined;
+        if (!tab) return;
+        switchOutputTab(tab);
+    });
+});
+
+// Default active tab: Compiled
+switchOutputTab('compiled');
+
+const compiledIoContainer = document.getElementById('compiled-io-container') as HTMLElement | null;
+const outputFloatOpenBtn = document.getElementById('output-float-open') as HTMLButtonElement | null;
+const outputFloatCloseBtn = document.getElementById('output-float-close') as HTMLButtonElement | null;
+const outputFloatDragHandle = document.getElementById('output-float-drag') as HTMLButtonElement | null;
+
+function setCompiledWindowFloating(isFloating: boolean) {
+    if (!compiledIoContainer) return;
+    compiledIoContainer.classList.toggle('floating', isFloating);
+
+    if (outputFloatOpenBtn) outputFloatOpenBtn.hidden = isFloating;
+    if (outputFloatCloseBtn) outputFloatCloseBtn.hidden = !isFloating;
+    if (outputFloatDragHandle) outputFloatDragHandle.hidden = !isFloating;
+
+    if (!isFloating) {
+        compiledIoContainer.style.left = '';
+        compiledIoContainer.style.top = '';
+        compiledIoContainer.style.width = '';
+        compiledIoContainer.style.height = '';
+    }
+}
+
+function openCompiledWindowFloating() {
+    if (!compiledIoContainer) return;
+    if (!compiledIoContainer.classList.contains('floating')) {
+        const rect = compiledIoContainer.getBoundingClientRect();
+        setCompiledWindowFloating(true);
+        compiledIoContainer.style.left = `${Math.max(8, rect.left)}px`;
+        compiledIoContainer.style.top = `${Math.max(8, rect.top)}px`;
+        compiledIoContainer.style.width = `${Math.max(320, rect.width)}px`;
+        compiledIoContainer.style.height = `${Math.max(240, rect.height)}px`;
+    }
+}
+
+function closeCompiledWindowFloating() {
+    setCompiledWindowFloating(false);
+}
+
+outputFloatOpenBtn?.addEventListener('click', openCompiledWindowFloating);
+outputFloatCloseBtn?.addEventListener('click', closeCompiledWindowFloating);
+outputClearBtn?.addEventListener('click', () => {
+    if (activeOutputTab === 'serial') {
+        clearSerial();
+    } else if (activeOutputTab === 'plotter') {
+        clearPlotter();
+    }
+});
+
+outputFloatDragHandle?.addEventListener('mousedown', (event: MouseEvent) => {
+    if (!compiledIoContainer || !compiledIoContainer.classList.contains('floating')) return;
+    event.preventDefault();
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const initialLeft = parseFloat(compiledIoContainer.style.left || '0');
+    const initialTop = parseFloat(compiledIoContainer.style.top || '0');
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+        const deltaX = moveEvent.clientX - startX;
+        const deltaY = moveEvent.clientY - startY;
+        const nextLeft = Math.max(0, initialLeft + deltaX);
+        const nextTop = Math.max(0, initialTop + deltaY);
+        compiledIoContainer.style.left = `${nextLeft}px`;
+        compiledIoContainer.style.top = `${nextTop}px`;
+    };
+
+    const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
 });
 
 // I/O panel
@@ -812,12 +1138,47 @@ window.addEventListener('resize', resizePlotterCanvas);
 setTimeout(resizePlotterCanvas, 100);
 
 hackCable.serialDataCallback = (data: string) => { appendSerial(data); feedPlotter(data); };
-document.getElementById('serial-clear')?.addEventListener('click', clearSerial);
-document.getElementById('serial-plotter-clear')?.addEventListener('click', clearPlotter);
 
 const simHttpPathInput = document.getElementById('sim-http-path') as HTMLInputElement | null;
 const simHttpSendBtn = document.getElementById('sim-http-send') as HTMLButtonElement | null;
 const simHttpResponseEl = document.getElementById('sim-http-response') as HTMLElement | null;
+const simHttpToggleBtn = document.getElementById('sim-http-toggle') as HTMLButtonElement | null;
+const simHttpContainer = document.getElementById('sim-http-container') as HTMLElement | null;
+
+function setSimHttpSettingsVisible(visible: boolean) {
+    if (!simHttpContainer) return;
+    simHttpContainer.hidden = !visible;
+    simHttpContainer.style.display = visible ? 'flex' : 'none';
+    if (!simHttpToggleBtn) return;
+    simHttpToggleBtn.classList.toggle('active', visible);
+    simHttpToggleBtn.setAttribute('aria-expanded', visible ? 'true' : 'false');
+}
+
+setSimHttpSettingsVisible(false);
+
+simHttpToggleBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setSimHttpSettingsVisible(simHttpContainer?.hidden ?? true);
+});
+
+simHttpContainer?.addEventListener('click', (event) => {
+    event.stopPropagation();
+});
+
+document.addEventListener('click', (event) => {
+    if (!simHttpContainer || simHttpContainer.hidden) return;
+    const target = event.target as Node | null;
+    if (!target) return;
+    const clickedToggle = simHttpToggleBtn?.contains(target) ?? false;
+    const clickedPopup = simHttpContainer.contains(target);
+    if (!clickedToggle && !clickedPopup) {
+        setSimHttpSettingsVisible(false);
+    }
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') setSimHttpSettingsVisible(false);
+});
 
 function renderSimulatedHttpResponse(text: string) {
     if (simHttpResponseEl) simHttpResponseEl.textContent = text;
@@ -1038,6 +1399,16 @@ if(save && restore && clearAll){
 }
 
 // Function to update UI translations
+function syncRunButtonA11yLabels() {
+    document.querySelectorAll('.run-circle-btn').forEach((element) => {
+        if (!(element instanceof HTMLButtonElement)) return;
+        const label = (element.textContent || '').trim();
+        if (!label) return;
+        element.title = label;
+        element.setAttribute('aria-label', label);
+    });
+}
+
 function updateUITranslations() {
     document.querySelectorAll('[data-i18n]').forEach((element) => {
         const key = element.getAttribute('data-i18n');
@@ -1046,6 +1417,7 @@ function updateUITranslations() {
             element.textContent = translated;
         }
     });
+    syncRunButtonA11yLabels();
 }
 
 // Function to show status messages
@@ -1066,6 +1438,7 @@ function showStatus(messageKey: string, type: 'info' | 'success' | 'error') {
 }
 
 // Apply translations on page load
+syncRunButtonA11yLabels();
 setTimeout(() => updateUITranslations(), 200);
 
 // Code examples
@@ -2769,7 +3142,7 @@ function repairCachedNewBfarmCodeIfNeeded(): void {
 
     localStorage.setItem('hackCable-webExample-inputCode', fixedCode);
     if (codeInput instanceof HTMLTextAreaElement) {
-        codeInput.value = fixedCode;
+        setCodeEditorValue(fixedCode);
     }
     console.log('Repaired stale cached code for new_bfarm_awd_automation.');
 }
@@ -2783,8 +3156,9 @@ if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
         if (selectedExample && codeExamples[selectedExample]) {
             const rawExampleCode = codeExamples[selectedExample];
             const preparedExampleCode = preprocessExampleCode(selectedExample, rawExampleCode);
-            codeInput.value = preparedExampleCode;
-            localStorage.setItem('hackCable-webExample-inputCode', codeInput.value);
+            setCodeEditorValue(preparedExampleCode);
+            localStorage.setItem('hackCable-webExample-inputCode', getCodeEditorValue());
+            markCompileStale();
             console.log(`Loaded example: ${selectedExample}`);
 
             // Setup circuit for Handysense Pro Smart Farm examples
@@ -2896,19 +3270,31 @@ if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
     });
 }
 
+
 // language
 
-const languageEn = document.getElementById('language-en');
-const languageTh = document.getElementById('language-th');
+const languageToggle = document.getElementById('language-toggle') as HTMLButtonElement | null;
+const languageStorageKey = 'hackCable-webExample-language';
 
-languageEn?.addEventListener("click", () => {
-    localStorage.setItem('hackCable-webExample-language', 'en_us');
-    location.reload()
-});
-languageTh?.addEventListener("click", () => {
-    console.log("Change lang to Thai")
-    localStorage.setItem('hackCable-webExample-language', 'th_th');
-    location.reload()
+const getCurrentLanguage = () => {
+    return localStorage.getItem(languageStorageKey) === 'th_th' ? 'th_th' : 'en_us';
+};
+
+const updateLanguageToggleLabel = () => {
+    if (!languageToggle) return;
+    const currentLanguage = getCurrentLanguage();
+    // Show the target language on the button.
+    languageToggle.textContent = currentLanguage === 'th_th' ? 'EN' : 'TH';
+};
+
+updateLanguageToggleLabel();
+
+languageToggle?.addEventListener("click", async () => {
+    const nextLanguage = getCurrentLanguage() === 'th_th' ? 'en_us' : 'th_th';
+    await hackCable.changeLanguage(nextLanguage);
+    localStorage.setItem(languageStorageKey, nextLanguage);
+    updateLanguageToggleLabel();
+    updateUITranslations();
 });
 
 // Board selection
@@ -3994,8 +4380,9 @@ window.addEventListener('message', (e: MessageEvent) => {
     if (!e.data) return;
     if (e.data.source === 'bfarm' && e.data.type === 'code-sync' && typeof e.data.code === 'string') {
         if (codeInput instanceof HTMLTextAreaElement) {
-            codeInput.value = e.data.code;
+            setCodeEditorValue(e.data.code);
             localStorage.setItem('hackCable-webExample-inputCode', e.data.code);
+            markCompileStale();
             showStatus('ui.status.codeReceived', 'success');
         }
     }
@@ -4017,7 +4404,7 @@ const autoSyncBlocksCheckbox = document.getElementById('auto-sync-blocks') as HT
 
 function transferToBlocks() {
     if (codeInput instanceof HTMLTextAreaElement) {
-        window.parent.postMessage({ source: 'hackcable', type: 'code-sync', code: codeInput.value }, '*');
+        window.parent.postMessage({ source: 'hackcable', type: 'code-sync', code: getCodeEditorValue() }, '*');
     }
 }
 
