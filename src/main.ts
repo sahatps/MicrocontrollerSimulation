@@ -464,13 +464,10 @@ export class HackCable {
             return;
         }
 
-        // Default visible — hide only if user previously closed it
-        const isCatalogHidden = localStorage.getItem('hackCable-catalog-visible') === 'false';
-        if (isCatalogHidden) {
-            bar.classList.add('hidden');
-        } else {
-            toggleBtn.classList.add('active');
-        }
+        // Always start with catalog visible by default.
+        bar.classList.remove('hidden');
+        toggleBtn.classList.add('active');
+        localStorage.setItem('hackCable-catalog-visible', 'true');
 
         // Handle toggle button click
         toggleBtn.addEventListener('click', () => {

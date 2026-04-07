@@ -1346,27 +1346,40 @@ function initializeSidebarToggle() {
 initializeSidebarToggle();
 
 // Initialize control bar toggle functionality
-function initializeControlBarToggle() {
-    const controlBar = document.querySelector('.controlBar') as HTMLElement;
-    const toggleBtn = document.querySelector('.toggle-controlbar') as HTMLButtonElement;
+let controlBarElement: HTMLElement | null = null;
 
-    if (!controlBar || !toggleBtn) return;
+function setControlBarHidden(hidden: boolean) {
+    if (!controlBarElement) return;
 
-    const isHidden = localStorage.getItem('hackCable-controlbar-hidden') === 'true';
-    if (isHidden) {
-        controlBar.classList.add('hidden');
-        document.body.classList.add('controlbar-hidden');
-    } else {
-        toggleBtn.classList.add('panel-open');
+    controlBarElement.classList.toggle('hidden', hidden);
+    document.body.classList.toggle('controlbar-hidden', hidden);
+    localStorage.setItem('hackCable-controlbar-hidden', hidden.toString());
+
+    if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ source: 'hackcable', type: 'controlbar-state', hidden }, '*');
     }
+}
 
-    toggleBtn.addEventListener('click', () => {
-        controlBar.classList.toggle('hidden');
-        const isNowHidden = controlBar.classList.contains('hidden');
-        toggleBtn.classList.toggle('panel-open', !isNowHidden);
-        document.body.classList.toggle('controlbar-hidden', isNowHidden);
-        localStorage.setItem('hackCable-controlbar-hidden', isNowHidden.toString());
-    });
+function toggleControlBarVisibility() {
+    if (!controlBarElement) return;
+    const shouldHide = !controlBarElement.classList.contains('hidden');
+    setControlBarHidden(shouldHide);
+}
+
+function initializeControlBarToggle() {
+    const controlBar = document.querySelector('.controlBar') as HTMLElement | null;
+    const legacyToggleBtn = document.querySelector('.toggle-controlbar') as HTMLButtonElement | null;
+
+    if (!controlBar) return;
+    controlBarElement = controlBar;
+
+    // Default state is always visible.
+    setControlBarHidden(false);
+
+    // Keep old side handle hidden; new toggle lives in HackCable header.
+    if (legacyToggleBtn) {
+        legacyToggleBtn.style.display = 'none';
+    }
 }
 
 initializeControlBarToggle();
@@ -4395,6 +4408,15 @@ window.addEventListener('message', (e: MessageEvent) => {
     }
     if (e.data.source === 'shell' && e.data.type === 'resize') {
         window.dispatchEvent(new Event('resize'));
+    }
+    if (e.data.source === 'shell' && e.data.type === 'toggle-controlbar') {
+        toggleControlBarVisibility();
+    }
+    if (e.data.source === 'shell' && e.data.type === 'get-controlbar-state') {
+        if (controlBarElement) {
+            const isHidden = controlBarElement.classList.contains('hidden');
+            window.parent.postMessage({ source: 'hackcable', type: 'controlbar-state', hidden: isHidden }, '*');
+        }
     }
 });
 

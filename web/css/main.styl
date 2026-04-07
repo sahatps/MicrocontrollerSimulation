@@ -265,9 +265,15 @@ body.controlbar-hidden #hackCable
     gap 6px
     overflow-x hidden
     overflow-y auto
+    -ms-overflow-style none
+    scrollbar-width none
     transition width 0.3s ease, padding 0.3s ease
     box-sizing border-box
     z-index 1000
+
+    &::-webkit-scrollbar
+        width 0
+        background transparent
 
     &.hidden
         width 0
@@ -1135,6 +1141,7 @@ footer
 
 // Control bar toggle button — always fixed to right edge, independent of controlBar state
 .toggle-controlbar
+    display none !important
     position fixed
     right 0
     top 50%
