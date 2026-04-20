@@ -467,7 +467,12 @@ boardSelectEl?.addEventListener('change', () => {
     updateCompilerVisibility();
     markCompileStale();
 });
-compilerModeSelect?.addEventListener('change', markCompileStale);
+compilerModeSelect?.addEventListener('change', () => {
+    markCompileStale();
+    if (compilerModeSelect.value !== 'clang-llvm') {
+        clangRunner.dispose();
+    }
+});
 updateCompilerVisibility();
 checkEmscriptenStatus();
 checkClangNativeStatus();
@@ -628,6 +633,9 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
             }).catch(err => {
                 hexInput.value = '// Clang/LLVM error:\n' + err.message;
                 onCompileFailure();
+            }).finally(() => {
+                // Keep compiled WASM bytes, release heavyweight compiler worker memory.
+                clangRunner.dispose();
             });
 
         } else if (boardType === 'esp32') {

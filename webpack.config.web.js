@@ -72,6 +72,11 @@ module.exports = {
         minimizer: [
             new TerserPlugin({
                 terserOptions: {
+                    compress: {
+                        // Drop noisy runtime logs in production builds to reduce
+                        // console retention pressure and client memory growth.
+                        pure_funcs: ['console.log', 'console.debug', 'console.info'],
+                    },
                     keep_classnames: true,
                     keep_fnames: true,
                 },

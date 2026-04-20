@@ -8,6 +8,8 @@ const crypto = require('crypto');
 
 const app = express();
 const PORT = 3001;
+const EMSCRIPTEN_INITIAL_MEMORY_BYTES = 64 * 1024 * 1024;
+const EMSCRIPTEN_MAX_MEMORY_BYTES = 256 * 1024 * 1024;
 
 app.use(cors());
 app.use(express.json({ limit: '100kb' }));
@@ -183,6 +185,8 @@ app.post('/api/compile/emscripten', async (req, res) => {
             '-s EXPORTED_RUNTIME_METHODS=UTF8ToString,ccall,cwrap',
             '-s EXPORTED_FUNCTIONS=_main',
             '-s ALLOW_MEMORY_GROWTH=1',
+            `-s INITIAL_MEMORY=${EMSCRIPTEN_INITIAL_MEMORY_BYTES}`,
+            `-s MAXIMUM_MEMORY=${EMSCRIPTEN_MAX_MEMORY_BYTES}`,
             '-s ENVIRONMENT=web',
             '-O2',
             '-o output.js',

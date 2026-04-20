@@ -36,6 +36,7 @@ export interface ClangCompileResult {
 
 export class ClangWasmRunner {
     private worker: Worker | null = null;
+    private workerUrl: string | null = null;
     private nextId = 0;
     private pending = new Map<number, { resolve: (v: any) => void; reject: (e: any) => void }>();
 
@@ -77,6 +78,27 @@ export class ClangWasmRunner {
     async compile(cppSource: string, headers: Record<string, string>): Promise<ClangCompileResult> {
         if (!this.worker) throw new Error('Clang not loaded — call load() first');
         return this.call('compile', { source: cppSource, headers });
+    }
+
+    /**
+     * Fully release worker memory (important after a compile in low-memory mode).
+     */
+    dispose(): void {
+        if (this.worker) {
+            this.worker.terminate();
+            this.worker = null;
+        }
+        if (this.workerUrl) {
+            URL.revokeObjectURL(this.workerUrl);
+            this.workerUrl = null;
+        }
+        if (this.pending.size > 0) {
+            const err = new Error('Clang worker disposed');
+            for (const pending of this.pending.values()) {
+                pending.reject(err);
+            }
+            this.pending.clear();
+        }
     }
 
     // ---- private helpers ----
@@ -253,8 +275,10 @@ self.onmessage = async (event) => {
     }
 };
 `;
-        const blob   = new Blob([workerCode], { type: 'application/javascript' });
-        const worker = new Worker(URL.createObjectURL(blob));
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        const workerUrl = URL.createObjectURL(blob);
+        const worker = new Worker(workerUrl);
+        this.workerUrl = workerUrl;
 
         worker.addEventListener('message', (e: MessageEvent) => {
             if (e.data.type === 'log') {
