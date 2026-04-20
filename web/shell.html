@@ -120,6 +120,19 @@
   </div>
 
   <script>
+    // Guard against accidental recursive embedding.
+    // If /bfarm/index.html (or another route) resolves to this shell page,
+    // loading it inside an iframe can create infinite shell-in-shell nesting.
+    if (window.top !== window.self) {
+      document.body.innerHTML = [
+        '<div style="padding:16px;font-family:sans-serif;color:#fff;background:#30343F;">',
+        '<strong>Blocks view is unavailable.</strong><br/>',
+        'The shell page was loaded inside an iframe, which indicates a deploy/path issue for <code>/bfarm/index.html</code>.',
+        '</div>'
+      ].join('');
+      throw new Error('HackCable shell loaded inside iframe');
+    }
+
     var hcPane  = document.getElementById('pane-hackcable');
     var bfPane  = document.getElementById('pane-bfarm');
     var btnCircuit = document.getElementById('btn-circuit');
