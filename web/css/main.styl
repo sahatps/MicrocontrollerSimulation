@@ -10,6 +10,7 @@ body
     padding 0
     min-height 100vh
     position relative
+    --controlbar-width 340px
 
 header
     display none
@@ -245,7 +246,7 @@ main
         flex 1
         overflow auto
         background-color #f5f5f5
-        margin-right 340px
+        margin-right var(--controlbar-width)
         transition margin-right 0.3s ease
 
 body.controlbar-hidden #hackCable
@@ -256,7 +257,7 @@ body.controlbar-hidden #hackCable
     right 0
     top 0
     bottom 20px
-    width 340px
+    width var(--controlbar-width)
     background-color #30343F
     border-left 1px solid black
     padding 56px 10px 10px
@@ -280,6 +281,19 @@ body.controlbar-hidden #hackCable
         padding 0
         border-left none
         overflow hidden
+
+    .controlbar-resize-handle
+        position absolute
+        left 0
+        top 0
+        bottom 0
+        width 10px
+        transform translateX(-50%)
+        cursor ew-resize
+        z-index 1003
+
+    &.hidden .controlbar-resize-handle
+        display none
 
     .controlbar-topright
         position absolute
@@ -716,12 +730,277 @@ body.controlbar-hidden #hackCable
                 &:hover
                     opacity 0.9
 
-            &[data-editor-panel="mock"] textarea
-                margin-top 0
+            &[data-editor-panel="mock"]
+                border 1px solid #3a3f4b
                 border-radius 0 0 5px 5px
-                min-height 150px
-                background-color #1a1a1a
-                color #f9fafb
+                background-color #1b1d23
+                padding 10px
+                display flex
+                flex-direction column
+                gap 10px
+
+                .mock-source-toggle
+                    display flex
+                    gap 6px
+
+                .mock-source-btn
+                    border none
+                    border-radius 6px
+                    background-color #2f3644
+                    color #d1d5db
+                    font-size 12px
+                    font-weight 600
+                    padding 6px 10px
+                    cursor pointer
+
+                    &:hover
+                        background-color #3a4355
+
+                    &.active
+                        background-color #5b8def
+                        color #ffffff
+
+                .mock-source-panel
+                    display flex
+                    flex-direction column
+                    gap 10px
+
+                    &[hidden]
+                        display none !important
+
+                .mock-source-panel[data-mock-source-panel="text"] textarea
+                    margin-top 0
+                    border-radius 6px
+                    min-height 150px
+                    background-color #13161d
+                    color #f9fafb
+                    border 1px solid #2f3644
+
+                .mock-timeline-toolbar
+                    display flex
+                    justify-content space-between
+                    align-items center
+                    gap 10px
+                    flex-wrap wrap
+
+                .mock-editor-mode-toolbar
+                    display flex
+                    justify-content flex-end
+                    gap 8px
+
+                .mock-editor-mode-btn
+                    border 1px solid #3a4355
+                    border-radius 6px
+                    padding 4px 10px
+                    background-color #20283a
+                    color #d1d5db
+                    font-size 11px
+                    font-weight 600
+                    cursor pointer
+
+                    &:hover
+                        background-color #2b3446
+
+                .mock-graph-editor
+                    display flex
+                    flex-direction column
+                    gap 10px
+
+                    &[hidden]
+                        display none !important
+
+                .mock-graph-controls
+                    display flex
+                    gap 8px
+                    flex-wrap wrap
+                    align-items flex-end
+
+                .mock-graph-control
+                    display inline-flex
+                    flex-direction column
+                    gap 4px
+                    color #e5e7eb
+                    font-size 11px
+                    font-weight 600
+
+                    select,
+                    input
+                        min-width 90px
+                        border 1px solid #3b4456
+                        border-radius 6px
+                        background-color #10141c
+                        color #f9fafb
+                        padding 4px 8px
+                        font-size 11px
+
+                .mock-delete-point-btn
+                    border 1px solid #6b2f35
+                    border-radius 6px
+                    background-color #3b1f24
+                    color #fecaca
+                    font-size 11px
+                    font-weight 600
+                    padding 5px 10px
+                    cursor pointer
+
+                    &:hover:not(:disabled)
+                        background-color #4a252d
+
+                    &:disabled
+                        opacity 0.45
+                        cursor not-allowed
+
+                .mock-graph-canvas-wrap
+                    border 1px solid #2f3a4f
+                    border-radius 8px
+                    background linear-gradient(180deg, #0f172a, #111827)
+                    overflow hidden
+
+                .mock-graph-canvas
+                    width 100%
+                    height 240px
+                    display block
+
+                .mock-graph-hint
+                    font-size 11px
+                    color #a7b0bf
+
+                .mock-timeline-editor
+                    &[hidden]
+                        display none !important
+
+                .mock-duration-label
+                    display inline-flex
+                    align-items center
+                    gap 8px
+                    color #e5e7eb
+                    font-size 12px
+                    font-weight 600
+
+                    input
+                        width 90px
+                        border 1px solid #3b4456
+                        border-radius 6px
+                        background-color #13161d
+                        color #f9fafb
+                        padding 4px 8px
+                        font-size 12px
+
+                .mock-loop-pill
+                    border 1px solid #325f88
+                    background-color rgba(59, 130, 246, 0.16)
+                    color #bfdbfe
+                    border-radius 999px
+                    padding 4px 10px
+                    font-size 11px
+                    font-weight 700
+
+                .mock-timeline-tracks
+                    display flex
+                    flex-direction column
+                    gap 10px
+
+                .mock-timeline-track
+                    border 1px solid #303848
+                    background-color #141922
+                    border-radius 8px
+                    padding 8px
+                    display flex
+                    flex-direction column
+                    gap 8px
+
+                .mock-timeline-track-header
+                    display flex
+                    justify-content space-between
+                    align-items center
+                    gap 10px
+
+                .mock-timeline-track-title
+                    margin 0
+                    font-size 12px
+                    color #f3f4f6
+                    font-weight 700
+
+                .mock-timeline-add-btn
+                    border 1px solid #3a4355
+                    border-radius 6px
+                    padding 4px 8px
+                    background-color #222938
+                    color #d1d5db
+                    font-size 11px
+                    font-weight 600
+                    cursor pointer
+
+                    &:hover
+                        background-color #2b3446
+
+                .mock-timeline-track-axis
+                    position relative
+                    height 28px
+                    border-radius 6px
+                    background linear-gradient(90deg, #0f172a, #1e293b)
+                    border 1px solid #2f3a4f
+                    overflow hidden
+
+                .mock-timeline-segment-bar
+                    position absolute
+                    top 4px
+                    bottom 4px
+                    border-radius 4px
+                    background linear-gradient(90deg, #22d3ee, #0ea5e9)
+                    color #082f49
+                    font-size 10px
+                    font-weight 700
+                    display flex
+                    align-items center
+                    justify-content center
+                    padding 0 4px
+                    overflow hidden
+                    white-space nowrap
+
+                .mock-timeline-segment-list
+                    display flex
+                    flex-direction column
+                    gap 6px
+
+                .mock-timeline-segment-item
+                    display grid
+                    grid-template-columns repeat(3, minmax(0, 1fr)) auto
+                    gap 6px
+
+                    input
+                        border 1px solid #3b4456
+                        border-radius 6px
+                        background-color #10141c
+                        color #f9fafb
+                        padding 4px 6px
+                        font-size 11px
+
+                .mock-timeline-delete-btn
+                    border 1px solid #6b2f35
+                    border-radius 6px
+                    background-color #3b1f24
+                    color #fecaca
+                    font-size 11px
+                    font-weight 600
+                    padding 4px 8px
+                    cursor pointer
+
+                    &:hover
+                        background-color #4a252d
+
+                .mock-timeline-empty
+                    font-size 11px
+                    color #9ca3af
+                    padding 2px 0
+
+                .mock-timeline-error
+                    border 1px solid #7f1d1d
+                    background-color rgba(127, 29, 29, 0.2)
+                    border-radius 6px
+                    color #fecaca
+                    font-size 11px
+                    padding 6px 8px
 
     #compiled-io-container
         position relative
@@ -984,8 +1263,8 @@ footer
 @media screen and (max-width: 1024px)
     main
         .controlBar
-            width 300px
-            min-width 260px
+            width var(--controlbar-width)
+            min-width 0
 
             .buttonBar
                 button
@@ -1002,8 +1281,8 @@ footer
         flex-direction column
 
         .controlBar
-            width 100%
-            min-width 100%
+            width var(--controlbar-width)
+            min-width 0
             height auto
             border-left none
             border-top 1px solid black
@@ -1082,6 +1361,13 @@ footer
         #hackCable
             height 50vh
             overflow auto
+
+body.controlbar-resizing
+    #hackCable
+        transition none
+
+    .controlBar
+        transition none
 
 // Responsive design for small mobile devices
 @media screen and (max-width: 480px)

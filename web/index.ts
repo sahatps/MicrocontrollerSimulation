@@ -223,15 +223,30 @@ setTimeout(() => {
     // Set default example selection and load its code
     const examplesSelect = document.getElementById('code-examples') as HTMLSelectElement;
     if (examplesSelect) {
-        examplesSelect.value = 'new_bfarm_smart_greenhouse';
+        const savedExample = localStorage.getItem(EXAMPLE_SELECTION_STORAGE_KEY) || '';
+        if (savedExample && codeExamples[savedExample]) {
+            examplesSelect.value = savedExample;
+        } else {
+            examplesSelect.value = 'new_bfarm_smart_greenhouse';
+        }
     }
     setTimeout(() => {
-        if (codeInput instanceof HTMLTextAreaElement && !getCodeEditorValue().trim()) {
-            setCodeEditorValue(preprocessExampleCode(
-                'new_bfarm_smart_greenhouse',
-                codeExamples['new_bfarm_smart_greenhouse']
-            ));
+        if (!(codeInput instanceof HTMLTextAreaElement) || !examplesSelect) return;
+        const currentCode = getCodeEditorValue().trim();
+        if (!currentCode) {
+            const selectedKey = examplesSelect.value && codeExamples[examplesSelect.value]
+                ? examplesSelect.value
+                : 'new_bfarm_smart_greenhouse';
+            setCodeEditorValue(preprocessExampleCode(selectedKey, codeExamples[selectedKey]));
             localStorage.setItem('hackCable-webExample-inputCode', getCodeEditorValue());
+            localStorage.setItem(EXAMPLE_SELECTION_STORAGE_KEY, selectedKey);
+            return;
+        }
+
+        const detectedKey = detectNewBfarmExampleFromCode(currentCode);
+        if (detectedKey && codeExamples[detectedKey]) {
+            examplesSelect.value = detectedKey;
+            localStorage.setItem(EXAMPLE_SELECTION_STORAGE_KEY, detectedKey);
         }
     }, 1000);
 }, 100);
@@ -245,9 +260,74 @@ const hexInput = document.getElementById('code-compiled');
 const statusMessage = document.getElementById('status-message');
 const codeEditorShell = document.querySelector('.editor-tab-panel[data-editor-panel="code"] .code-editor-shell') as HTMLElement | null;
 const codeEditorResizeHandle = document.getElementById('code-editor-resize-handle') as HTMLDivElement | null;
+const EXAMPLE_SELECTION_STORAGE_KEY = 'hackCable-webExample-selected';
 
 const compilerModeSelect = document.getElementById('compiler-mode') as HTMLSelectElement;
 const boardSelectEl = document.getElementById('board-select') as HTMLSelectElement;
+
+type MockSource = 'text' | 'timeline';
+type SensorKey = 'humidity' | 'temperature' | 'ph' | 'lux' | 'soil' | 'co2' | 'pressure';
+type MockSegment = { startSec: number; endSec: number; value: number };
+type MockTimelineConfig = { durationSec: number; tracks: Record<SensorKey, MockSegment[]> };
+type GraphPoint = { tSec: number; value: number };
+type MockEditorMode = 'graph' | 'timeline';
+type SensorRange = { min: number; max: number };
+
+const SENSOR_KEYS: SensorKey[] = ['humidity', 'temperature', 'ph', 'lux', 'soil', 'co2', 'pressure'];
+const SENSOR_KEY_SET = new Set<SensorKey>(SENSOR_KEYS);
+const SENSOR_DEFAULT_RANGES: Record<SensorKey, SensorRange> = {
+    humidity: { min: 0, max: 100 },
+    temperature: { min: -10, max: 60 },
+    ph: { min: 0, max: 14 },
+    lux: { min: 0, max: 2000 },
+    soil: { min: 0, max: 100 },
+    co2: { min: 300, max: 2000 },
+    pressure: { min: 900, max: 1100 },
+};
+const SENSOR_LABEL_KEYS: Record<SensorKey, string> = {
+    humidity: 'ui.mock.sensor.humidity',
+    temperature: 'ui.mock.sensor.temperature',
+    ph: 'ui.mock.sensor.ph',
+    lux: 'ui.mock.sensor.lux',
+    soil: 'ui.mock.sensor.soil',
+    co2: 'ui.mock.sensor.co2',
+    pressure: 'ui.mock.sensor.pressure',
+};
+const MOCK_SOURCE_STORAGE_KEY = 'hackCable-mock-source';
+const MOCK_TIMELINE_STORAGE_KEY = 'hackCable-mock-timeline';
+const MOCK_GRAPH_UI_STORAGE_KEY = 'hackCable-mock-graph-ui';
+const DEFAULT_MOCK_TIMELINE_DURATION_SEC = 20;
+const GRAPH_TIME_SNAP_SEC = 0.5;
+const GRAPH_AXIS_PADDING_LEFT = 46;
+const GRAPH_AXIS_PADDING_RIGHT = 12;
+const GRAPH_AXIS_PADDING_TOP = 14;
+const GRAPH_AXIS_PADDING_BOTTOM = 26;
+const GRAPH_POINT_RADIUS = 5;
+const mockSourceButtons = Array.from(document.querySelectorAll('.mock-source-btn')) as HTMLButtonElement[];
+const mockSourcePanels = Array.from(document.querySelectorAll('.mock-source-panel')) as HTMLElement[];
+const mockTimelineDurationInput = document.getElementById('mock-timeline-duration') as HTMLInputElement | null;
+const mockOpenTimelineBtn = document.getElementById('mock-open-timeline-btn') as HTMLButtonElement | null;
+const mockBackGraphBtn = document.getElementById('mock-back-graph-btn') as HTMLButtonElement | null;
+const mockGraphEditor = document.getElementById('mock-graph-editor') as HTMLDivElement | null;
+const mockTimelineEditor = document.getElementById('mock-timeline-editor') as HTMLDivElement | null;
+const mockGraphSensorSelect = document.getElementById('mock-graph-sensor') as HTMLSelectElement | null;
+const mockGraphYMinInput = document.getElementById('mock-graph-y-min') as HTMLInputElement | null;
+const mockGraphYMaxInput = document.getElementById('mock-graph-y-max') as HTMLInputElement | null;
+const mockDeletePointBtn = document.getElementById('mock-delete-point-btn') as HTMLButtonElement | null;
+const mockGraphCanvas = document.getElementById('mock-graph-canvas') as HTMLCanvasElement | null;
+const mockTimelineTracksContainer = document.getElementById('mock-timeline-tracks') as HTMLDivElement | null;
+const mockTimelineError = document.getElementById('mock-timeline-error') as HTMLDivElement | null;
+
+let activeMockSource: MockSource = 'text';
+let mockRunStartMs = Date.now();
+let mockTimelineConfig: MockTimelineConfig = createDefaultMockTimelineConfig();
+let mockTimelineErrorKey: string | null = null;
+let activeMockEditorMode: MockEditorMode = 'graph';
+let activeGraphSensor: SensorKey = 'ph';
+let graphRangeOverrides: Partial<Record<SensorKey, SensorRange>> = {};
+let selectedGraphPointIndex: number | null = null;
+let graphDragPointIndex: number | null = null;
+let graphDidDrag = false;
 
 type RunControlState = 'needs-compile' | 'compiling' | 'compiled' | 'executing';
 let runControlState: RunControlState = 'needs-compile';
@@ -395,11 +475,18 @@ checkClangNativeStatus();
 if(compileButton && executeButton && stopButton && pauseButton && codeInput instanceof HTMLTextAreaElement && hexInput instanceof HTMLTextAreaElement){
 
     const code = localStorage.getItem('hackCable-webExample-inputCode');
-    if(code) setCodeEditorValue(code);
+    if (code) {
+        const normalizedCode = normalizeBfarmMacroCode(code);
+        if (normalizedCode !== code) {
+            localStorage.setItem('hackCable-webExample-inputCode', normalizedCode);
+        }
+        setCodeEditorValue(normalizedCode);
+    }
     const hex = localStorage.getItem('hackCable-webExample-inputHex');
     if(hex) hexInput.value = hex;
 
     setRunControlState('needs-compile');
+    registerSerialDataCallback();
 
     compileButton.addEventListener("click", () => compile());
     executeButton.addEventListener("click", () => { clearSerial(); execute(); setTimeout(startIOMonitor, 200); });
@@ -418,7 +505,11 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
     function compile(){
         if(!(codeInput instanceof HTMLTextAreaElement && hexInput instanceof HTMLTextAreaElement)) return;
         if (isCompilingCode) return;
-        const sourceCode = getCodeEditorValue();
+        const rawSourceCode = getCodeEditorValue();
+        const sourceCode = normalizeBfarmMacroCode(rawSourceCode);
+        if (sourceCode !== rawSourceCode) {
+            setCodeEditorValue(sourceCode);
+        }
 
         const boardType = hackCable.editor.canvas.getBoardType();
         if (boardType) hackCable.emulatorManager.setBoardType(boardType);
@@ -565,7 +656,14 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
     function execute(){
         if ((executeButton as HTMLButtonElement).disabled) return;
         if (runControlState === 'needs-compile' || runControlState === 'compiling') return;
-        const sourceCode = getCodeEditorValue();
+        registerSerialDataCallback();
+        const serialDiagRunId = beginSerialPipelineDiagnostics();
+        const rawSourceCode = getCodeEditorValue();
+        const sourceCode = normalizeBfarmMacroCode(rawSourceCode);
+        if (sourceCode !== rawSourceCode) {
+            setCodeEditorValue(sourceCode);
+            localStorage.setItem('hackCable-webExample-inputCode', sourceCode);
+        }
 
         hackCable.emulatorManager.stop();
 
@@ -576,6 +674,8 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
 
         if(!(hexInput instanceof HTMLTextAreaElement && codeInput instanceof HTMLTextAreaElement)) return;
         showStatus('ui.status.executing', 'info');
+        resetMockRunStartTime();
+        flushSerialBufferToDom(true);
 
         if (boardType === 'esp32' && mode === 'emscripten') {
             // --- EMSCRIPTEN PATH ---
@@ -611,10 +711,10 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
             const shimNative = new ArduinoWasmShim(
                 (pin, value) => hackCable.esp32PinUpdate(pin, value),
                 (text) => appendSerial(text),
-                (_slaveId, _reg) => 0,
-                () => 0,
-                () => 0,
-                () => 0,
+                (slaveId, regAddr) => readBridgeNumber('hackcable_modbus_read', [slaveId, regAddr], 0),
+                () => readBridgeNumber('hackcable_sht31_temp', [], 25),
+                () => readBridgeNumber('hackcable_sht31_humidity', [], 60),
+                () => readBridgeNumber('hackcable_bh1750_lux', [], 500),
             );
             WebAssembly.instantiate(lastClangNativeResult, shimNative.buildImports())
                 .then(({ instance }) => {
@@ -652,10 +752,10 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
             const shim = new ArduinoWasmShim(
                 (pin, value) => hackCable.esp32PinUpdate(pin, value),
                 (text) => appendSerial(text),
-                (_slaveId, _reg) => 0,
-                () => 0,
-                () => 0,
-                () => 0,
+                (slaveId, regAddr) => readBridgeNumber('hackcable_modbus_read', [slaveId, regAddr], 0),
+                () => readBridgeNumber('hackcable_sht31_temp', [], 25),
+                () => readBridgeNumber('hackcable_sht31_humidity', [], 60),
+                () => readBridgeNumber('hackcable_bh1750_lux', [], 500),
             );
             WebAssembly.instantiate(lastClangResult, shim.buildImports())
                 .then(({ instance }) => {
@@ -683,7 +783,10 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
         } else if (boardType === 'esp32') {
             // --- MICROPYTHON ---
             setRunControlState('executing');
+            flushSerialBufferToDom(true);
+            scheduleSerialPipelineFallbackWarning(serialDiagRunId);
             hackCable.emulatorManager.run(sourceCode);
+            setTimeout(() => flushSerialBufferToDom(true), 0);
 
         } else {
             // --- ARDUINO AVR ---
@@ -740,9 +843,915 @@ document.querySelectorAll('.editor-tab-btn').forEach((btn) => {
 // Default active tab: Code
 switchEditorTab('code');
 
+function translateUi(key: string): string {
+    const i18n = (window as any).i18next;
+    if (!i18n || typeof i18n.t !== 'function') return key;
+    return String(i18n.t(key));
+}
+
+function createEmptyTimelineTracks(): Record<SensorKey, MockSegment[]> {
+    return SENSOR_KEYS.reduce((acc, key) => {
+        acc[key] = [];
+        return acc;
+    }, {} as Record<SensorKey, MockSegment[]>);
+}
+
+function createDefaultMockTimelineConfig(): MockTimelineConfig {
+    return {
+        durationSec: DEFAULT_MOCK_TIMELINE_DURATION_SEC,
+        tracks: createEmptyTimelineTracks(),
+    };
+}
+
+function getDefaultSensorRange(sensorKey: SensorKey): SensorRange {
+    const preset = SENSOR_DEFAULT_RANGES[sensorKey];
+    return { min: preset.min, max: preset.max };
+}
+
+function getSensorRange(sensorKey: SensorKey): SensorRange {
+    const override = graphRangeOverrides[sensorKey];
+    if (!override) return getDefaultSensorRange(sensorKey);
+    if (!Number.isFinite(override.min) || !Number.isFinite(override.max) || override.min >= override.max) {
+        return getDefaultSensorRange(sensorKey);
+    }
+    return { min: override.min, max: override.max };
+}
+
+function clampToSensorRange(sensorKey: SensorKey, value: number): number {
+    const range = getSensorRange(sensorKey);
+    return Math.max(range.min, Math.min(range.max, value));
+}
+
+function snapTimeSec(rawValue: number, durationSec: number): number {
+    if (!Number.isFinite(rawValue)) return 0;
+    const maxTime = Math.max(0, durationSec - GRAPH_TIME_SNAP_SEC);
+    const clamped = Math.max(0, Math.min(maxTime, rawValue));
+    return roundSeconds(Math.round(clamped / GRAPH_TIME_SNAP_SEC) * GRAPH_TIME_SNAP_SEC);
+}
+
+function normalizeGraphPoints(points: GraphPoint[], sensorKey: SensorKey): GraphPoint[] {
+    const dedup = new Map<number, GraphPoint>();
+    points.forEach((point) => {
+        const tSec = snapTimeSec(point.tSec, mockTimelineConfig.durationSec);
+        dedup.set(tSec, { tSec, value: clampToSensorRange(sensorKey, point.value) });
+    });
+    return Array.from(dedup.values()).sort((a, b) => a.tSec - b.tSec);
+}
+
+function segmentsToGraphPoints(sensorKey: SensorKey): GraphPoint[] {
+    const segments = [...mockTimelineConfig.tracks[sensorKey]].sort((a, b) => a.startSec - b.startSec);
+    const points: GraphPoint[] = segments.map((segment) => ({ tSec: segment.startSec, value: segment.value }));
+    return normalizeGraphPoints(points, sensorKey);
+}
+
+function graphPointsToSegments(sensorKey: SensorKey, rawPoints: GraphPoint[]): MockSegment[] {
+    const points = normalizeGraphPoints(rawPoints, sensorKey);
+    if (points.length === 0) return [];
+
+    const segments: MockSegment[] = [];
+    for (let i = 0; i < points.length; i++) {
+        const current = points[i];
+        const next = points[i + 1];
+        const startSec = current.tSec;
+        const endSec = next ? next.tSec : mockTimelineConfig.durationSec;
+        if (endSec <= startSec) continue;
+        segments.push({
+            startSec: roundSeconds(startSec),
+            endSec: roundSeconds(endSec),
+            value: clampToSensorRange(sensorKey, current.value),
+        });
+    }
+    return segments;
+}
+
+function saveMockGraphUiPrefs() {
+    const payload = {
+        selectedSensor: activeGraphSensor,
+        editorMode: activeMockEditorMode,
+        yRanges: graphRangeOverrides,
+    };
+    localStorage.setItem(MOCK_GRAPH_UI_STORAGE_KEY, JSON.stringify(payload));
+}
+
+function loadMockGraphUiPrefs() {
+    const raw = localStorage.getItem(MOCK_GRAPH_UI_STORAGE_KEY);
+    if (!raw) return;
+    try {
+        const parsed = JSON.parse(raw) as {
+            selectedSensor?: string;
+            editorMode?: string;
+            yRanges?: Record<string, { min?: unknown; max?: unknown }>;
+        };
+        if (parsed.selectedSensor && isSensorKey(parsed.selectedSensor)) {
+            activeGraphSensor = parsed.selectedSensor;
+        }
+        if (parsed.editorMode === 'graph' || parsed.editorMode === 'timeline') {
+            activeMockEditorMode = parsed.editorMode;
+        }
+        if (parsed.yRanges && typeof parsed.yRanges === 'object') {
+            const nextRanges: Partial<Record<SensorKey, SensorRange>> = {};
+            SENSOR_KEYS.forEach((sensorKey) => {
+                const candidate = parsed.yRanges?.[sensorKey];
+                if (!candidate) return;
+                const min = asFiniteNumber(candidate.min);
+                const max = asFiniteNumber(candidate.max);
+                if (min === null || max === null || min >= max) return;
+                nextRanges[sensorKey] = { min, max };
+            });
+            graphRangeOverrides = nextRanges;
+        }
+    } catch {
+        // Ignore corrupt storage payload.
+    }
+}
+
+function setActiveMockEditorMode(mode: MockEditorMode, persist = true) {
+    activeMockEditorMode = mode;
+    if (mockGraphEditor) mockGraphEditor.hidden = mode !== 'graph';
+    if (mockTimelineEditor) mockTimelineEditor.hidden = mode !== 'timeline';
+    if (mockOpenTimelineBtn) mockOpenTimelineBtn.hidden = mode === 'timeline';
+    if (mockBackGraphBtn) mockBackGraphBtn.hidden = mode !== 'timeline';
+    if (persist) saveMockGraphUiPrefs();
+}
+
+function setActiveGraphSensor(sensorKey: SensorKey, persist = true) {
+    activeGraphSensor = sensorKey;
+    selectedGraphPointIndex = null;
+    if (mockGraphSensorSelect) mockGraphSensorSelect.value = sensorKey;
+    const range = getSensorRange(sensorKey);
+    if (mockGraphYMinInput) mockGraphYMinInput.value = String(range.min);
+    if (mockGraphYMaxInput) mockGraphYMaxInput.value = String(range.max);
+    if (persist) saveMockGraphUiPrefs();
+}
+
+function setSelectedGraphPoint(index: number | null) {
+    selectedGraphPointIndex = index;
+    if (mockDeletePointBtn) mockDeletePointBtn.disabled = index === null;
+}
+
+function updateTrackFromGraphPoints(sensorKey: SensorKey, points: GraphPoint[]): boolean {
+    const segments = graphPointsToSegments(sensorKey, points);
+    const ok = updateTrackSegments(sensorKey, segments);
+    if (!ok) return false;
+    setMockTimelineError(null);
+    const normalized = normalizeGraphPoints(points, sensorKey);
+    if (selectedGraphPointIndex !== null && selectedGraphPointIndex >= normalized.length) {
+        setSelectedGraphPoint(normalized.length > 0 ? normalized.length - 1 : null);
+    }
+    return true;
+}
+
+function updateGraphPoint(sensorKey: SensorKey, index: number, nextPoint: GraphPoint): boolean {
+    const points = segmentsToGraphPoints(sensorKey);
+    if (!points[index]) return false;
+    points[index] = nextPoint;
+    const ok = updateTrackFromGraphPoints(sensorKey, points);
+    if (!ok) return false;
+    const refreshed = segmentsToGraphPoints(sensorKey);
+    const snappedT = snapTimeSec(nextPoint.tSec, mockTimelineConfig.durationSec);
+    const newIndex = refreshed.findIndex((point) => point.tSec === snappedT);
+    setSelectedGraphPoint(newIndex >= 0 ? newIndex : null);
+    return true;
+}
+
+function addOrReplaceGraphPoint(sensorKey: SensorKey, nextPoint: GraphPoint): boolean {
+    const points = segmentsToGraphPoints(sensorKey);
+    const snappedT = snapTimeSec(nextPoint.tSec, mockTimelineConfig.durationSec);
+    const existingIndex = points.findIndex((point) => point.tSec === snappedT);
+    if (existingIndex >= 0) {
+        points[existingIndex] = { tSec: snappedT, value: nextPoint.value };
+    } else {
+        points.push({ tSec: snappedT, value: nextPoint.value });
+    }
+    const ok = updateTrackFromGraphPoints(sensorKey, points);
+    if (!ok) return false;
+    const refreshed = segmentsToGraphPoints(sensorKey);
+    const selectedIndex = refreshed.findIndex((point) => point.tSec === snappedT);
+    setSelectedGraphPoint(selectedIndex >= 0 ? selectedIndex : null);
+    return true;
+}
+
+function deleteSelectedGraphPoint() {
+    if (selectedGraphPointIndex === null) return;
+    const points = segmentsToGraphPoints(activeGraphSensor);
+    if (!points[selectedGraphPointIndex]) {
+        setSelectedGraphPoint(null);
+        return;
+    }
+    points.splice(selectedGraphPointIndex, 1);
+    if (!updateTrackFromGraphPoints(activeGraphSensor, points)) return;
+    setSelectedGraphPoint(null);
+}
+
+function resetMockRunStartTime() {
+    mockRunStartMs = Date.now();
+}
+
+function readBridgeNumber(bridgeName: string, args: number[], fallback: number): number {
+    const bridge = (window as any)[bridgeName];
+    if (typeof bridge !== 'function') return fallback;
+    const value = Number(bridge(...args));
+    return Number.isFinite(value) ? value : fallback;
+}
+
+function asFiniteNumber(value: unknown): number | null {
+    const num = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(num) ? num : null;
+}
+
+function roundSeconds(value: number): number {
+    return Math.round(value * 1000) / 1000;
+}
+
+function normalizeMockTimelineConfig(raw: unknown): MockTimelineConfig {
+    const fallback = createDefaultMockTimelineConfig();
+    if (!raw || typeof raw !== 'object') return fallback;
+
+    const rawObj = raw as { durationSec?: unknown; tracks?: unknown };
+    const parsedDuration = asFiniteNumber(rawObj.durationSec);
+    const durationSec = parsedDuration !== null && parsedDuration > 0 ? roundSeconds(parsedDuration) : fallback.durationSec;
+    const tracks = createEmptyTimelineTracks();
+
+    const rawTracks = rawObj.tracks;
+    if (!rawTracks || typeof rawTracks !== 'object') {
+        return { durationSec, tracks };
+    }
+
+    SENSOR_KEYS.forEach((key) => {
+        const maybeList = (rawTracks as Record<string, unknown>)[key];
+        if (!Array.isArray(maybeList)) return;
+        const parsed: MockSegment[] = [];
+        for (const item of maybeList) {
+            if (!item || typeof item !== 'object') continue;
+            const rawSeg = item as { startSec?: unknown; endSec?: unknown; value?: unknown };
+            const startSec = asFiniteNumber(rawSeg.startSec);
+            const endSec = asFiniteNumber(rawSeg.endSec);
+            const value = asFiniteNumber(rawSeg.value);
+            if (startSec === null || endSec === null || value === null) continue;
+            if (startSec < 0 || endSec > durationSec || startSec >= endSec) continue;
+            parsed.push({
+                startSec: roundSeconds(startSec),
+                endSec: roundSeconds(endSec),
+                value,
+            });
+        }
+        parsed.sort((a, b) => a.startSec - b.startSec);
+        const filtered: MockSegment[] = [];
+        parsed.forEach((segment) => {
+            const prev = filtered[filtered.length - 1];
+            if (!prev || segment.startSec >= prev.endSec) filtered.push(segment);
+        });
+        tracks[key] = filtered;
+    });
+
+    return { durationSec, tracks };
+}
+
+function setMockTimelineError(errorKey: string | null): void {
+    mockTimelineErrorKey = errorKey;
+    if (!mockTimelineError) return;
+    if (!errorKey) {
+        mockTimelineError.hidden = true;
+        mockTimelineError.textContent = '';
+        return;
+    }
+    mockTimelineError.hidden = false;
+    mockTimelineError.textContent = translateUi(errorKey);
+}
+
+function validateTrackSegments(segments: MockSegment[], durationSec: number): string | null {
+    const sorted = [...segments].sort((a, b) => a.startSec - b.startSec);
+    let prevEnd = -1;
+    for (const segment of sorted) {
+        if (!Number.isFinite(segment.startSec) || !Number.isFinite(segment.endSec) || !Number.isFinite(segment.value)) {
+            return 'ui.mock.timeline.error.numeric';
+        }
+        if (segment.startSec < 0 || segment.endSec > durationSec || segment.startSec >= segment.endSec) {
+            return 'ui.mock.timeline.error.range';
+        }
+        if (prevEnd >= 0 && segment.startSec < prevEnd) {
+            return 'ui.mock.timeline.error.overlap';
+        }
+        prevEnd = segment.endSec;
+    }
+    return null;
+}
+
+function validateTimelineConfig(config: MockTimelineConfig): string | null {
+    if (!Number.isFinite(config.durationSec) || config.durationSec <= 0) {
+        return 'ui.mock.timeline.error.duration';
+    }
+    for (const key of SENSOR_KEYS) {
+        const error = validateTrackSegments(config.tracks[key], config.durationSec);
+        if (error) return error;
+    }
+    return null;
+}
+
+function saveMockTimelineConfig() {
+    localStorage.setItem(MOCK_TIMELINE_STORAGE_KEY, JSON.stringify(mockTimelineConfig));
+}
+
+function saveMockSource() {
+    localStorage.setItem(MOCK_SOURCE_STORAGE_KEY, activeMockSource);
+}
+
+function setActiveMockSource(source: MockSource, persist = true) {
+    activeMockSource = source;
+    mockSourceButtons.forEach((button) => {
+        button.classList.toggle('active', button.dataset.mockSource === source);
+    });
+    mockSourcePanels.forEach((panel) => {
+        const isActive = panel.dataset.mockSourcePanel === source;
+        panel.hidden = !isActive;
+    });
+    if (source === 'timeline') {
+        requestAnimationFrame(() => renderMockGraphEditor());
+    } else {
+        graphDragPointIndex = null;
+    }
+    if (persist) saveMockSource();
+}
+
+function updateTimelineDuration(nextDuration: number): boolean {
+    if (!Number.isFinite(nextDuration) || nextDuration <= 0) {
+        setMockTimelineError('ui.mock.timeline.error.duration');
+        return false;
+    }
+    const durationSec = roundSeconds(nextDuration);
+    const nextConfig: MockTimelineConfig = {
+        durationSec,
+        tracks: createEmptyTimelineTracks(),
+    };
+    SENSOR_KEYS.forEach((key) => {
+        nextConfig.tracks[key] = mockTimelineConfig.tracks[key]
+            .filter((segment) => segment.startSec < durationSec)
+            .map((segment) => ({
+                startSec: roundSeconds(segment.startSec),
+                endSec: roundSeconds(Math.min(segment.endSec, durationSec)),
+                value: segment.value,
+            }))
+            .filter((segment) => segment.endSec > segment.startSec);
+    });
+    const error = validateTimelineConfig(nextConfig);
+    if (error) {
+        setMockTimelineError(error);
+        return false;
+    }
+    mockTimelineConfig = nextConfig;
+    setMockTimelineError(null);
+    saveMockTimelineConfig();
+    renderMockEditors();
+    return true;
+}
+
+function updateTrackSegments(sensorKey: SensorKey, nextSegments: MockSegment[]): boolean {
+    const cleaned = nextSegments.map((segment) => ({
+        startSec: roundSeconds(segment.startSec),
+        endSec: roundSeconds(segment.endSec),
+        value: segment.value,
+    }));
+    const error = validateTrackSegments(cleaned, mockTimelineConfig.durationSec);
+    if (error) {
+        setMockTimelineError(error);
+        return false;
+    }
+    mockTimelineConfig.tracks[sensorKey] = cleaned.sort((a, b) => a.startSec - b.startSec);
+    setMockTimelineError(null);
+    saveMockTimelineConfig();
+    renderMockEditors();
+    return true;
+}
+
+function addSegment(sensorKey: SensorKey) {
+    const segments = [...mockTimelineConfig.tracks[sensorKey]].sort((a, b) => a.startSec - b.startSec);
+    const duration = mockTimelineConfig.durationSec;
+    let start = 0;
+    for (const segment of segments) {
+        if (segment.startSec - start >= 1) break;
+        start = segment.endSec;
+    }
+    const end = Math.min(duration, roundSeconds(start + 1));
+    if (end <= start) {
+        setMockTimelineError('ui.mock.timeline.error.noRoom');
+        return;
+    }
+    const nextSegments = [...segments, { startSec: roundSeconds(start), endSec: end, value: 0 }];
+    updateTrackSegments(sensorKey, nextSegments);
+}
+
+function updateSegmentField(sensorKey: SensorKey, index: number, field: keyof MockSegment, value: number): boolean {
+    const nextSegments = mockTimelineConfig.tracks[sensorKey].map((segment) => ({ ...segment }));
+    const target = nextSegments[index];
+    if (!target) return false;
+    target[field] = value;
+    return updateTrackSegments(sensorKey, nextSegments);
+}
+
+function deleteSegment(sensorKey: SensorKey, index: number): void {
+    const nextSegments = mockTimelineConfig.tracks[sensorKey].filter((_segment, segmentIndex) => segmentIndex !== index);
+    updateTrackSegments(sensorKey, nextSegments);
+}
+
+function renderMockTimelineTracks() {
+    if (!mockTimelineTracksContainer) return;
+    mockTimelineTracksContainer.innerHTML = '';
+    if (mockTimelineDurationInput) mockTimelineDurationInput.value = String(mockTimelineConfig.durationSec);
+
+    SENSOR_KEYS.forEach((sensorKey) => {
+        const row = document.createElement('section');
+        row.className = 'mock-timeline-track';
+
+        const header = document.createElement('div');
+        header.className = 'mock-timeline-track-header';
+
+        const title = document.createElement('h4');
+        title.className = 'mock-timeline-track-title';
+        title.textContent = translateUi(SENSOR_LABEL_KEYS[sensorKey]);
+
+        const addButton = document.createElement('button');
+        addButton.type = 'button';
+        addButton.className = 'mock-timeline-add-btn';
+        addButton.textContent = translateUi('ui.mock.timeline.addSegment');
+        addButton.addEventListener('click', () => addSegment(sensorKey));
+
+        header.appendChild(title);
+        header.appendChild(addButton);
+        row.appendChild(header);
+
+        const axis = document.createElement('div');
+        axis.className = 'mock-timeline-track-axis';
+        const segments = [...mockTimelineConfig.tracks[sensorKey]].sort((a, b) => a.startSec - b.startSec);
+        segments.forEach((segment) => {
+            const bar = document.createElement('div');
+            bar.className = 'mock-timeline-segment-bar';
+            const left = (segment.startSec / mockTimelineConfig.durationSec) * 100;
+            const width = ((segment.endSec - segment.startSec) / mockTimelineConfig.durationSec) * 100;
+            bar.style.left = `${Math.max(0, left)}%`;
+            bar.style.width = `${Math.max(1.5, width)}%`;
+            bar.textContent = String(segment.value);
+            bar.title = `${segment.startSec}-${segment.endSec}s = ${segment.value}`;
+            axis.appendChild(bar);
+        });
+        row.appendChild(axis);
+
+        const list = document.createElement('div');
+        list.className = 'mock-timeline-segment-list';
+        if (segments.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'mock-timeline-empty';
+            empty.textContent = translateUi('ui.mock.timeline.noSegments');
+            list.appendChild(empty);
+        }
+
+        segments.forEach((segment, index) => {
+            const item = document.createElement('div');
+            item.className = 'mock-timeline-segment-item';
+
+            const startInput = document.createElement('input');
+            startInput.type = 'number';
+            startInput.step = '0.1';
+            startInput.min = '0';
+            startInput.max = String(mockTimelineConfig.durationSec);
+            startInput.value = String(segment.startSec);
+            startInput.addEventListener('change', () => {
+                const value = asFiniteNumber(startInput.value);
+                if (value === null) {
+                    setMockTimelineError('ui.mock.timeline.error.numeric');
+                    renderMockEditors();
+                    return;
+                }
+                if (!updateSegmentField(sensorKey, index, 'startSec', value)) {
+                    renderMockEditors();
+                }
+            });
+
+            const endInput = document.createElement('input');
+            endInput.type = 'number';
+            endInput.step = '0.1';
+            endInput.min = '0';
+            endInput.max = String(mockTimelineConfig.durationSec);
+            endInput.value = String(segment.endSec);
+            endInput.addEventListener('change', () => {
+                const value = asFiniteNumber(endInput.value);
+                if (value === null) {
+                    setMockTimelineError('ui.mock.timeline.error.numeric');
+                    renderMockEditors();
+                    return;
+                }
+                if (!updateSegmentField(sensorKey, index, 'endSec', value)) {
+                    renderMockEditors();
+                }
+            });
+
+            const valueInput = document.createElement('input');
+            valueInput.type = 'number';
+            valueInput.step = '0.1';
+            valueInput.value = String(segment.value);
+            valueInput.addEventListener('change', () => {
+                const value = asFiniteNumber(valueInput.value);
+                if (value === null) {
+                    setMockTimelineError('ui.mock.timeline.error.numeric');
+                    renderMockEditors();
+                    return;
+                }
+                if (!updateSegmentField(sensorKey, index, 'value', value)) {
+                    renderMockEditors();
+                }
+            });
+
+            const deleteButton = document.createElement('button');
+            deleteButton.type = 'button';
+            deleteButton.className = 'mock-timeline-delete-btn';
+            deleteButton.textContent = translateUi('ui.mock.timeline.deleteSegment');
+            deleteButton.addEventListener('click', () => deleteSegment(sensorKey, index));
+
+            item.append(startInput, endInput, valueInput, deleteButton);
+            list.appendChild(item);
+        });
+
+        row.appendChild(list);
+        mockTimelineTracksContainer.appendChild(row);
+    });
+}
+
+function populateMockGraphSensorOptions() {
+    if (!mockGraphSensorSelect) return;
+    mockGraphSensorSelect.innerHTML = '';
+    SENSOR_KEYS.forEach((sensorKey) => {
+        const option = document.createElement('option');
+        option.value = sensorKey;
+        option.textContent = translateUi(SENSOR_LABEL_KEYS[sensorKey]);
+        mockGraphSensorSelect.appendChild(option);
+    });
+    mockGraphSensorSelect.value = activeGraphSensor;
+}
+
+type GraphCanvasMetrics = {
+    width: number;
+    height: number;
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+    plotWidth: number;
+    plotHeight: number;
+    range: SensorRange;
+};
+
+function getGraphCanvasMetrics(): GraphCanvasMetrics | null {
+    if (!mockGraphCanvas) return null;
+    const rect = mockGraphCanvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const cssWidth = Math.max(320, Math.floor(rect.width || mockGraphCanvas.clientWidth || 640));
+    const cssHeight = Math.max(180, Math.floor(rect.height || mockGraphCanvas.clientHeight || 240));
+    const pixelWidth = Math.floor(cssWidth * dpr);
+    const pixelHeight = Math.floor(cssHeight * dpr);
+    if (mockGraphCanvas.width !== pixelWidth || mockGraphCanvas.height !== pixelHeight) {
+        mockGraphCanvas.width = pixelWidth;
+        mockGraphCanvas.height = pixelHeight;
+    }
+    const left = GRAPH_AXIS_PADDING_LEFT * dpr;
+    const right = GRAPH_AXIS_PADDING_RIGHT * dpr;
+    const top = GRAPH_AXIS_PADDING_TOP * dpr;
+    const bottom = GRAPH_AXIS_PADDING_BOTTOM * dpr;
+    return {
+        width: pixelWidth,
+        height: pixelHeight,
+        left,
+        right,
+        top,
+        bottom,
+        plotWidth: Math.max(20, pixelWidth - left - right),
+        plotHeight: Math.max(20, pixelHeight - top - bottom),
+        range: getSensorRange(activeGraphSensor),
+    };
+}
+
+function graphTimeToX(timeSec: number, metrics: GraphCanvasMetrics): number {
+    if (mockTimelineConfig.durationSec <= 0) return metrics.left;
+    const ratio = Math.max(0, Math.min(1, timeSec / mockTimelineConfig.durationSec));
+    return metrics.left + ratio * metrics.plotWidth;
+}
+
+function graphValueToY(value: number, metrics: GraphCanvasMetrics): number {
+    const span = metrics.range.max - metrics.range.min || 1;
+    const clamped = Math.max(metrics.range.min, Math.min(metrics.range.max, value));
+    const ratio = (clamped - metrics.range.min) / span;
+    return metrics.top + (1 - ratio) * metrics.plotHeight;
+}
+
+function graphXToTime(x: number, metrics: GraphCanvasMetrics): number {
+    const ratio = Math.max(0, Math.min(1, (x - metrics.left) / metrics.plotWidth));
+    return ratio * mockTimelineConfig.durationSec;
+}
+
+function graphYToValue(y: number, metrics: GraphCanvasMetrics): number {
+    const ratio = Math.max(0, Math.min(1, 1 - (y - metrics.top) / metrics.plotHeight));
+    return metrics.range.min + ratio * (metrics.range.max - metrics.range.min);
+}
+
+function getCanvasEventPosition(event: MouseEvent, canvas: HTMLCanvasElement): { x: number; y: number } {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+        x: (event.clientX - rect.left) * scaleX,
+        y: (event.clientY - rect.top) * scaleY,
+    };
+}
+
+function findGraphPointIndexAt(x: number, y: number, points: GraphPoint[], metrics: GraphCanvasMetrics): number | null {
+    const radius = GRAPH_POINT_RADIUS * (window.devicePixelRatio || 1) + 4;
+    for (let i = points.length - 1; i >= 0; i--) {
+        const px = graphTimeToX(points[i].tSec, metrics);
+        const py = graphValueToY(points[i].value, metrics);
+        const dx = px - x;
+        const dy = py - y;
+        if (dx * dx + dy * dy <= radius * radius) return i;
+    }
+    return null;
+}
+
+function renderMockGraphEditor() {
+    if (!mockGraphCanvas) return;
+    const metrics = getGraphCanvasMetrics();
+    if (!metrics) return;
+    const ctx = mockGraphCanvas.getContext('2d');
+    if (!ctx) return;
+
+    const points = segmentsToGraphPoints(activeGraphSensor);
+    if (mockDeletePointBtn) {
+        mockDeletePointBtn.disabled = selectedGraphPointIndex === null || !points[selectedGraphPointIndex];
+    }
+
+    ctx.clearRect(0, 0, metrics.width, metrics.height);
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, metrics.width, metrics.height);
+
+    ctx.strokeStyle = 'rgba(148,163,184,0.28)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+        const x = metrics.left + (i / 4) * metrics.plotWidth;
+        ctx.beginPath();
+        ctx.moveTo(x, metrics.top);
+        ctx.lineTo(x, metrics.top + metrics.plotHeight);
+        ctx.stroke();
+    }
+    for (let i = 0; i <= 4; i++) {
+        const y = metrics.top + (i / 4) * metrics.plotHeight;
+        ctx.beginPath();
+        ctx.moveTo(metrics.left, y);
+        ctx.lineTo(metrics.left + metrics.plotWidth, y);
+        ctx.stroke();
+    }
+
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(metrics.left, metrics.top + metrics.plotHeight);
+    ctx.lineTo(metrics.left + metrics.plotWidth, metrics.top + metrics.plotHeight);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(metrics.left, metrics.top);
+    ctx.lineTo(metrics.left, metrics.top + metrics.plotHeight);
+    ctx.stroke();
+
+    const xLabelY = metrics.top + metrics.plotHeight + 16 * (window.devicePixelRatio || 1);
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = `${11 * (window.devicePixelRatio || 1)}px sans-serif`;
+    ctx.textAlign = 'center';
+    for (let i = 0; i <= 4; i++) {
+        const timeVal = roundSeconds((i / 4) * mockTimelineConfig.durationSec);
+        const x = metrics.left + (i / 4) * metrics.plotWidth;
+        ctx.fillText(`${timeVal}s`, x, xLabelY);
+    }
+    ctx.textAlign = 'right';
+    ctx.fillText(String(roundSeconds(metrics.range.max)), metrics.left - 6 * (window.devicePixelRatio || 1), metrics.top + 10 * (window.devicePixelRatio || 1));
+    ctx.fillText(String(roundSeconds(metrics.range.min)), metrics.left - 6 * (window.devicePixelRatio || 1), metrics.top + metrics.plotHeight);
+
+    if (points.length > 0) {
+        ctx.strokeStyle = '#22d3ee';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        const first = points[0];
+        ctx.moveTo(graphTimeToX(first.tSec, metrics), graphValueToY(first.value, metrics));
+        for (let i = 1; i < points.length; i++) {
+            const prev = points[i - 1];
+            const next = points[i];
+            const nextX = graphTimeToX(next.tSec, metrics);
+            ctx.lineTo(nextX, graphValueToY(prev.value, metrics));
+            ctx.lineTo(nextX, graphValueToY(next.value, metrics));
+        }
+        const last = points[points.length - 1];
+        const endX = graphTimeToX(mockTimelineConfig.durationSec, metrics);
+        ctx.lineTo(endX, graphValueToY(last.value, metrics));
+        ctx.stroke();
+    }
+
+    points.forEach((point, index) => {
+        const x = graphTimeToX(point.tSec, metrics);
+        const y = graphValueToY(point.value, metrics);
+        ctx.beginPath();
+        ctx.arc(x, y, GRAPH_POINT_RADIUS * (window.devicePixelRatio || 1), 0, Math.PI * 2);
+        const isSelected = index === selectedGraphPointIndex;
+        ctx.fillStyle = isSelected ? '#fbbf24' : '#38bdf8';
+        ctx.fill();
+        ctx.lineWidth = isSelected ? 2 : 1;
+        ctx.strokeStyle = isSelected ? '#f59e0b' : '#0f172a';
+        ctx.stroke();
+    });
+}
+
+function renderMockEditors() {
+    renderMockTimelineTracks();
+    populateMockGraphSensorOptions();
+    renderMockGraphEditor();
+}
+
+function initializeMockControls() {
+    const savedSource = localStorage.getItem(MOCK_SOURCE_STORAGE_KEY);
+    if (savedSource === 'text' || savedSource === 'timeline') {
+        activeMockSource = savedSource;
+    }
+
+    const rawTimeline = localStorage.getItem(MOCK_TIMELINE_STORAGE_KEY);
+    if (rawTimeline) {
+        try {
+            mockTimelineConfig = normalizeMockTimelineConfig(JSON.parse(rawTimeline));
+        } catch {
+            mockTimelineConfig = createDefaultMockTimelineConfig();
+        }
+    }
+
+    loadMockGraphUiPrefs();
+    setActiveMockSource(activeMockSource, false);
+    setActiveGraphSensor(activeGraphSensor, false);
+    setActiveMockEditorMode(activeMockEditorMode, false);
+    renderMockEditors();
+    setSelectedGraphPoint(null);
+    setMockTimelineError(null);
+}
+
+mockSourceButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+        const source = button.dataset.mockSource;
+        if (source !== 'text' && source !== 'timeline') return;
+        setActiveMockSource(source);
+    });
+});
+
+mockTimelineDurationInput?.addEventListener('change', () => {
+    const nextDuration = asFiniteNumber(mockTimelineDurationInput.value);
+    if (nextDuration === null) {
+        setMockTimelineError('ui.mock.timeline.error.numeric');
+        renderMockEditors();
+        return;
+    }
+    if (!updateTimelineDuration(nextDuration)) {
+        renderMockEditors();
+    }
+});
+
+mockOpenTimelineBtn?.addEventListener('click', () => {
+    setActiveMockEditorMode('timeline');
+});
+
+mockBackGraphBtn?.addEventListener('click', () => {
+    setActiveMockEditorMode('graph');
+    renderMockGraphEditor();
+});
+
+mockGraphSensorSelect?.addEventListener('change', () => {
+    const value = mockGraphSensorSelect.value;
+    if (!isSensorKey(value)) return;
+    setActiveGraphSensor(value);
+    renderMockGraphEditor();
+});
+
+mockGraphYMinInput?.addEventListener('change', () => {
+    const nextMin = asFiniteNumber(mockGraphYMinInput.value);
+    const current = getSensorRange(activeGraphSensor);
+    if (nextMin === null || nextMin >= current.max) {
+        setMockTimelineError('ui.mock.timeline.error.range');
+        setActiveGraphSensor(activeGraphSensor, false);
+        renderMockGraphEditor();
+        return;
+    }
+    graphRangeOverrides[activeGraphSensor] = { min: nextMin, max: current.max };
+    setMockTimelineError(null);
+    saveMockGraphUiPrefs();
+    renderMockEditors();
+});
+
+mockGraphYMaxInput?.addEventListener('change', () => {
+    const nextMax = asFiniteNumber(mockGraphYMaxInput.value);
+    const current = getSensorRange(activeGraphSensor);
+    if (nextMax === null || nextMax <= current.min) {
+        setMockTimelineError('ui.mock.timeline.error.range');
+        setActiveGraphSensor(activeGraphSensor, false);
+        renderMockGraphEditor();
+        return;
+    }
+    graphRangeOverrides[activeGraphSensor] = { min: current.min, max: nextMax };
+    setMockTimelineError(null);
+    saveMockGraphUiPrefs();
+    renderMockEditors();
+});
+
+mockDeletePointBtn?.addEventListener('click', () => {
+    deleteSelectedGraphPoint();
+});
+
+mockGraphCanvas?.addEventListener('mousedown', (event: MouseEvent) => {
+    const metrics = getGraphCanvasMetrics();
+    if (!metrics || !mockGraphCanvas) return;
+    const points = segmentsToGraphPoints(activeGraphSensor);
+    const pos = getCanvasEventPosition(event, mockGraphCanvas);
+    const hitIndex = findGraphPointIndexAt(pos.x, pos.y, points, metrics);
+    graphDidDrag = false;
+    if (hitIndex !== null) {
+        graphDragPointIndex = hitIndex;
+        setSelectedGraphPoint(hitIndex);
+        renderMockGraphEditor();
+    } else {
+        graphDragPointIndex = null;
+        setSelectedGraphPoint(null);
+        renderMockGraphEditor();
+    }
+});
+
+window.addEventListener('mousemove', (event: MouseEvent) => {
+    if (graphDragPointIndex === null || !mockGraphCanvas) return;
+    const metrics = getGraphCanvasMetrics();
+    if (!metrics) return;
+    const pos = getCanvasEventPosition(event, mockGraphCanvas);
+    const tSec = snapTimeSec(graphXToTime(pos.x, metrics), mockTimelineConfig.durationSec);
+    const value = clampToSensorRange(activeGraphSensor, graphYToValue(pos.y, metrics));
+    if (updateGraphPoint(activeGraphSensor, graphDragPointIndex, { tSec, value })) {
+        const points = segmentsToGraphPoints(activeGraphSensor);
+        const nextIndex = points.findIndex((point) => point.tSec === tSec);
+        graphDragPointIndex = nextIndex >= 0 ? nextIndex : graphDragPointIndex;
+        graphDidDrag = true;
+    }
+});
+
+window.addEventListener('mouseup', () => {
+    graphDragPointIndex = null;
+});
+
+mockGraphCanvas?.addEventListener('click', (event: MouseEvent) => {
+    if (!mockGraphCanvas) return;
+    if (graphDidDrag) {
+        graphDidDrag = false;
+        return;
+    }
+    const metrics = getGraphCanvasMetrics();
+    if (!metrics) return;
+    const points = segmentsToGraphPoints(activeGraphSensor);
+    const pos = getCanvasEventPosition(event, mockGraphCanvas);
+    const hitIndex = findGraphPointIndexAt(pos.x, pos.y, points, metrics);
+    if (hitIndex !== null) {
+        setSelectedGraphPoint(hitIndex);
+        renderMockGraphEditor();
+        return;
+    }
+    const tSec = snapTimeSec(graphXToTime(pos.x, metrics), mockTimelineConfig.durationSec);
+    const value = clampToSensorRange(activeGraphSensor, graphYToValue(pos.y, metrics));
+    if (addOrReplaceGraphPoint(activeGraphSensor, { tSec, value })) {
+        setMockTimelineError(null);
+    }
+});
+
+window.addEventListener('resize', () => {
+    renderMockGraphEditor();
+});
+
+initializeMockControls();
+
 type OutputTabName = 'compiled' | 'serial' | 'plotter';
 let activeOutputTab: OutputTabName = 'compiled';
 const outputClearBtn = document.getElementById('output-clear-btn') as HTMLButtonElement | null;
+type SerialPipelineMarker = 'execute_clicked' | 'callback_received' | 'dom_rendered' | 'plotter_fed';
+type SerialDataSource = 'callback' | 'internal';
+interface SerialPipelineRunState {
+    runId: number;
+    executeClickedAt: number;
+    callbackReceived: boolean;
+    domRendered: boolean;
+    plotterFed: boolean;
+    warningEmitted: boolean;
+}
+const SERIAL_PIPELINE_DEBUG = false;
+const SERIAL_PIPELINE_FALLBACK_DELAY_MS = 1500;
+const SERIAL_MAX_BUFFER_CHARS = 1_000_000;
+const SERIAL_MAX_PENDING_CHARS = 200_000;
+const SERIAL_TRUNCATED_NOTICE = '[Serial output truncated to latest data]\n';
+let serialPipelineRunSeq = 0;
+let serialPipelineState: SerialPipelineRunState | null = null;
+let serialBufferedText = '';
+let serialPendingChunks: string[] = [];
+let serialPendingChars = 0;
 
 function updateOutputClearButton(tabName: OutputTabName) {
     if (!outputClearBtn) return;
@@ -767,6 +1776,7 @@ function switchOutputTab(tabName: OutputTabName) {
         setTimeout(() => resizePlotterCanvas(), 0);
     }
 
+    flushSerialBufferToDom(tabName === 'serial');
     updateOutputClearButton(tabName);
 }
 
@@ -1011,14 +2021,91 @@ function autoActivateSensorsFromCode(code: string) {
 }
 
 // Serial Monitor
-function appendSerial(data: string) {
+function debugSerialPipeline(message: string, extra?: unknown) {
+    if (!SERIAL_PIPELINE_DEBUG) return;
+    if (extra !== undefined) {
+        console.log(`[SerialPipeline] ${message}`, extra);
+    } else {
+        console.log(`[SerialPipeline] ${message}`);
+    }
+}
+
+function beginSerialPipelineDiagnostics(): number {
+    serialPipelineRunSeq += 1;
+    serialPipelineState = {
+        runId: serialPipelineRunSeq,
+        executeClickedAt: Date.now(),
+        callbackReceived: false,
+        domRendered: false,
+        plotterFed: false,
+        warningEmitted: false,
+    };
+    debugSerialPipeline('Run started', serialPipelineState);
+    return serialPipelineState.runId;
+}
+
+function markSerialPipeline(marker: SerialPipelineMarker) {
+    if (!serialPipelineState) return;
+    if (marker === 'callback_received') serialPipelineState.callbackReceived = true;
+    if (marker === 'dom_rendered') serialPipelineState.domRendered = true;
+    if (marker === 'plotter_fed') serialPipelineState.plotterFed = true;
+}
+
+function flushSerialBufferToDom(forceFullSync = false): boolean {
     const output = document.getElementById('serial-output');
-    if (!output) return;
-    output.textContent += data;
+    if (!output) {
+        debugSerialPipeline('Serial DOM not available yet');
+        return false;
+    }
+
+    if (forceFullSync) {
+        if ((output.textContent ?? '') !== serialBufferedText) {
+            output.textContent = serialBufferedText;
+        }
+        serialPendingChunks = [];
+        serialPendingChars = 0;
+    } else if (serialPendingChunks.length > 0) {
+        output.textContent = (output.textContent ?? '') + serialPendingChunks.join('');
+        serialPendingChunks = [];
+        serialPendingChars = 0;
+    }
+
     output.scrollTop = output.scrollHeight;
+    markSerialPipeline('dom_rendered');
+    return true;
+}
+
+function trimSerialBufferIfNeeded(): boolean {
+    if (serialBufferedText.length <= SERIAL_MAX_BUFFER_CHARS) return false;
+    const tailLength = Math.max(0, SERIAL_MAX_BUFFER_CHARS - SERIAL_TRUNCATED_NOTICE.length);
+    const tail = serialBufferedText.slice(-tailLength);
+    serialBufferedText = SERIAL_TRUNCATED_NOTICE + tail;
+    serialPendingChunks = [serialBufferedText];
+    serialPendingChars = serialBufferedText.length;
+    return true;
+}
+
+function appendSerial(data: string) {
+    if (!data) return;
+    serialBufferedText += data;
+    const bufferTrimmed = trimSerialBufferIfNeeded();
+    if (!bufferTrimmed) {
+        serialPendingChunks.push(data);
+        serialPendingChars += data.length;
+        if (serialPendingChars > SERIAL_MAX_PENDING_CHARS) {
+            const pendingTailLength = Math.min(SERIAL_MAX_PENDING_CHARS, serialBufferedText.length);
+            const pendingTail = serialBufferedText.slice(-pendingTailLength);
+            serialPendingChunks = [pendingTail];
+            serialPendingChars = pendingTail.length;
+        }
+    }
+    flushSerialBufferToDom(bufferTrimmed);
 }
 
 function clearSerial() {
+    serialBufferedText = '';
+    serialPendingChunks = [];
+    serialPendingChars = 0;
     const output = document.getElementById('serial-output');
     if (output) output.textContent = '';
 }
@@ -1116,15 +2203,20 @@ function clearPlotter() {
     drawPlotter();
 }
 
-function feedPlotter(data: string) {
+function feedPlotter(data: string): boolean {
+    let fed = false;
     serialLineBuffer += data;
     let nl: number;
     while ((nl = serialLineBuffer.indexOf('\n')) !== -1) {
         const line = serialLineBuffer.slice(0, nl);
         serialLineBuffer = serialLineBuffer.slice(nl + 1);
         const parsed = parsePlotterLine(line);
-        if (parsed) pushPlotterData(parsed);
+        if (parsed) {
+            pushPlotterData(parsed);
+            fed = true;
+        }
     }
+    return fed;
 }
 
 function resizePlotterCanvas() {
@@ -1137,7 +2229,32 @@ function resizePlotterCanvas() {
 window.addEventListener('resize', resizePlotterCanvas);
 setTimeout(resizePlotterCanvas, 100);
 
-hackCable.serialDataCallback = (data: string) => { appendSerial(data); feedPlotter(data); };
+function routeIncomingSerialData(data: string, source: SerialDataSource = 'callback') {
+    if (!data) return;
+    markSerialPipeline('callback_received');
+    debugSerialPipeline(`Serial data via ${source}`);
+    appendSerial(data);
+    if (feedPlotter(data)) {
+        markSerialPipeline('plotter_fed');
+    }
+}
+
+function scheduleSerialPipelineFallbackWarning(runId: number) {
+    setTimeout(() => {
+        if (!serialPipelineState || serialPipelineState.runId !== runId) return;
+        if (serialPipelineState.callbackReceived || serialPipelineState.warningEmitted) return;
+        serialPipelineState.warningEmitted = true;
+        const msg = '[Serial Pipeline Warning] Execute started but no serial callback received. Check runtime callback wiring.\n';
+        routeIncomingSerialData(msg, 'internal');
+        debugSerialPipeline('Fallback warning emitted', serialPipelineState);
+    }, SERIAL_PIPELINE_FALLBACK_DELAY_MS);
+}
+
+function registerSerialDataCallback() {
+    hackCable.serialDataCallback = (data: string) => {
+        routeIncomingSerialData(data, 'callback');
+    };
+}
 
 const simHttpPathInput = document.getElementById('sim-http-path') as HTMLInputElement | null;
 const simHttpSendBtn = document.getElementById('sim-http-send') as HTMLButtonElement | null;
@@ -1223,7 +2340,7 @@ simHttpPathInput?.addEventListener('keydown', (event) => {
     return runSimulatedHttpGet(path);
 };
 (window as any).hackcable_serial_begin = (_baud: number) => {};
-(window as any).hackcable_serial_data = (text: string) => { appendSerial(text); feedPlotter(text); };
+(window as any).hackcable_serial_data = (text: string) => { routeIncomingSerialData(text, 'internal'); };
 // Sensor mock input parser
 function parseMockValues(): Record<string, number> {
     const el = document.getElementById('sensor-mock-input') as HTMLTextAreaElement | null;
@@ -1236,9 +2353,37 @@ function parseMockValues(): Record<string, number> {
     return result;
 }
 
+function isSensorKey(key: string): key is SensorKey {
+    return SENSOR_KEY_SET.has(key as SensorKey);
+}
+
+function getMockAtTime(
+    key: SensorKey,
+    nowMs: number,
+    config: MockTimelineConfig,
+    runStartMs: number,
+): number | undefined {
+    if (!Number.isFinite(nowMs) || !Number.isFinite(runStartMs)) return undefined;
+    if (!Number.isFinite(config.durationSec) || config.durationSec <= 0) return undefined;
+
+    const elapsedSec = Math.max(0, (nowMs - runStartMs) / 1000);
+    const cycleSec = ((elapsedSec % config.durationSec) + config.durationSec) % config.durationSec;
+    const segments = config.tracks[key] || [];
+    for (const segment of segments) {
+        if (cycleSec >= segment.startSec && cycleSec < segment.endSec) {
+            return segment.value;
+        }
+    }
+    return undefined;
+}
+
 function getMock(key: string, defaultVal: number): number {
-    const v = parseMockValues()[key];
-    return v !== undefined ? v : defaultVal;
+    if (activeMockSource === 'timeline' && isSensorKey(key)) {
+        const timedValue = getMockAtTime(key, Date.now(), mockTimelineConfig, mockRunStartMs);
+        return timedValue !== undefined ? timedValue : defaultVal;
+    }
+    const value = parseMockValues()[key];
+    return value !== undefined ? value : defaultVal;
 }
 
 // Sensor data bridges (called from Emscripten WASM sensor mocks)
@@ -1347,10 +2492,82 @@ initializeSidebarToggle();
 
 // Initialize control bar toggle functionality
 let controlBarElement: HTMLElement | null = null;
+let controlBarResizeHandle: HTMLDivElement | null = null;
+let controlBarWidth = 340;
+const CONTROLBAR_WIDTH_STORAGE_KEY = 'hackCable-controlbar-width';
+const CONTROLBAR_DEFAULT_WIDTH = 340;
+const CONTROLBAR_MIN_WIDTH = 220;
+const CONTROLBAR_MAX_WIDTH = 720;
+
+function getControlBarWidthBounds() {
+    const viewportLimitedMax = Math.floor(window.innerWidth * 0.85);
+    const maxWidth = Math.max(180, Math.min(CONTROLBAR_MAX_WIDTH, viewportLimitedMax));
+    const minWidth = Math.min(CONTROLBAR_MIN_WIDTH, maxWidth);
+    return { minWidth, maxWidth };
+}
+
+function clampControlBarWidth(nextWidth: number) {
+    const { minWidth, maxWidth } = getControlBarWidthBounds();
+    const normalized = Number.isFinite(nextWidth) ? Math.round(nextWidth) : CONTROLBAR_DEFAULT_WIDTH;
+    return Math.max(minWidth, Math.min(normalized, maxWidth));
+}
+
+function applyControlBarWidth(nextWidth: number, persist: boolean) {
+    controlBarWidth = clampControlBarWidth(nextWidth);
+    document.body.style.setProperty('--controlbar-width', `${controlBarWidth}px`);
+    if (persist) {
+        localStorage.setItem(CONTROLBAR_WIDTH_STORAGE_KEY, `${controlBarWidth}`);
+    }
+}
+
+function loadSavedControlBarWidth() {
+    const rawValue = localStorage.getItem(CONTROLBAR_WIDTH_STORAGE_KEY);
+    if (!rawValue) return CONTROLBAR_DEFAULT_WIDTH;
+    const parsedWidth = Number(rawValue);
+    if (!Number.isFinite(parsedWidth) || parsedWidth <= 0) return CONTROLBAR_DEFAULT_WIDTH;
+    return parsedWidth;
+}
+
+function initializeControlBarResize() {
+    if (!controlBarResizeHandle) return;
+
+    controlBarResizeHandle.addEventListener('mousedown', (event: MouseEvent) => {
+        if (!controlBarElement || controlBarElement.classList.contains('hidden')) return;
+
+        event.preventDefault();
+        const startX = event.clientX;
+        const startWidth = controlBarWidth;
+        const previousCursor = document.body.style.cursor;
+        const previousUserSelect = document.body.style.userSelect;
+        document.body.classList.add('controlbar-resizing');
+        document.body.style.cursor = 'ew-resize';
+        document.body.style.userSelect = 'none';
+
+        const onMouseMove = (moveEvent: MouseEvent) => {
+            const deltaX = moveEvent.clientX - startX;
+            applyControlBarWidth(startWidth - deltaX, false);
+        };
+
+        const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            document.body.classList.remove('controlbar-resizing');
+            document.body.style.cursor = previousCursor;
+            document.body.style.userSelect = previousUserSelect;
+            applyControlBarWidth(controlBarWidth, true);
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    });
+}
 
 function setControlBarHidden(hidden: boolean) {
     if (!controlBarElement) return;
 
+    if (!hidden) {
+        applyControlBarWidth(controlBarWidth, false);
+    }
     controlBarElement.classList.toggle('hidden', hidden);
     document.body.classList.toggle('controlbar-hidden', hidden);
     localStorage.setItem('hackCable-controlbar-hidden', hidden.toString());
@@ -1372,6 +2589,11 @@ function initializeControlBarToggle() {
 
     if (!controlBar) return;
     controlBarElement = controlBar;
+    controlBarResizeHandle = controlBar.querySelector('.controlbar-resize-handle') as HTMLDivElement | null;
+    controlBarWidth = loadSavedControlBarWidth();
+    applyControlBarWidth(controlBarWidth, false);
+    initializeControlBarResize();
+    window.addEventListener('resize', () => applyControlBarWidth(controlBarWidth, false));
 
     // Default state is always visible.
     setControlBarHidden(false);
@@ -1431,6 +2653,8 @@ function updateUITranslations() {
         }
     });
     syncRunButtonA11yLabels();
+    renderMockEditors();
+    setMockTimelineError(mockTimelineErrorKey);
 }
 
 // Function to show status messages
@@ -3119,6 +4343,18 @@ function isNewBfarmExample(exampleKey: string): boolean {
     return exampleKey.startsWith('new_bfarm_');
 }
 
+function normalizeBfarmMacroCode(rawCode: string): string {
+    if (!rawCode || !hasBfarmMacroMarkers(rawCode)) {
+        return rawCode;
+    }
+    try {
+        return convertBfarmMacroToCpp(rawCode);
+    } catch (error) {
+        console.warn('Failed to normalize BFarm macro code:', error);
+        return rawCode;
+    }
+}
+
 function preprocessExampleCode(exampleKey: string, rawCode: string): string {
     if (!isNewBfarmExample(exampleKey)) {
         return rawCode;
@@ -3128,7 +4364,7 @@ function preprocessExampleCode(exampleKey: string, rawCode: string): string {
         return rawCode;
     }
 
-    return convertBfarmMacroToCpp(rawCode);
+    return normalizeBfarmMacroCode(rawCode);
 }
 
 function isBrokenCachedAwdCode(code: string): boolean {
@@ -3144,6 +4380,39 @@ function isBrokenCachedAwdCode(code: string): boolean {
     return awdStart < pubLine && pubLine < setupStart;
 }
 
+function detectNewBfarmExampleFromCode(code: string): string | null {
+    if (!code) return null;
+    const checks: Array<{ key: string; patterns: RegExp[] }> = [
+        {
+            key: 'new_bfarm_smart_greenhouse',
+            patterns: [/connectGreenhouseWifi/, /ghHumidity/, /String\("humidity="\)/],
+        },
+        {
+            key: 'new_bfarm_awd_automation',
+            patterns: [/awdCycle/, /@msg\/awd\/depth/, /pub_topic\s*\(/],
+        },
+        {
+            key: 'new_bfarm_fertigation_lab',
+            patterns: [/fertigationStep/, /PHthresh_min/, /ECthresh_min/],
+        },
+        {
+            key: 'new_bfarm_weather_station_sim',
+            patterns: [/weatherRs485Ok/, /@msg\/weather\/temp/, /Weather_HTCo2PLx/],
+        },
+        {
+            key: 'new_bfarm_hybrid_connectivity',
+            patterns: [/Hybrid Connectivity Testbed/, /SerialBT\.begin\("HybridTestbed"\)/, /latestLine/],
+        },
+    ];
+
+    for (const entry of checks) {
+        if (entry.patterns.every((p) => p.test(code))) {
+            return entry.key;
+        }
+    }
+    return null;
+}
+
 function repairCachedNewBfarmCodeIfNeeded(): void {
     const cachedCode = localStorage.getItem('hackCable-webExample-inputCode');
     if (!cachedCode || !isBrokenCachedAwdCode(cachedCode)) return;
@@ -3154,6 +4423,7 @@ function repairCachedNewBfarmCodeIfNeeded(): void {
     );
 
     localStorage.setItem('hackCable-webExample-inputCode', fixedCode);
+    localStorage.setItem(EXAMPLE_SELECTION_STORAGE_KEY, 'new_bfarm_awd_automation');
     if (codeInput instanceof HTMLTextAreaElement) {
         setCodeEditorValue(fixedCode);
     }
@@ -3171,6 +4441,7 @@ if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
             const preparedExampleCode = preprocessExampleCode(selectedExample, rawExampleCode);
             setCodeEditorValue(preparedExampleCode);
             localStorage.setItem('hackCable-webExample-inputCode', getCodeEditorValue());
+            localStorage.setItem(EXAMPLE_SELECTION_STORAGE_KEY, selectedExample);
             markCompileStale();
             console.log(`Loaded example: ${selectedExample}`);
 

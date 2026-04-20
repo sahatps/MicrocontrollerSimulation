@@ -98,7 +98,15 @@ export class HackCable {
 
     public serialDataCallback: ((data: string) => void) | null = null;
     public serialDataReceived(data: string) {
-        if (this.serialDataCallback) this.serialDataCallback(data);
+        if (this.serialDataCallback) {
+            this.serialDataCallback(data);
+            return;
+        }
+        // Fallback bridge for environments where callback wiring is temporarily missing.
+        const fallback = (globalThis as any).hackcable_serial_data;
+        if (typeof fallback === "function") {
+            fallback(data);
+        }
     }
 
     public async simulatedHttpGet(path: string) {

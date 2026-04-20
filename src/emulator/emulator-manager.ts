@@ -88,8 +88,10 @@ export class EmulatorManager {
                 // Run MicroPython for ESP32
                 if (!this.micropythonRunner) {
                     this.micropythonRunner = new MicroPythonRunner();
+                    this.bindESP32RuntimeCallbacks();
                     await this.micropythonRunner.initialize();
                 }
+                this.bindESP32RuntimeCallbacks();
 
                 if (code) {
                     console.log('[EmulatorManager] Running MicroPython code...');
@@ -499,20 +501,94 @@ export class EmulatorManager {
             '    pass',
             '',
             'class Preferences:',
+            '    def __init__(self):',
+            '        self._ns = "default"',
+            '        self._read_only = False',
+            '        self._store = {}',
+            '    def _storage_key(self):',
+            '        return "__hackcable_pref__" + str(self._ns)',
+            '    def _load(self):',
+            '        self._store = {}',
+            '        raw = None',
+            '        try:',
+            '            raw = js.localStorage.getItem(self._storage_key())',
+            '        except Exception:',
+            '            raw = None',
+            '        if not raw:',
+            '            return',
+            '        try:',
+            '            data = json.loads(str(raw))',
+            '            if isinstance(data, dict):',
+            '                self._store = data',
+            '        except Exception:',
+            '            self._store = {}',
+            '    def _save(self):',
+            '        if self._read_only:',
+            '            return False',
+            '        try:',
+            '            js.localStorage.setItem(self._storage_key(), json.dumps(self._store))',
+            '            return True',
+            '        except Exception:',
+            '            return False',
             '    def begin(self, *args):',
+            '        if len(args) > 0 and args[0] is not None:',
+            '            self._ns = str(args[0])',
+            '        if len(args) > 1:',
+            '            self._read_only = bool(args[1])',
+            '        self._load()',
             '        return True',
             '    def end(self):',
             '        return True',
+            '    def clear(self):',
+            '        if self._read_only:',
+            '            return False',
+            '        self._store = {}',
+            '        return self._save()',
+            '    def get(self, key, default=None):',
+            '        key_str = str(key)',
+            '        if key_str in self._store:',
+            '            return self._store[key_str]',
+            '        return default',
+            '    def put(self, key, value):',
+            '        if self._read_only:',
+            '            return False',
+            '        self._store[str(key)] = value',
+            '        self._save()',
+            '        return True',
             '    def getFloat(self, key, default=0.0):',
-            '        return float(default)',
+            '        try:',
+            '            return float(self.get(key, default))',
+            '        except Exception:',
+            '            return float(default)',
             '    def getInt(self, key, default=0):',
-            '        return int(default)',
+            '        try:',
+            '            return int(self.get(key, default))',
+            '        except Exception:',
+            '            return int(default)',
+            '    def getString(self, key, default=""):',
+            '        try:',
+            '            return str(self.get(key, default))',
+            '        except Exception:',
+            '            return str(default)',
             '    def putFloat(self, key, value):',
-            '        return True',
+            '        try:',
+            '            return self.put(key, float(value))',
+            '        except Exception:',
+            '            return False',
             '    def putInt(self, key, value):',
-            '        return True',
+            '        try:',
+            '            return self.put(key, int(value))',
+            '        except Exception:',
+            '            return False',
+            '    def putString(self, key, value):',
+            '        try:',
+            '            return self.put(key, str(value))',
+            '        except Exception:',
+            '            return False',
             '    def isKey(self, key):',
-            '        return False',
+            '        return str(key) in self._store',
+            '    def keys(self):',
+            '        return list(self._store.keys())',
             '',
             'class _NoopClient:',
             '    def __init__(self, name):',
@@ -609,8 +685,84 @@ export class EmulatorManager {
             'def setupMQTT():',
             '    return True',
             'def pub_topic(topic, value=None): _hc_notice_once("pub_topic")',
-            'def load_preferences(): _hc_notice_once("load_preferences")',
-            'def set_preferences(): _hc_notice_once("set_preferences")',
+            '_hc_pref_default_keys = [',
+            '    "calTemp", "calPH4", "calPH7", "calPH10", "calEC0", "calEC1413",',
+            '    "PHthresh_min", "PHthresh_max", "ECthresh_min", "ECthresh_max",',
+            '    "PHdura_value", "ECdura_value"',
+            ']',
+            'def _hc_pref_is_scalar(value):',
+            '    return isinstance(value, (int, float, str, bool))',
+            'def _hc_pref_candidate_name(name):',
+            '    lower = str(name).lower()',
+            '    if lower.startswith("_"):',
+            '        return False',
+            '    if "pin" in lower:',
+            '        return False',
+            '    return ("cal" in lower) or ("thresh" in lower) or ("dura" in lower)',
+            'def _hc_pref_keys_to_save():',
+            '    keys = []',
+            '    seen = {}',
+            '    g = globals()',
+            '    for name in _hc_pref_default_keys:',
+            '        if name in g and _hc_pref_is_scalar(g[name]):',
+            '            keys.append(name)',
+            '            seen[name] = 1',
+            '    for name in list(g.keys()):',
+            '        if name in seen:',
+            '            continue',
+            '        value = g[name]',
+            '        if _hc_pref_is_scalar(value) and _hc_pref_candidate_name(name):',
+            '            keys.append(str(name))',
+            '            seen[str(name)] = 1',
+            '    return keys',
+            'def load_preferences():',
+            '    prefs = globals().get("preferences", None)',
+            '    if prefs is None:',
+            '        return False',
+            '    loaded = 0',
+            '    try:',
+            '        for name in prefs.keys():',
+            '            key = str(name)',
+            '            globals()[key] = prefs.get(key, globals().get(key, None))',
+            '            loaded += 1',
+            '    except Exception:',
+            '        return False',
+            '    return loaded > 0',
+            'def set_preferences():',
+            '    prefs = globals().get("preferences", None)',
+            '    if prefs is None:',
+            '        return False',
+            '    saved = 0',
+            '    for key in _hc_pref_keys_to_save():',
+            '        try:',
+            '            if prefs.put(key, globals().get(key)):',
+            '                saved += 1',
+            '        except Exception:',
+            '            pass',
+            '    return saved > 0',
+            'def clear_preferences():',
+            '    prefs = globals().get("preferences", None)',
+            '    if prefs is None:',
+            '        return False',
+            '    try:',
+            '        return prefs.clear()',
+            '    except Exception:',
+            '        return False',
+            'def print_config():',
+            '    prefs = globals().get("preferences", None)',
+            '    if prefs is None:',
+            '        Serial.println("[Preferences] unavailable")',
+            '        return',
+            '    keys = []',
+            '    try:',
+            '        keys = prefs.keys()',
+            '    except Exception:',
+            '        keys = []',
+            '    if len(keys) == 0:',
+            '        Serial.println("[Preferences] empty")',
+            '        return',
+            '    for key in keys:',
+            '        Serial.println(str(key) + "=" + str(prefs.get(key, "")))',
             'def control_pH(value): _hc_notice_once("control_pH")',
             'def control_EC(value): _hc_notice_once("control_EC")',
             'def PHcompute(adc): return (float(adc) / 4095.0) * 14.0',
@@ -862,7 +1014,8 @@ export class EmulatorManager {
                     pythonCode += `    ${cronScheduledFn}()\n`;
                     pythonCode += '    time.sleep_ms(1000)\n';
                 } else {
-                    pythonCode += '    pass\n';
+                    pythonCode += '    Serial.println("[MicroPython Warning] Loop has no executable statements after conversion.")\n';
+                    pythonCode += '    time.sleep_ms(1000)\n';
                 }
             }
         }
@@ -1234,6 +1387,7 @@ export class EmulatorManager {
         if (!this.micropythonRunner) return;
 
         console.log('[EmulatorManager] Setting up ESP32 hardware listeners...');
+        this.bindESP32RuntimeCallbacks();
 
         const supportedPins = this.hackcable.getSupportedBoardPins();
         this.micropythonRunner.setSupportedPins(supportedPins);
@@ -1260,17 +1414,20 @@ export class EmulatorManager {
             });
         });
 
-        // Wire serial output to HackCable callback
+        console.log('[EmulatorManager] ESP32 hardware listeners configured');
+    }
+
+    private bindESP32RuntimeCallbacks() {
+        if (!this.micropythonRunner) return;
+
+        // Bind per-run to avoid stale handlers if UI wiring changes during runtime lifecycle.
         this.micropythonRunner.onSerialData = (data: string) => {
             this.hackcable.serialDataReceived(data);
         };
 
-        // Wire sensor activation callback
         this.micropythonRunner.onSensorActivate = (busType: string, pin1: number, pin2: number) => {
             this.hackcable.activateSensorComponent(busType, pin1, pin2);
         };
-
-        console.log('[EmulatorManager] ESP32 hardware listeners configured');
     }
 
 

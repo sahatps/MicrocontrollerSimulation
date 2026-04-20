@@ -19,6 +19,7 @@
         </div>
     </main>
     <div class="controlBar">
+        <div class="controlbar-resize-handle" aria-hidden="true"></div>
         <div class="controlbar-topright">
             <div class="controlbar-topright-row controlbar-topright-main">
                 <select id="board-select" class="controlbar-select-corner board-mode-corner">
@@ -86,11 +87,55 @@
                     </div>
                 </div>
                 <div class="editor-tab-panel" data-editor-panel="mock" hidden>
-                    <textarea id="sensor-mock-input" rows="7">humidity = 60
+                    <div class="mock-source-toggle" role="group" aria-label="Mock source">
+                        <button type="button" class="mock-source-btn active" data-mock-source="text" data-i18n="ui.mock.source.text">Text</button>
+                        <button type="button" class="mock-source-btn" data-mock-source="timeline" data-i18n="ui.mock.source.timeline">Timeline</button>
+                    </div>
+                    <div class="mock-source-panel" data-mock-source-panel="text">
+                        <textarea id="sensor-mock-input" rows="7">humidity = 60
 temperature = 25
 ph = 7.0
 lux = 500
 soil = 50</textarea>
+                    </div>
+                    <div class="mock-source-panel" data-mock-source-panel="timeline" hidden>
+                        <div class="mock-timeline-toolbar">
+                            <label class="mock-duration-label" for="mock-timeline-duration">
+                                <span data-i18n="ui.mock.timeline.duration">Duration (s)</span>
+                                <input id="mock-timeline-duration" type="number" min="1" step="1" value="20" />
+                            </label>
+                            <span class="mock-loop-pill" data-i18n="ui.mock.timeline.loopAlways">Loop: On</span>
+                        </div>
+                        <div class="mock-editor-mode-toolbar">
+                            <button id="mock-open-timeline-btn" type="button" class="mock-editor-mode-btn" data-i18n="ui.mock.graph.openTimeline">Open Timeline Editor</button>
+                            <button id="mock-back-graph-btn" type="button" class="mock-editor-mode-btn" data-i18n="ui.mock.graph.backGraph" hidden>Back to Graph</button>
+                        </div>
+                        <div id="mock-graph-editor" class="mock-graph-editor">
+                            <div class="mock-graph-controls">
+                                <label class="mock-graph-control" for="mock-graph-sensor">
+                                    <span data-i18n="ui.mock.graph.sensor">Sensor</span>
+                                    <select id="mock-graph-sensor"></select>
+                                </label>
+                                <label class="mock-graph-control" for="mock-graph-y-min">
+                                    <span data-i18n="ui.mock.graph.yMin">Y Min</span>
+                                    <input id="mock-graph-y-min" type="number" step="0.1" />
+                                </label>
+                                <label class="mock-graph-control" for="mock-graph-y-max">
+                                    <span data-i18n="ui.mock.graph.yMax">Y Max</span>
+                                    <input id="mock-graph-y-max" type="number" step="0.1" />
+                                </label>
+                                <button id="mock-delete-point-btn" type="button" class="mock-delete-point-btn" data-i18n="ui.mock.graph.deletePoint">Delete Point</button>
+                            </div>
+                            <div class="mock-graph-canvas-wrap">
+                                <canvas id="mock-graph-canvas" class="mock-graph-canvas"></canvas>
+                            </div>
+                            <div class="mock-graph-hint" data-i18n="ui.mock.graph.hint">Click to add point. Drag point to edit. Values use step/hold behavior.</div>
+                        </div>
+                        <div id="mock-timeline-editor" class="mock-timeline-editor" hidden>
+                            <div id="mock-timeline-tracks" class="mock-timeline-tracks"></div>
+                        </div>
+                        <div id="mock-timeline-error" class="mock-timeline-error" hidden></div>
+                    </div>
                 </div>
             </div>
             <div class="buttonBar" id="compiled-io-container">

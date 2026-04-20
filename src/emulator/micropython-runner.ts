@@ -734,6 +734,13 @@ except Exception:
                         statements.push(currentBlock);
                     }
 
+                    if (statements.length === 0) {
+                        const msg = '[MicroPython Warning] Converted loop has no executable statements.';
+                        console.warn(msg);
+                        if (this.onSerialData) this.onSerialData(msg + '\n');
+                        return;
+                    }
+
                     console.log('[MicroPython] Parsed', statements.length, 'loop statements:');
                     statements.forEach((stmt, idx) => {
                         console.log(`[MicroPython] Statement ${idx}:`, stmt.replace(/\n/g, '\\n'));
@@ -741,6 +748,7 @@ except Exception:
 
                     // Execute statements one at a time with proper delays
                     let statementIndex = 0;
+                    const reportedLoopErrors = new Set<string>();
                     const executeNextStatement = () => {
                         if (this.taskScheduler.stopped) {
                             return;
@@ -775,6 +783,21 @@ except Exception:
                         } catch (error) {
                             console.error('[MicroPython] Statement execution error:', error);
                             console.error('[MicroPython] Problematic statement:', statement);
+                            const message = error instanceof Error ? error.message : String(error);
+                            const key = `${message} | ${statement}`;
+                            if (!reportedLoopErrors.has(key)) {
+                                reportedLoopErrors.add(key);
+                                const compactStatement = String(statement || '').replace(/\s+/g, ' ').trim();
+                                const stmtPreview = compactStatement.length > 180
+                                    ? compactStatement.slice(0, 180) + '...'
+                                    : compactStatement;
+                                if (this.onSerialData) {
+                                    this.onSerialData(
+                                        `[MicroPython Loop Error] ${message}\n` +
+                                        `[MicroPython Loop Error] statement: ${stmtPreview}\n`
+                                    );
+                                }
+                            }
                             statementIndex = (statementIndex + 1) % statements.length;
                             setTimeout(executeNextStatement, 100);
                         }
