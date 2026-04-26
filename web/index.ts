@@ -37,6 +37,50 @@ let lastClangNativeResult: Uint8Array | null = null;
 let activeClangNativeLoopHandle: ReturnType<typeof setInterval> | null = null;
 let clangNativeAvailable = false;
 
+const SIM_FIXED_STEP_MS = 16;
+const SIM_MAX_STEPS_PER_TICK = 240;
+const SIM_MAX_PENDING_STEPS = 12000;
+
+function startFixedStepSimulationLoop(
+    step: () => void,
+    onError: (error: unknown) => void,
+): ReturnType<typeof setInterval> {
+    let pendingSteps = 0;
+    let lastTimestamp = performance.now();
+    let warnedBacklog = false;
+
+    return setInterval(() => {
+        const now = performance.now();
+        let elapsedMs = now - lastTimestamp;
+        lastTimestamp = now;
+        if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) {
+            elapsedMs = SIM_FIXED_STEP_MS;
+        }
+
+        const computedSteps = Math.max(1, Math.floor(elapsedMs / SIM_FIXED_STEP_MS));
+        pendingSteps += computedSteps;
+
+        if (pendingSteps > SIM_MAX_PENDING_STEPS) {
+            pendingSteps = SIM_MAX_PENDING_STEPS;
+            if (!warnedBacklog) {
+                warnedBacklog = true;
+                console.warn('[HackCable] Simulation loop backlog is very large; limiting catch-up work per interval.');
+            }
+        }
+
+        const stepsThisTick = Math.min(pendingSteps, SIM_MAX_STEPS_PER_TICK);
+        for (let i = 0; i < stepsThisTick; i++) {
+            try {
+                step();
+            } catch (error) {
+                onError(error);
+                return;
+            }
+        }
+        pendingSteps -= stepsThisTick;
+    }, SIM_FIXED_STEP_MS);
+}
+
 async function checkEmscriptenStatus(retries = 5, delayMs = 1000) {
     for (let attempt = 0; attempt < retries; attempt++) {
         try {
@@ -730,13 +774,16 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                     if (exp.memory) shimNative.setWasmMemory(exp.memory);
                     if (typeof exp.sim_run_setup === 'function') exp.sim_run_setup();
                     if (typeof exp.sim_run_loop === 'function') {
-                        activeClangNativeLoopHandle = setInterval(() => {
-                            try { exp.sim_run_loop(); } catch (e) {
-                                clearInterval(activeClangNativeLoopHandle!);
-                                activeClangNativeLoopHandle = null;
+                        activeClangNativeLoopHandle = startFixedStepSimulationLoop(
+                            () => exp.sim_run_loop(),
+                            (e) => {
+                                if (activeClangNativeLoopHandle !== null) {
+                                    clearInterval(activeClangNativeLoopHandle);
+                                    activeClangNativeLoopHandle = null;
+                                }
                                 appendSerial('Runtime error: ' + (e as Error).message + '\n');
-                            }
-                        }, 16);
+                            },
+                        );
                     }
                     autoActivateSensorsFromCode(sourceCode);
                     showStatus('ui.status.executing', 'info');
@@ -771,13 +818,16 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                     if (exp.memory) shim.setWasmMemory(exp.memory);
                     if (typeof exp.setup === 'function') exp.setup();
                     if (typeof exp.loop === 'function') {
-                        activeClangLoopHandle = setInterval(() => {
-                            try { exp.loop(); } catch (e) {
-                                clearInterval(activeClangLoopHandle!);
-                                activeClangLoopHandle = null;
+                        activeClangLoopHandle = startFixedStepSimulationLoop(
+                            () => exp.loop(),
+                            (e) => {
+                                if (activeClangLoopHandle !== null) {
+                                    clearInterval(activeClangLoopHandle);
+                                    activeClangLoopHandle = null;
+                                }
                                 appendSerial('Runtime error: ' + (e as Error).message + '\n');
-                            }
-                        }, 16);
+                            },
+                        );
                     }
                     autoActivateSensorsFromCode(sourceCode);
                     showStatus('ui.status.executing', 'info');

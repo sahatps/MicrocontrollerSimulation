@@ -60,6 +60,14 @@
       font-family Rubik
       font-size 13px
 
+  .hackCable-catalog-overlay
+    position sticky
+    top 0
+    left 0
+    height 0
+    z-index 1202
+    pointer-events none
+
   .hackCable-toggle-catalog-floating
     position absolute
     top 0
@@ -76,7 +84,8 @@
     justify-content center
     z-index 1200
     box-shadow 0 2px 8px rgba(0, 0, 0, 0.18)
-    transition top 0.2s ease, left 0.2s ease, box-shadow 0.2s ease
+    transition box-shadow 0.2s ease
+    pointer-events auto
 
     &:hover
       background radial-gradient(circle at 30% 30%, #c9ecad 0%, #89be69 100%)
@@ -90,8 +99,8 @@
       color #f6fff1
 
     &.active
-      top 4px
-      left 12px
+      top 0
+      left 8px
       z-index 1201
 
   .hackCable-catalog-bar
@@ -109,6 +118,7 @@
     max-height 126px
     transition max-height 0.3s ease
     z-index 900
+    pointer-events auto
 
     &.hidden
       max-height 0
@@ -242,8 +252,17 @@
     width 100%
     flex 1
     overflow auto
-    scrollbar-width thin
+    scrollbar-width none
+    -ms-overflow-style none
     position relative
+
+    &::-webkit-scrollbar
+      width 0
+      height 0
+
+    &.is-panning
+      cursor grabbing
+      user-select none
 
     #hackCable-canvas
       width 100%

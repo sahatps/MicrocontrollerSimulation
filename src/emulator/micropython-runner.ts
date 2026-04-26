@@ -39,6 +39,7 @@ export class MicroPythonRunner {
     private nextHttpRequestId = 1;
     private supportedPins: Set<number>;
     private unsupportedWriteWarnings: Set<number> = new Set();
+    private resumeLoopScheduler: (() => void) | null = null;
 
     // ESP32 common GPIO pins
     private readonly availablePins = [2, 4, 5, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33];
@@ -513,9 +514,10 @@ except Exception:
 
         // Clear any existing loop
         if (this.loopIntervalId) {
-            clearInterval(this.loopIntervalId);
+            clearTimeout(this.loopIntervalId);
             this.loopIntervalId = null;
         }
+        this.resumeLoopScheduler = null;
         this.resetHttpBridge(true);
 
         try {
@@ -746,14 +748,16 @@ except Exception:
                         console.log(`[MicroPython] Statement ${idx}:`, stmt.replace(/\n/g, '\\n'));
                     });
 
-                    // Execute statements one at a time with proper delays
+                    // Execute statements with real-time catch-up so background-tab timer throttling
+                    // does not permanently slow the simulated loop.
                     let statementIndex = 0;
                     const reportedLoopErrors = new Set<string>();
-                    const executeNextStatement = () => {
-                        if (this.taskScheduler.stopped) {
-                            return;
-                        }
+                    const MAX_STATEMENTS_PER_SLICE = 320;
+                    const DEFAULT_STEP_DELAY_MS = 10;
+                    const ERROR_STEP_DELAY_MS = 100;
+                    let nextDueAtMs = performance.now();
 
+                    const executeOneStatement = (): number => {
                         const statement = statements[statementIndex];
                         console.log(`[MicroPython] Executing statement ${statementIndex}: ${statement}`);
 
@@ -766,19 +770,18 @@ except Exception:
                                 const delay = parseInt(simpleSleepMatch[1]);
                                 console.log(`[MicroPython] Sleeping for ${delay}ms`);
                                 statementIndex = (statementIndex + 1) % statements.length;
-                                setTimeout(executeNextStatement, delay);
+                                return Math.max(0, delay);
                             } else if (simpleSleepSecMatch) {
                                 const delay = Math.floor(parseFloat(simpleSleepSecMatch[1]) * 1000);
                                 console.log(`[MicroPython] Sleeping for ${delay}ms`);
                                 statementIndex = (statementIndex + 1) % statements.length;
-                                setTimeout(executeNextStatement, delay);
+                                return Math.max(0, delay);
                             } else {
                                 // Execute the statement/block
                                 console.log(`[MicroPython] Running block:\n${statement}`);
                                 this.mp.runPython(statement);
                                 statementIndex = (statementIndex + 1) % statements.length;
-                                // Small delay to allow UI updates
-                                setTimeout(executeNextStatement, 10);
+                                return DEFAULT_STEP_DELAY_MS;
                             }
                         } catch (error) {
                             console.error('[MicroPython] Statement execution error:', error);
@@ -799,13 +802,52 @@ except Exception:
                                 }
                             }
                             statementIndex = (statementIndex + 1) % statements.length;
-                            setTimeout(executeNextStatement, 100);
+                            return ERROR_STEP_DELAY_MS;
                         }
+                    };
+
+                    const scheduleFromDueTime = () => {
+                        if (this.taskScheduler.stopped) return;
+                        const waitMs = Math.max(0, Math.floor(nextDueAtMs - performance.now()));
+                        this.loopIntervalId = setTimeout(executeDueStatements, waitMs);
+                    };
+
+                    const executeDueStatements = () => {
+                        if (this.taskScheduler.stopped) {
+                            return;
+                        }
+
+                        let executed = 0;
+                        const now = performance.now();
+                        if (nextDueAtMs < now - 60000) {
+                            // Avoid unbounded catch-up after very long suspension.
+                            nextDueAtMs = now;
+                        }
+
+                        while (!this.taskScheduler.stopped && executed < MAX_STATEMENTS_PER_SLICE && performance.now() >= nextDueAtMs) {
+                            const stepDelayMs = executeOneStatement();
+                            nextDueAtMs += Math.max(0, stepDelayMs);
+                            executed++;
+                        }
+
+                        if (this.taskScheduler.stopped) return;
+
+                        if (executed >= MAX_STATEMENTS_PER_SLICE && performance.now() >= nextDueAtMs) {
+                            this.loopIntervalId = setTimeout(executeDueStatements, 0);
+                            return;
+                        }
+                        scheduleFromDueTime();
                     };
 
                     this.taskScheduler.start();
                     console.log('[MicroPython] Loop execution started');
-                    executeNextStatement();
+                    nextDueAtMs = performance.now();
+                    this.resumeLoopScheduler = () => {
+                        if (!this.loopIntervalId && !this.taskScheduler.stopped) {
+                            scheduleFromDueTime();
+                        }
+                    };
+                    scheduleFromDueTime();
                 } else {
                     const msg = '[MicroPython] Could not parse while True loop body; running code directly.';
                     console.warn(msg);
@@ -844,8 +886,13 @@ except Exception:
     set pause(pause: boolean) {
         if (pause && !this.pause) {
             this.taskScheduler.stop();
+            if (this.loopIntervalId) {
+                clearTimeout(this.loopIntervalId);
+                this.loopIntervalId = null;
+            }
         } else if (!pause && this.pause) {
             this.taskScheduler.start();
+            if (this.resumeLoopScheduler) this.resumeLoopScheduler();
         }
     }
 
@@ -857,9 +904,10 @@ except Exception:
         this.taskScheduler.stop();
         this.resetHttpBridge(true);
         if (this.loopIntervalId) {
-            clearInterval(this.loopIntervalId);
+            clearTimeout(this.loopIntervalId);
             this.loopIntervalId = null;
         }
+        this.resumeLoopScheduler = null;
         console.log('[MicroPython] Stopped');
     }
 }

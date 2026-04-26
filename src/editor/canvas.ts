@@ -15,6 +15,9 @@ export class Canvas extends draw2d.Canvas{
     private selected: any = null;
     private codeGenerator: CodeGenerator;
     private onCircuitChangeCallback: ((code: string) => void) | null = null;
+    private editorElement: HTMLElement | null = null;
+    private canvasElement: HTMLElement | null = null;
+    private isPanningPointerDown = false;
 
     constructor(divId: string){
         super(divId);
@@ -23,7 +26,11 @@ export class Canvas extends draw2d.Canvas{
         this.overlayContainer = document.querySelector('.hackCable-canvas-overlay-container');
         this.html.prepend(this.overlayContainer);
 
-        this.setScrollArea(document.querySelector('.hackCable-canvas'))
+        // Use the editor container as scroll area so drag-panning works on the visible viewport.
+        this.setScrollArea(
+            document.querySelector('.hackCable-editor') ||
+            document.querySelector('.hackCable-canvas')
+        )
 
         // Edit policies
         this.installEditPolicy(new draw2d.policy.canvas.PanningSelectionPolicy())
@@ -51,6 +58,9 @@ export class Canvas extends draw2d.Canvas{
         // Initialize canvas toolbar (bin, forward, backward buttons)
         new CanvasToolbar(this);
 
+        // Improve pan UX: drag only while mouse is held and always stop on global mouse release.
+        this.setupPanInteraction();
+
         // Add test figures (commented out - using auto-setup instead)
         /*
         let rect = new draw2d.shape.basic.Rectangle({x: 100, y: 10, stroke: 3, color: "#9e0000", bgColor: "#cd0000"});
@@ -70,6 +80,60 @@ export class Canvas extends draw2d.Canvas{
 
 
     }
+    private setupPanInteraction(){
+        this.editorElement = document.querySelector('.hackCable-editor') as HTMLElement | null;
+        this.canvasElement = document.getElementById('hackCable-canvas');
+        if (!this.canvasElement) return;
+
+        this.canvasElement.addEventListener('mousedown', (event: MouseEvent) => {
+            if (event.button !== 0) return;
+
+            const pos = this.fromDocumentToCanvasCoordinate(event.clientX, event.clientY);
+            const figure = this.getBestFigure(pos.x, pos.y);
+            this.isPanningPointerDown = figure === null;
+
+            if (this.isPanningPointerDown) {
+                this.editorElement?.classList.add('is-panning');
+                this.setPanningCursor(true);
+            }
+        });
+
+        this.canvasElement.addEventListener('mouseup', () => this.stopPanInteraction());
+        window.addEventListener('mouseup', (event: MouseEvent) => this.stopPanInteraction(event));
+        window.addEventListener('blur', () => this.stopPanInteraction());
+    }
+
+    private setPanningCursor(active: boolean){
+        const cursorValue = active ? 'grabbing' : '';
+        if (this.editorElement) this.editorElement.style.cursor = cursorValue;
+        if (this.canvasElement) this.canvasElement.style.cursor = cursorValue;
+        if (this.overlayContainer instanceof HTMLElement) this.overlayContainer.style.cursor = cursorValue;
+    }
+
+    private stopPanInteraction(event?: MouseEvent){
+        if (this.isPanningPointerDown) {
+            this.isPanningPointerDown = false;
+            this.editorElement?.classList.remove('is-panning');
+            this.setPanningCursor(false);
+        }
+
+        // Draw2D only binds mouseup on the canvas element.
+        // If release happens outside, force-reset internal drag state.
+        const canvasAny = this as any;
+        if (canvasAny.mouseDown !== true) return;
+
+        if (event) {
+            const pos = this.fromDocumentToCanvasCoordinate(event.clientX, event.clientY);
+            canvasAny.editPolicy?.each((_: number, policy: any) => {
+                policy.onMouseUp(this, pos.x, pos.y, event.shiftKey, event.ctrlKey);
+            });
+        }
+
+        canvasAny.mouseDown = false;
+        canvasAny.mouseDragDiffX = 0;
+        canvasAny.mouseDragDiffY = 0;
+    }
+
     private setupResponsiveCanvas(){
         // Update canvas dimensions based on container size
         const updateCanvasDimensions = () => {
@@ -101,6 +165,46 @@ export class Canvas extends draw2d.Canvas{
     private onZoomChange(){
         css(this.overlayContainer, {transform: 'scale(' + 1/this.getZoom() + ')'})
     }
+
+    /**
+     * Convert pointer coordinates to canvas coordinates using the active scroll host.
+     * This keeps hit-testing accurate when the scroll area is the outer editor container.
+     */
+    public fromDocumentToCanvasCoordinate(x: any, y: any): any {
+        const scrollArea: any = this.getScrollArea?.();
+        const host = scrollArea?.get ? scrollArea.get(0) as HTMLElement : null;
+        if (!host) return super.fromDocumentToCanvasCoordinate(x, y);
+
+        const rect = host.getBoundingClientRect();
+        return new (draw2d as any).geo.Point(
+            (x - rect.left + host.scrollLeft) * this.getZoom(),
+            (y - rect.top + host.scrollTop) * this.getZoom()
+        );
+    }
+
+    /**
+     * Convert canvas coordinates back to pointer/client coordinates.
+     * This is used by wheel-zoom center calculations and must mirror the method above.
+     */
+    public fromCanvasToDocumentCoordinate(x: any, y: any): any {
+        const scrollArea: any = this.getScrollArea?.();
+        const host = scrollArea?.get ? scrollArea.get(0) as HTMLElement : null;
+        if (!host) return super.fromCanvasToDocumentCoordinate(x, y);
+
+        const rect = host.getBoundingClientRect();
+        return new (draw2d as any).geo.Point(
+            x * (1 / this.getZoom()) + rect.left - host.scrollLeft,
+            y * (1 / this.getZoom()) + rect.top - host.scrollTop
+        );
+    }
+
+    /**
+     * Enable wheel-to-zoom directly on the circuit canvas without requiring Shift.
+     */
+    public onMouseWheel(wheelDelta: any, x: any, y: any, _shiftKey: any, ctrlKey: any): any {
+        return super.onMouseWheel(wheelDelta, x, y, true, ctrlKey);
+    }
+
     private onSelectionChange(selected: any){
         if(this.selected != selected){
             if(this.selected instanceof ComponentFigure) this.selected.onUnselected()
