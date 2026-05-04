@@ -9,6 +9,18 @@ export class FourChannelRelayElement extends LitElement {
     { name: 'IN2', x: 116, y: 36, signals: [], number: 4 },
     { name: 'IN3', x: 116, y: 44, signals: [], number: 5 },
     { name: 'IN4', x: 116, y: 52, signals: [], number: 6 },
+    { name: 'R1_COM', x: 12, y: 78, signals: [], number: 7 },
+    { name: 'R1_NC', x: 19, y: 78, signals: [], number: 8 },
+    { name: 'R1_NO', x: 26, y: 78, signals: [], number: 9 },
+    { name: 'R2_COM', x: 38, y: 78, signals: [], number: 10 },
+    { name: 'R2_NC', x: 45, y: 78, signals: [], number: 11 },
+    { name: 'R2_NO', x: 52, y: 78, signals: [], number: 12 },
+    { name: 'R3_COM', x: 64, y: 78, signals: [], number: 13 },
+    { name: 'R3_NC', x: 71, y: 78, signals: [], number: 14 },
+    { name: 'R3_NO', x: 78, y: 78, signals: [], number: 15 },
+    { name: 'R4_COM', x: 90, y: 78, signals: [], number: 16 },
+    { name: 'R4_NC', x: 97, y: 78, signals: [], number: 17 },
+    { name: 'R4_NO', x: 104, y: 78, signals: [], number: 18 },
   ];
 
   ch1 = false;
@@ -22,7 +34,7 @@ export class FourChannelRelayElement extends LitElement {
     const labels = ['RL1', 'RL2', 'RL3', 'RL4'];
 
     return svg`
-      <svg width="32mm" height="20mm" version="1.1" viewBox="0 0 120 75"
+      <svg width="32mm" height="24mm" version="1.1" viewBox="0 0 120 90"
            xmlns="http://www.w3.org/2000/svg">
         <defs>
           <filter id="r4LedGlow" x="-50%" y="-50%" width="200%" height="200%">
@@ -62,6 +74,17 @@ export class FourChannelRelayElement extends LitElement {
                   r="2.5"
                   fill="${channels[i] ? '#ff2200' : '#550000'}"
                   filter="${channels[i] ? 'url(#r4LedGlow)' : 'none'}"/>
+        `)}
+
+        <!-- Bottom output terminals -->
+        ${relayX.map((rx, i) => svg`
+          <rect x="${rx}" y="70" width="22" height="16" fill="#5cb85c" stroke="#2d6d2d" stroke-width="0.35" rx="1"/>
+          <line x1="${rx + 4}" y1="78" x2="${channels[i] ? rx + 18 : rx + 11}" y2="78"
+                stroke="${channels[i] ? '#ff9800' : '#ddd'}" stroke-width="1.1" stroke-linecap="round"/>
+          <circle cx="${rx + 4}" cy="78" r="3" fill="#e8e8e8" stroke="#999" stroke-width="0.5"/>
+          <circle cx="${rx + 11}" cy="78" r="3" fill="#e8e8e8" stroke="#999" stroke-width="0.5"/>
+          <circle cx="${rx + 18}" cy="78" r="3" fill="#e8e8e8" stroke="#999" stroke-width="0.5"/>
+          <text x="${rx + 11}" y="74" fill="#fff" font-family="Arial" font-size="2.2" text-anchor="middle" font-weight="bold">COM NC NO</text>
         `)}
 
         <!-- Right 6-pin header -->

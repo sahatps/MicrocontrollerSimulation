@@ -63,6 +63,9 @@ export class ArduinoWasmShim {
                 // ---- Digital I/O ----
                 pinMode(pin: number, mode: number) {
                     self.pinModes.set(pin, mode);
+                    if (mode === 2 && !self.pinStates.has(pin)) {
+                        self.pinStates.set(pin, true);
+                    }
                 },
                 digitalWrite(pin: number, value: number) {
                     const b = value !== 0;

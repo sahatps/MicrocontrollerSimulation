@@ -28,6 +28,7 @@ export class EmulatorManager {
         bh1750Sensors: Set<string>;
         helperFunctionNames: Set<string>;
     } | null = null;
+    private lastConversionValidationIssues: string[] = [];
 
 
     static async compileCode(code: string): Promise<CompileResult> {
@@ -109,6 +110,14 @@ export class EmulatorManager {
                             .join('\n');
                         console.log('[EmulatorManager] Converted code (numbered):\n' + numbered);
                     } catch { }
+
+                    if (this.lastConversionValidationIssues.length > 0) {
+                        const details = this.lastConversionValidationIssues
+                            .map((issue) => `[MicroPython Conversion Error] ${issue}`)
+                            .join('\n');
+                        this.hackcable.serialDataReceived(`${details}\n`);
+                        throw new Error('Generated MicroPython contains unresolved Arduino tokens');
+                    }
 
                     try {
                         await this.micropythonRunner.runCode(pythonCode);
@@ -275,6 +284,7 @@ export class EmulatorManager {
 
         // Check if it's already Python code
         if (code.includes('from machine import') || code.includes('import machine')) {
+            this.lastConversionValidationIssues = [];
             return code;
         }
 
@@ -314,6 +324,15 @@ export class EmulatorManager {
         const constMatches = code.matchAll(/const\s+(?:int|float|double)\s+([A-Z_][A-Z0-9_]*)\s*=\s*([\d.]+)/g);
         for (const match of constMatches) {
             constants.set(match[1], parseFloat(match[2]));
+        }
+
+        const globalArrays = this.extractGlobalArrayDeclarations(code);
+        const globalScalars = this.extractGlobalScalarDeclarations(code, constants);
+        const numericArrays = new Map<string, number[]>();
+        for (const array of globalArrays) {
+            if (array.numericValues) {
+                numericArrays.set(array.name, array.numericValues);
+            }
         }
 
         // Check if code uses analogRead (need ADC import)
@@ -778,49 +797,72 @@ export class EmulatorManager {
             '',
         ].join('\n');
 
-        // Add Python constants for thresholds and other values
+        // Add Python constants, including *_PIN definitions, so any surviving
+        // Arduino-style constant references still resolve in generated Python.
         constants.forEach((value, name) => {
-            // Skip pin definitions - they'll be used directly
-            if (!name.endsWith('_PIN')) {
-                pythonCode += `${name} = ${value}\n`;
-            }
+            pythonCode += `${name} = ${value}\n`;
         });
         if (constants.size > 0) {
             pythonCode += '\n';
         }
 
+        for (const array of globalArrays) {
+            pythonCode += `${array.name} = ${array.pythonValue}\n`;
+        }
+        if (globalArrays.length > 0) {
+            pythonCode += '\n';
+        }
+
+        for (const scalar of globalScalars) {
+            pythonCode += `${scalar.name} = ${scalar.pythonValue}\n`;
+        }
+        if (globalScalars.length > 0) {
+            pythonCode += '\n';
+        }
+
         // Extract OUTPUT pinMode calls (for LEDs, actuators, relays)
         // Match both named constants and numeric values
-        const outputPinMatches = code.matchAll(/pinMode\s*\(\s*([A-Z_][A-Z0-9_]*|\d+)\s*,\s*OUTPUT\s*\)/g);
+        const outputPinMatches = code.matchAll(/pinMode\s*\(\s*([A-Z_][A-Z0-9_]*(?:\s*\[\s*(?:[A-Za-z_]\w*|\d+)\s*\])?|\d+)\s*,\s*OUTPUT\s*\)/g);
         const outputPins: Array<{ name: string, num: number }> = [];
+        const seenOutputPins = new Set<number>();
         for (const match of outputPinMatches) {
             const pinRef = match[1];
-            if (/^\d+$/.test(pinRef)) {
-                outputPins.push({ name: `pin${pinRef}`, num: parseInt(pinRef) });
-            } else {
-                const pinNum = constants.get(pinRef);
-                if (pinNum !== undefined) {
-                    // Convert PIN_NAME to pythonic name: MIST_PUMP_PIN -> mist_pump
-                    const pyName = pinRef.replace(/_PIN$/, '').toLowerCase();
-                    outputPins.push({ name: pyName, num: pinNum });
-                }
+            for (const pin of this.resolvePinReferences(pinRef, constants, numericArrays)) {
+                if (seenOutputPins.has(pin.num)) continue;
+                seenOutputPins.add(pin.num);
+                outputPins.push(pin);
             }
         }
 
         // Extract INPUT_PULLUP pinMode calls (for buttons)
-        const inputPinMatches = code.matchAll(/pinMode\s*\(\s*([A-Z_][A-Z0-9_]*|\d+)\s*,\s*INPUT_PULLUP\s*\)/g);
+        const inputPinMatches = code.matchAll(/pinMode\s*\(\s*([A-Z_][A-Z0-9_]*(?:\s*\[\s*(?:[A-Za-z_]\w*|\d+)\s*\])?|\d+)\s*,\s*INPUT_PULLUP\s*\)/g);
         const inputPins: Array<{ name: string, num: number }> = [];
+        const seenInputPins = new Set<number>();
         for (const match of inputPinMatches) {
             const pinRef = match[1];
-            if (/^\d+$/.test(pinRef)) {
-                inputPins.push({ name: `pin${pinRef}`, num: parseInt(pinRef) });
-            } else {
-                const pinNum = constants.get(pinRef);
-                if (pinNum !== undefined) {
-                    const pyName = pinRef.replace(/_PIN$/, '').toLowerCase();
-                    inputPins.push({ name: pyName, num: pinNum });
-                }
+            for (const pin of this.resolvePinReferences(pinRef, constants, numericArrays)) {
+                if (seenInputPins.has(pin.num)) continue;
+                seenInputPins.add(pin.num);
+                inputPins.push(pin);
             }
+        }
+
+        // Numeric GPIO calls can survive examples that do not use *_PIN constants.
+        // If conversion later emits pinN.value(), make sure the preamble defines it.
+        const numericWriteMatches = code.matchAll(/\bdigitalWrite\s*\(\s*(\d+)\s*,/g);
+        for (const match of numericWriteMatches) {
+            const num = parseInt(match[1], 10);
+            if (seenOutputPins.has(num) || seenInputPins.has(num)) continue;
+            seenOutputPins.add(num);
+            outputPins.push({ name: `pin${num}`, num });
+        }
+
+        const numericReadMatches = code.matchAll(/\bdigitalRead\s*\(\s*(\d+)\s*\)/g);
+        for (const match of numericReadMatches) {
+            const num = parseInt(match[1], 10);
+            if (seenOutputPins.has(num) || seenInputPins.has(num)) continue;
+            seenInputPins.add(num);
+            inputPins.push({ name: `pin${num}`, num });
         }
 
         // Extract analogRead pins
@@ -860,6 +902,31 @@ export class EmulatorManager {
         });
 
         if (outputPins.length > 0 || inputPins.length > 0 || analogPins.length > 0) {
+            pythonCode += '\n';
+        }
+
+        // Ensure every *_PIN constant also has a stable Pin-object alias, even if
+        // a specific pinMode(...) pattern was missed during discovery.
+        const emittedPinAliases = new Set<string>([
+            ...outputPins.map((pin) => pin.name),
+            ...inputPins.map((pin) => pin.name),
+        ]);
+        for (const [pinConstName, pinNum] of [...constants.entries()].filter(([name]) => name.endsWith('_PIN'))) {
+            const pyName = pinConstName.replace(/_PIN$/, '').toLowerCase();
+            if (emittedPinAliases.has(pyName)) continue;
+
+            const isOutput = outputPins.some((pin) => pin.num === pinNum || pin.name === pyName);
+            const isInput = inputPins.some((pin) => pin.num === pinNum || pin.name === pyName);
+            if (isOutput) {
+                pythonCode += `${pyName} = Pin(${pinConstName}, Pin.OUT)\n`;
+            } else if (isInput) {
+                pythonCode += `${pyName} = Pin(${pinConstName}, Pin.IN, Pin.PULL_UP)\n`;
+            } else {
+                pythonCode += `${pyName} = Pin(${pinConstName})\n`;
+            }
+            emittedPinAliases.add(pyName);
+        }
+        if (emittedPinAliases.size > 0) {
             pythonCode += '\n';
         }
 
@@ -1020,7 +1087,102 @@ export class EmulatorManager {
             }
         }
 
-        return pythonCode;
+        const finalized = this.finalizeConvertedPythonCode(pythonCode);
+        this.lastConversionValidationIssues = finalized.validationIssues;
+        return finalized.pythonCode;
+    }
+
+    private finalizeConvertedPythonCode(pythonCode: string): { pythonCode: string; validationIssues: string[] } {
+        const ctx = this.currentConversionContext;
+        let normalized = pythonCode;
+
+        if (ctx) {
+            for (const [pinName] of ctx.constantNames) {
+                const pyPin = pinName.replace(/_PIN$/, '').toLowerCase();
+                const escapedPin = pinName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+                normalized = normalized.replace(
+                    new RegExp(`digitalRead\\s*\\(\\s*${escapedPin}\\s*\\)`, 'g'),
+                    `${pyPin}.value()`
+                );
+                normalized = normalized.replace(
+                    new RegExp(`digitalWrite\\s*\\(\\s*${escapedPin}\\s*,\\s*(HIGH|LOW|1|0)\\s*\\)`, 'g'),
+                    (_match, state: string) => `${pyPin}.value(${state === 'HIGH' || state === '1' ? '1' : '0'})`
+                );
+            }
+
+            for (const [num, pyPin] of ctx.outputPins) {
+                normalized = normalized.replace(
+                    new RegExp(`digitalWrite\\s*\\(\\s*${num}\\s*,\\s*(HIGH|LOW|1|0)\\s*\\)`, 'g'),
+                    (_match, state: string) => {
+                        if (/^pin\d+$/.test(pyPin)) {
+                            return `Pin(${num}, Pin.OUT).value(${state === 'HIGH' || state === '1' ? '1' : '0'})`;
+                        }
+                        return `${pyPin}.value(${state === 'HIGH' || state === '1' ? '1' : '0'})`;
+                    }
+                );
+            }
+            for (const [num, pyPin] of ctx.inputPins) {
+                normalized = normalized.replace(
+                    new RegExp(`digitalRead\\s*\\(\\s*${num}\\s*\\)`, 'g'),
+                    /^pin\d+$/.test(pyPin) ? `Pin(${num}, Pin.IN, Pin.PULL_UP).value()` : `${pyPin}.value()`
+                );
+            }
+        }
+
+        normalized = normalized.replace(/\bLOW\b/g, '0');
+        normalized = normalized.replace(/\bHIGH\b/g, '1');
+
+        const validationIssues: string[] = [];
+        const definedPinConstants = new Set<string>();
+        const definedPinAliases = new Set<string>();
+        const lines = normalized.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#')) continue;
+
+            const defMatch = trimmed.match(/^([A-Z_][A-Z0-9_]*_PIN)\s*=/);
+            if (defMatch) {
+                definedPinConstants.add(defMatch[1]);
+            }
+
+            const pinAliasMatch = trimmed.match(/^([A-Za-z_]\w*)\s*=\s*(?:ADC\s*\(\s*)?Pin\s*\(/);
+            if (pinAliasMatch) {
+                definedPinAliases.add(pinAliasMatch[1]);
+            }
+        }
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#')) continue;
+
+            if (/\bdigitalRead\s*\(/.test(trimmed) || /\bdigitalWrite\s*\(/.test(trimmed)) {
+                validationIssues.push(`line ${i + 1}: unresolved Arduino GPIO call -> ${trimmed}`);
+            }
+            if (/\bLOW\b/.test(trimmed) || /\bHIGH\b/.test(trimmed)) {
+                validationIssues.push(`line ${i + 1}: unresolved Arduino level token -> ${trimmed}`);
+            }
+
+            const pinRefs = trimmed.match(/\b([A-Z_][A-Z0-9_]*_PIN)\b/g) || [];
+            for (const pinRef of pinRefs) {
+                if (/^([A-Z_][A-Z0-9_]*_PIN)\s*=/.test(trimmed)) continue;
+                if (!definedPinConstants.has(pinRef)) {
+                    validationIssues.push(`line ${i + 1}: unresolved pin constant ${pinRef} -> ${trimmed}`);
+                }
+            }
+
+            const numericPinRefs = trimmed.match(/\bpin\d+\.value\s*\(/g) || [];
+            for (const pinRef of numericPinRefs) {
+                const pinAlias = pinRef.replace(/\.value\s*\($/, '');
+                if (!definedPinAliases.has(pinAlias)) {
+                    validationIssues.push(`line ${i + 1}: unresolved numeric pin alias ${pinAlias} -> ${trimmed}`);
+                }
+            }
+        }
+
+        return { pythonCode: normalized, validationIssues };
     }
 
     private extractRelayPins(code: string): number[] {
@@ -1177,6 +1339,167 @@ export class EmulatorManager {
         return `for ${varName} in range(${startExpr}, ${endExpr}): ${inlineBody || 'pass'}`;
     }
 
+    private convertForLoopHeader(line: string): string | null {
+        const trimmed = line.trim();
+        const m = trimmed.match(/^for\s*\(\s*(?:int|long|unsigned\s+int|unsigned)?\s*([A-Za-z_]\w*)\s*=\s*([^;]+?)\s*;\s*\1\s*<\s*([^;]+?)\s*;\s*\1\s*\+\+\s*\)\s*\{?\s*;?\s*$/);
+        if (!m) return null;
+        const varName = m[1].trim();
+        const startExpr = m[2].trim();
+        const endExpr = m[3].trim();
+        return `for ${varName} in range(${startExpr}, ${endExpr}):`;
+    }
+
+    private splitArrayInitializer(initializer: string): string[] {
+        const items: string[] = [];
+        let current = '';
+        let inSingle = false;
+        let inDouble = false;
+
+        for (let i = 0; i < initializer.length; i++) {
+            const ch = initializer[i];
+            const prev = i > 0 ? initializer[i - 1] : '';
+
+            if (ch === "'" && !inDouble && prev !== '\\') {
+                inSingle = !inSingle;
+                current += ch;
+                continue;
+            }
+            if (ch === '"' && !inSingle && prev !== '\\') {
+                inDouble = !inDouble;
+                current += ch;
+                continue;
+            }
+
+            if (!inSingle && !inDouble && ch === ',') {
+                items.push(current.trim());
+                current = '';
+                continue;
+            }
+
+            current += ch;
+        }
+
+        if (current.trim()) items.push(current.trim());
+        return items;
+    }
+
+    private normalizeArrayLiteralValue(value: string): string {
+        let normalized = value.trim();
+        normalized = normalized.replace(/\btrue\b/g, 'True');
+        normalized = normalized.replace(/\bfalse\b/g, 'False');
+        normalized = normalized.replace(
+            /\b(\d+(?:\.\d+)?)(?:[uU](?:ll|LL|l|L)?|(?:ll|LL|l|L)[uU]?|[fFlL])\b/g,
+            '$1'
+        );
+        return normalized;
+    }
+
+    private parseNumericArrayLiteralValues(initializer: string): number[] | null {
+        const values = this.splitArrayInitializer(initializer)
+            .map((item) => this.normalizeArrayLiteralValue(item))
+            .map((item) => item.trim());
+        if (values.length === 0) return [];
+        const numbers: number[] = [];
+        for (const value of values) {
+            if (!/^-?\d+(?:\.\d+)?$/.test(value)) return null;
+            numbers.push(Number(value));
+        }
+        return numbers;
+    }
+
+    private extractGlobalArrayDeclarations(code: string): Array<{ name: string; pythonValue: string; numericValues: number[] | null }> {
+        const arrays = new Map<string, { pythonValue: string; numericValues: number[] | null }>();
+
+        for (const match of code.matchAll(/^\s*const\s+char\s*\*\s*([A-Za-z_]\w*)\s*\[\s*\d+\s*\]\s*=\s*\{([\s\S]*?)\}\s*;\s*$/gm)) {
+            const name = match[1];
+            const values = this.splitArrayInitializer(match[2]).map((item) => this.normalizeArrayLiteralValue(item));
+            arrays.set(name, { pythonValue: `[${values.join(', ')}]`, numericValues: null });
+        }
+
+        for (const match of code.matchAll(/^\s*(?:const\s+)?(?:int|float|double|bool|boolean|char|String|long|unsigned|uint8_t|uint16_t)\s+([A-Za-z_]\w*)\s*\[\s*\d+\s*\]\s*=\s*\{([\s\S]*?)\}\s*;\s*$/gm)) {
+            const name = match[1];
+            if (arrays.has(name)) continue;
+            const initializer = match[2];
+            const values = this.splitArrayInitializer(initializer).map((item) => this.normalizeArrayLiteralValue(item));
+            arrays.set(name, {
+                pythonValue: `[${values.join(', ')}]`,
+                numericValues: this.parseNumericArrayLiteralValues(initializer),
+            });
+        }
+
+        return Array.from(arrays.entries()).map(([name, value]) => ({
+            name,
+            pythonValue: value.pythonValue,
+            numericValues: value.numericValues,
+        }));
+    }
+
+    private extractGlobalScalarDeclarations(code: string, constants: Map<string, number>): Array<{ name: string; pythonValue: string }> {
+        const scalars = new Map<string, string>();
+
+        for (const match of code.matchAll(/^\s*(?:bool|boolean|int|long|unsigned|float|double|String|char\s*\*)\s+([A-Za-z_]\w*)\s*=\s*([^;]+)\s*;\s*$/gm)) {
+            const name = match[1];
+            const value = match[2].trim();
+            if (constants.has(name)) continue;
+            scalars.set(name, this.normalizeArrayLiteralValue(value));
+        }
+
+        return Array.from(scalars.entries()).map(([name, pythonValue]) => ({ name, pythonValue }));
+    }
+
+    private resolvePinReferences(
+        pinRef: string,
+        constants: Map<string, number>,
+        numericArrays: Map<string, number[]>,
+    ): Array<{ name: string; num: number }> {
+        const trimmed = pinRef.trim();
+        if (/^\d+$/.test(trimmed)) {
+            const num = parseInt(trimmed, 10);
+            return [{ name: `pin${num}`, num }];
+        }
+
+        const indexedArrayMatch = trimmed.match(/^([A-Z_][A-Z0-9_]*)\s*\[\s*([A-Za-z_]\w*|\d+)\s*\]$/);
+        if (indexedArrayMatch) {
+            const arrayName = indexedArrayMatch[1];
+            const indexExpr = indexedArrayMatch[2];
+            const values = numericArrays.get(arrayName);
+            if (!values) return [];
+            if (/^\d+$/.test(indexExpr)) {
+                const index = parseInt(indexExpr, 10);
+                if (index < 0 || index >= values.length) return [];
+                const num = values[index];
+                return [{ name: `pin${num}`, num }];
+            }
+            return values.map((num) => ({ name: `pin${num}`, num }));
+        }
+
+        const pinNum = constants.get(trimmed);
+        if (pinNum !== undefined) {
+            const pyName = trimmed.replace(/_PIN$/, '').toLowerCase();
+            return [{ name: pyName, num: pinNum }];
+        }
+
+        return [];
+    }
+
+    private convertArrayDeclaration(line: string): string | null {
+        const stringArrayMatch = line.match(/^\s*const\s+char\s*\*\s*([A-Za-z_]\w*)\s*\[\s*\d+\s*\]\s*=\s*\{([\s\S]*?)\}\s*;?\s*$/);
+        if (stringArrayMatch) {
+            const name = stringArrayMatch[1];
+            const values = this.splitArrayInitializer(stringArrayMatch[2]).map((item) => this.normalizeArrayLiteralValue(item));
+            return `${name} = [${values.join(', ')}]`;
+        }
+
+        const scalarArrayMatch = line.match(/^\s*(?:const\s+)?(?:int|float|double|bool|boolean|char|String|long|unsigned|uint8_t|uint16_t)\s+([A-Za-z_]\w*)\s*\[\s*\d+\s*\]\s*=\s*\{([\s\S]*?)\}\s*;?\s*$/);
+        if (scalarArrayMatch) {
+            const name = scalarArrayMatch[1];
+            const values = this.splitArrayInitializer(scalarArrayMatch[2]).map((item) => this.normalizeArrayLiteralValue(item));
+            return `${name} = [${values.join(', ')}]`;
+        }
+
+        return null;
+    }
+
     private splitCompactLine(rawLine: string): string[] {
         const parts: string[] = [];
         let current = '';
@@ -1239,6 +1562,9 @@ export class EmulatorManager {
         result = result.replace(/\/\/.*$/g, '');
         result = result.replace(/\/\*.*?\*\//g, '');
         if (!result.trim()) return '';
+
+        const arrayDeclaration = this.convertArrayDeclaration(result);
+        if (arrayDeclaration !== null) return arrayDeclaration;
 
         const printfMatch = result.match(/Serial\s*\.\s*printf\s*\(\s*"([^"]*)"\s*(?:,\s*(.*?))?\s*\)\s*;?\s*$/);
         if (printfMatch) {
@@ -1337,11 +1663,11 @@ export class EmulatorManager {
         result = result.replace(/digitalWrite\s*\(\s*LED_PIN_(\d+)\s*,\s*(HIGH|LOW|1|0)\s*\)/g,
             (_match, pin, state) => `led${pin}.value(${state === 'HIGH' || state === '1' ? '1' : '0'})`);
         result = result.replace(/digitalWrite\s*\(\s*(\d+)\s*,\s*(HIGH|LOW|1|0)\s*\)/g,
-            (_match, pin, state) => `pin${pin}.value(${state === 'HIGH' || state === '1' ? '1' : '0'})`);
+            (_match, pin, state) => `Pin(${pin}, Pin.OUT).value(${state === 'HIGH' || state === '1' ? '1' : '0'})`);
 
         result = result.replace(/digitalRead\s*\(\s*([A-Z_][A-Z0-9_]*)\s*\)/g, (_match, pinName) => `${pinName.replace(/_PIN$/, '').toLowerCase()}.value()`);
         result = result.replace(/digitalRead\s*\(\s*BUTTON_PIN_(\d+)\s*\)/g, 'button$1.value()');
-        result = result.replace(/digitalRead\s*\(\s*(\d+)\s*\)/g, 'pin$1.value()');
+        result = result.replace(/digitalRead\s*\(\s*(\d+)\s*\)/g, 'Pin($1, Pin.IN, Pin.PULL_UP).value()');
 
         result = this.rewriteSerialCall(result, 'println');
         result = this.rewriteSerialCall(result, 'print');
@@ -1365,6 +1691,9 @@ export class EmulatorManager {
 
         const inlineFor = this.convertInlineForLoop(result);
         if (inlineFor) result = inlineFor;
+
+        const forHeader = this.convertForLoopHeader(result);
+        if (forHeader) result = forHeader;
 
         result = this.normalizeBooleanOperators(result);
         result = result.replace(
@@ -1454,6 +1783,11 @@ export class EmulatorManager {
         if (this.micropythonRunner) this.micropythonRunner.stop();
         this.hackcable.deactivateAllSensors();
         this.hackcable.deactivateAllActuators();
+    }
+
+    setInputPin(pin: number, value: boolean) {
+        if (this.boardType !== 'esp32' || !this.micropythonRunner) return;
+        this.micropythonRunner.setInputPin(pin, value);
     }
 
 

@@ -31,6 +31,8 @@ import {
 } from "@wokwi/elements";
 import i18next from "i18next";
 import { CustomESP32BoardElement } from "../components/custom-esp32-board";
+import { HandysenseBoardElement } from "../components/handysense-board";
+import { HandysenseRealBoardElement } from "../components/handysense-real-board";
 import { HandysenseProBoardElement } from "../components/handysense-pro-board";
 import { PhSensorElement } from "../components/ph-sensor-element";
 import { AirHumiditySensorElement } from "../components/air-humidity-sensor-element";
@@ -54,11 +56,11 @@ import { EcSensorElement } from "../components/ec-sensor-element";
 import { FertilizerTempSensorElement } from "../components/fertilizer-temp-sensor-element";
 import { FourChannelButtonElement } from "../components/four-channel-button-element";
 
-export declare type WokwiComponent = SevenSegmentElement | ArduinoUnoElement | LCD1602Element | LEDElement | NeoPixelElement | PushbuttonElement | ResistorElement | MembraneKeypadElement | PotentiometerElement | NeopixelMatrixElement | SSD1306Element | BuzzerElement | RotaryDialerElement | ServoElement | Dht22Element | ArduinoMegaElement | ArduinoNanoElement | Ds1307Element | LEDRingElement | SlideSwitchElement | HCSR04Element | LCD2004Element | AnalogJoystickElement | SlidePotentiometerElement | IRReceiverElement | IRRemoteElement | PIRMotionSensorElement | NTCTemperatureSensorElement | HeartBeatSensorElement | TiltSwitchElement | FlameSensorElement | GasSensorElement | FranzininhoElement | NanoRP2040ConnectElement | SmallSoundSensorElement | BigSoundSensorElement | MPU6050Element | ESP32DevkitV1Element | KY040Element | PhotoresistorSensorElement | RGBLedElement | ILI9341Element | LedBarGraphElement | MicrosdCardElement | DipSwitch8Element | CustomESP32BoardElement | HandysenseProBoardElement | PhSensorElement | AirHumiditySensorElement | MistingPumpElement | WaterPumpElement | FanElement | RelayElement | Rs485PhSensorElement | Rs485LightSensorElement | Rs485RainSensorElement | Rs485WindSpeedSensorElement | Rs485ParSensorElement | WeatherSensorHtco2plxElement | Sht31SensorElement | Bh1750SensorElement | CurrentLoop420mAElement | SoilMoistureSensorElement | FourChannelRelayElement | FertilizerPhSensorElement | EcSensorElement | FertilizerTempSensorElement | FourChannelButtonElement
+export declare type WokwiComponent = SevenSegmentElement | ArduinoUnoElement | LCD1602Element | LEDElement | NeoPixelElement | PushbuttonElement | ResistorElement | MembraneKeypadElement | PotentiometerElement | NeopixelMatrixElement | SSD1306Element | BuzzerElement | RotaryDialerElement | ServoElement | Dht22Element | ArduinoMegaElement | ArduinoNanoElement | Ds1307Element | LEDRingElement | SlideSwitchElement | HCSR04Element | LCD2004Element | AnalogJoystickElement | SlidePotentiometerElement | IRReceiverElement | IRRemoteElement | PIRMotionSensorElement | NTCTemperatureSensorElement | HeartBeatSensorElement | TiltSwitchElement | FlameSensorElement | GasSensorElement | FranzininhoElement | NanoRP2040ConnectElement | SmallSoundSensorElement | BigSoundSensorElement | MPU6050Element | ESP32DevkitV1Element | KY040Element | PhotoresistorSensorElement | RGBLedElement | ILI9341Element | LedBarGraphElement | MicrosdCardElement | DipSwitch8Element | CustomESP32BoardElement | HandysenseBoardElement | HandysenseRealBoardElement | HandysenseProBoardElement | PhSensorElement | AirHumiditySensorElement | MistingPumpElement | WaterPumpElement | FanElement | RelayElement | Rs485PhSensorElement | Rs485LightSensorElement | Rs485RainSensorElement | Rs485WindSpeedSensorElement | Rs485ParSensorElement | WeatherSensorHtco2plxElement | Sht31SensorElement | Bh1750SensorElement | CurrentLoop420mAElement | SoilMoistureSensorElement | FourChannelRelayElement | FertilizerPhSensorElement | EcSensorElement | FertilizerTempSensorElement | FourChannelButtonElement
 
 export declare type WokwiClass = typeof Dht22Element;
 
-export const wokwiComponentClasses = [SevenSegmentElement, ArduinoUnoElement, LCD1602Element, LEDElement, NeoPixelElement, PushbuttonElement, ResistorElement, MembraneKeypadElement, PotentiometerElement, NeopixelMatrixElement, SSD1306Element, BuzzerElement, RotaryDialerElement, ServoElement, Dht22Element, ArduinoMegaElement, ArduinoNanoElement, Ds1307Element, LEDRingElement, SlideSwitchElement, HCSR04Element, LCD2004Element, AnalogJoystickElement, SlidePotentiometerElement, IRReceiverElement, IRRemoteElement,  PIRMotionSensorElement, NTCTemperatureSensorElement, HeartBeatSensorElement, TiltSwitchElement, FlameSensorElement, GasSensorElement, FranzininhoElement, NanoRP2040ConnectElement, SmallSoundSensorElement, BigSoundSensorElement, MPU6050Element, ESP32DevkitV1Element, KY040Element, PhotoresistorSensorElement, RGBLedElement, ILI9341Element, LedBarGraphElement, MicrosdCardElement, DipSwitch8Element, CustomESP32BoardElement, HandysenseProBoardElement, PhSensorElement, AirHumiditySensorElement, MistingPumpElement, WaterPumpElement, FanElement, RelayElement, Rs485PhSensorElement, Rs485LightSensorElement, Rs485RainSensorElement, Rs485WindSpeedSensorElement, Rs485ParSensorElement, WeatherSensorHtco2plxElement, Sht31SensorElement, Bh1750SensorElement, CurrentLoop420mAElement, SoilMoistureSensorElement, FourChannelRelayElement, FertilizerPhSensorElement, EcSensorElement, FertilizerTempSensorElement, FourChannelButtonElement]
+export const wokwiComponentClasses = [SevenSegmentElement, ArduinoUnoElement, LCD1602Element, LEDElement, NeoPixelElement, PushbuttonElement, ResistorElement, MembraneKeypadElement, PotentiometerElement, NeopixelMatrixElement, SSD1306Element, BuzzerElement, RotaryDialerElement, ServoElement, Dht22Element, ArduinoMegaElement, ArduinoNanoElement, Ds1307Element, LEDRingElement, SlideSwitchElement, HCSR04Element, LCD2004Element, AnalogJoystickElement, SlidePotentiometerElement, IRReceiverElement, IRRemoteElement,  PIRMotionSensorElement, NTCTemperatureSensorElement, HeartBeatSensorElement, TiltSwitchElement, FlameSensorElement, GasSensorElement, FranzininhoElement, NanoRP2040ConnectElement, SmallSoundSensorElement, BigSoundSensorElement, MPU6050Element, ESP32DevkitV1Element, KY040Element, PhotoresistorSensorElement, RGBLedElement, ILI9341Element, LedBarGraphElement, MicrosdCardElement, DipSwitch8Element, CustomESP32BoardElement, HandysenseBoardElement, HandysenseRealBoardElement, HandysenseProBoardElement, PhSensorElement, AirHumiditySensorElement, MistingPumpElement, WaterPumpElement, FanElement, RelayElement, Rs485PhSensorElement, Rs485LightSensorElement, Rs485RainSensorElement, Rs485WindSpeedSensorElement, Rs485ParSensorElement, WeatherSensorHtco2plxElement, Sht31SensorElement, Bh1750SensorElement, CurrentLoop420mAElement, SoilMoistureSensorElement, FourChannelRelayElement, FertilizerPhSensorElement, EcSensorElement, FertilizerTempSensorElement, FourChannelButtonElement]
 
 export declare type WokwiComponentInfo = {id: number, clasz: WokwiClass, name: string, description: string, type: ComponentType}
 export declare type WokwiComponents = WokwiComponentInfo[]
@@ -95,6 +97,18 @@ export const wokwiComponents = (): WokwiComponents => [
         clasz: CustomESP32BoardElement,
         name: "Custom ESP32",
         description: "Custom ESP32 board with modified design",
+        type: ComponentType.CARD
+    },{
+        id: 50,
+        clasz: HandysenseBoardElement,
+        name: "Handysense",
+        description: "Handysense board layout matched to the hardware map",
+        type: ComponentType.CARD
+    },{
+        id: 51,
+        clasz: HandysenseRealBoardElement,
+        name: "Handysense real",
+        description: "Handysense board layout aligned to the real board photo",
         type: ComponentType.CARD
     },{
         id: 28,

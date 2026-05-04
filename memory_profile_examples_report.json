@@ -1,0 +1,59 @@
+{
+  "target": "http://localhost:3000/#circuit",
+  "captured_at": "2026-04-20 23:48:02",
+  "baseline": {
+    "state": "idle_circuit",
+    "top_js_heap_used_mb": 29.77,
+    "top_js_heap_total_mb": 46.12,
+    "frame_js_heap_used_mb": 38.5,
+    "frame_js_heap_total_mb": 54.85,
+    "dom_nodes": 15766
+  },
+  "examples": [
+    {
+      "value": "new_bfarm_smart_greenhouse",
+      "label": "Smart Greenhouse End-to-End",
+      "top_js_heap_used_mb": 31.55,
+      "top_js_heap_total_mb": 47.37,
+      "frame_js_heap_used_mb": 40.29,
+      "frame_js_heap_total_mb": 56.1,
+      "dom_nodes": 13357
+    },
+    {
+      "value": "new_bfarm_awd_automation",
+      "label": "Paddy Field AWD Automation",
+      "top_js_heap_used_mb": 30.2,
+      "top_js_heap_total_mb": 46.87,
+      "frame_js_heap_used_mb": 38.94,
+      "frame_js_heap_total_mb": 55.6,
+      "dom_nodes": 13351
+    },
+    {
+      "value": "new_bfarm_fertigation_lab",
+      "label": "Fertigation Controller Lab",
+      "top_js_heap_used_mb": 32.78,
+      "top_js_heap_total_mb": 46.87,
+      "frame_js_heap_used_mb": 41.51,
+      "frame_js_heap_total_mb": 55.6,
+      "dom_nodes": 13338
+    },
+    {
+      "value": "new_bfarm_weather_station_sim",
+      "label": "Edge Weather Station Simulator",
+      "top_js_heap_used_mb": 29.04,
+      "top_js_heap_total_mb": 52.37,
+      "frame_js_heap_used_mb": 37.78,
+      "frame_js_heap_total_mb": 61.1,
+      "dom_nodes": 13020
+    },
+    {
+      "value": "new_bfarm_hybrid_connectivity",
+      "label": "Hybrid Connectivity Testbed",
+      "top_js_heap_used_mb": 30.32,
+      "top_js_heap_total_mb": 55.87,
+      "frame_js_heap_used_mb": 39.05,
+      "frame_js_heap_total_mb": 64.6,
+      "dom_nodes": 13331
+    }
+  ]
+}

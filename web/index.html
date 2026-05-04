@@ -26,6 +26,8 @@
                     <option value="arduino">Arduino Uno</option>
                     <option value="esp32">ESP32</option>
                     <option value="custom-esp32">Custom ESP32</option>
+                    <option value="handysense">Handysense</option>
+                    <option value="handysense-real">Handysense real</option>
                     <option value="handysense-pro" selected>Handysense pro</option>
                 </select>
                 <select id="compiler-mode" class="controlbar-select-corner compiler-mode-corner" title="Compilation method" style="display:none">
@@ -39,12 +41,21 @@
             <div class="controlbar-topright-row controlbar-topright-examples">
                 <select id="code-examples" class="controlbar-select-corner examples-mode-corner">
                     <option value="" data-i18n="ui.selectExample">Select an example...</option>
+                    <optgroup label="Handysensereal">
+                        <option value="handysense_real_six_button_test">6 Button Test</option>
+                        <option value="handysense_real_eight_led_test">8 LED Test</option>
+                        <option value="handysense_real_buttons_leds_test">Buttons + LEDs Test</option>
+                    </optgroup>
                     <optgroup label="new Bfarm Test">
                         <option value="new_bfarm_smart_greenhouse" selected>Smart Greenhouse End-to-End</option>
                         <option value="new_bfarm_awd_automation">Paddy Field AWD Automation</option>
                         <option value="new_bfarm_fertigation_lab">Fertigation Controller Lab</option>
                         <option value="new_bfarm_weather_station_sim">Edge Weather Station Simulator</option>
                         <option value="new_bfarm_hybrid_connectivity">Hybrid Connectivity Testbed</option>
+                    </optgroup>
+                    <optgroup label="Relay Contact Tests">
+                        <option value="handysense_relay_load_no">HandySense Relay Load Test (NO)</option>
+                        <option value="handysense_relay_load_nc">HandySense Relay Load Test (NC)</option>
                     </optgroup>
                 </select>
             </div>

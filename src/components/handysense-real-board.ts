@@ -1,0 +1,513 @@
+import { html, svg } from 'lit';
+import type { ElementPin } from '@wokwi/elements';
+import { HandysenseProBoardElement } from './handysense-pro-board';
+import { unitToPx } from '../utils/dom';
+
+const VCC_SIGNAL = [{ type: 'power', signal: 'VCC' }];
+const GND_SIGNAL = [{ type: 'power', signal: 'GND' }];
+const I2C_SCL_SIGNAL = [{ type: 'i2c', signal: 'SCL', bus: 0 }];
+const I2C_SDA_SIGNAL = [{ type: 'i2c', signal: 'SDA', bus: 0 }];
+const SPI_MOSI_SIGNAL = [{ type: 'spi', signal: 'MOSI', bus: 0 }];
+const SPI_MISO_SIGNAL = [{ type: 'spi', signal: 'MISO', bus: 0 }];
+const SPI_CLK_SIGNAL = [{ type: 'spi', signal: 'SCK', bus: 0 }];
+const SPI_CS_SIGNAL = [{ type: 'spi', signal: 'SS', bus: 0 }];
+
+export const HANDYSENSE_REAL_BOARD_CONTROL_EVENT = 'handysense-real-board-control';
+
+export type HandysenseRealBoardControlName =
+  | 'reset'
+  | 'boot'
+  | 'button0'
+  | 'button1'
+  | 'button2'
+  | 'button3';
+
+export interface HandysenseRealBoardControlDetail {
+  control: HandysenseRealBoardControlName;
+  pressed: boolean;
+}
+
+type HandysenseRealMomentaryControlName = Exclude<HandysenseRealBoardControlName, 'reset'>;
+
+function connectorSignals(names: string[]): any[][] {
+  return names.map((name) => {
+    if (name.endsWith('_VCC') || name.endsWith('_24V') || name === 'PWR24_VIN' || name === 'RELAY5V_VIN' || name === 'LEDR_VCC' || name === 'LED_VCC_A' || name === 'LED_VCC_B') {
+      return VCC_SIGNAL;
+    }
+    if (name.endsWith('_GND') || name === 'PWR24_GND' || name === 'RELAY5V_GND') {
+      return GND_SIGNAL;
+    }
+    switch (name) {
+      case 'I2C1_SCL':
+      case 'I2C2_SCL':
+      case 'I2C3_SCL':
+        return I2C_SCL_SIGNAL;
+      case 'I2C1_SDA':
+      case 'I2C2_SDA':
+      case 'I2C3_SDA':
+        return I2C_SDA_SIGNAL;
+      case 'SPI_MOSI':
+        return SPI_MOSI_SIGNAL;
+      case 'SPI_MISO':
+        return SPI_MISO_SIGNAL;
+      case 'SPI_CLK':
+        return SPI_CLK_SIGNAL;
+      case 'SPI_CS':
+        return SPI_CS_SIGNAL;
+      default:
+        return [];
+    }
+  });
+}
+
+function terminalGroupHorizontal(names: string[], x: number, y: number, step = 8): ElementPin[] {
+  const signals = connectorSignals(names);
+  return names.map((name, index) => ({
+    name,
+    x: x + (index * step),
+    y,
+    signals: signals[index],
+  }));
+}
+
+function terminalGroupVertical(names: string[], x: number, y: number, step = 8): ElementPin[] {
+  const signals = connectorSignals(names);
+  return names.map((name, index) => ({
+    name,
+    x,
+    y: y + (index * step),
+    signals: signals[index],
+  }));
+}
+
+const HANDYSENSE_REAL_PIN_INFO: ElementPin[] = [
+  ...terminalGroupHorizontal(['RS485_B', 'RS485_A', 'RS485_GND', 'RS485_24V'], 22.8, 10.4),
+
+  ...terminalGroupHorizontal(['I2C1_SCL', 'I2C1_SDA', 'I2C1_GND', 'I2C1_VCC'], 55.1, 10.5),
+  ...terminalGroupHorizontal(['I2C2_SCL', 'I2C2_SDA', 'I2C2_GND', 'I2C2_VCC'], 90, 10.5),
+  ...terminalGroupHorizontal(['I2C3_SCL', 'I2C3_SDA', 'I2C3_GND', 'I2C3_VCC'], 90, 43.9),
+
+  ...terminalGroupVertical(['A05_1_VCC', 'A05_1_SIG', 'A05_1_GND'], 9.8, 30.5),
+  ...terminalGroupVertical(['A05_2_VCC', 'A05_2_SIG', 'A05_2_GND'], 9.8, 59.2),
+  ...terminalGroupVertical(['A420_1_VCC', 'A420_1_SIG', 'A420_1_GND'], 9.8, 85.8),
+  ...terminalGroupVertical(['A420_2_VCC', 'A420_2_SIG', 'A420_2_GND'], 9.8, 113.8),
+
+  ...terminalGroupHorizontal(['LEDS_0', 'LEDS_1', 'LEDS_2', 'LEDS_3', 'LED_VCC_A'], 132, 149.5),
+  ...terminalGroupHorizontal(['LEDS_4', 'LEDS_5', 'LEDS_6', 'LEDS_7', 'LED_VCC_B'], 174, 149.5),
+
+  ...terminalGroupVertical(['SPI_MOSI', 'SPI_MISO', 'SPI_CLK', 'SPI_CS', 'SPI_GND'], 229.2, 91.5),
+  ...terminalGroupVertical(['BTN_0', 'BTN_1', 'BTN_2', 'BTN_3', 'BTN_GND'], 229.2, 136),
+  ...terminalGroupVertical(['LEDR_0', 'LEDR_1', 'LEDR_2', 'LEDR_3', 'LEDR_VCC'], 229.2, 177),
+
+  ...terminalGroupVertical(['PWR24_VIN', 'PWR24_GND'], 9.6, 252),
+  ...terminalGroupHorizontal(['RELAY5V_VIN', 'RELAY5V_GND'], 63.5, 270),
+
+  ...terminalGroupHorizontal(['R1_COM', 'R1_NC', 'R1_NO'], 90.5, 270),
+  ...terminalGroupHorizontal(['R2_COM', 'R2_NC', 'R2_NO'], 125.5, 270),
+  ...terminalGroupHorizontal(['R3_COM', 'R3_NC', 'R3_NO'], 161.5, 270),
+  ...terminalGroupHorizontal(['R4_COM', 'R4_NC', 'R4_NO'], 198.5, 270),
+];
+
+type BoardFaceMode = 'photo' | 'svg';
+
+const HANDYSENSE_REAL_CONTROL_GEOMETRY: Record<HandysenseRealBoardControlName, { x: number; y: number; radius: number }> = {
+  reset: { x: 141, y: 74, radius: 9 },
+  boot: { x: 170, y: 74, radius: 9 },
+  button0: { x: 115, y: 172, radius: 9 },
+  button1: { x: 142, y: 172, radius: 9 },
+  button2: { x: 168, y: 172, radius: 9 },
+  button3: { x: 196, y: 172, radius: 9 },
+};
+
+const HANDYSENSE_REAL_CONTROL_LABELS: Record<HandysenseRealBoardControlName, string> = {
+  reset: 'RESET',
+  boot: 'BOOT',
+  button0: 'Button 0',
+  button1: 'Button 1',
+  button2: 'Button 2',
+  button3: 'Button 3',
+};
+
+const HANDYSENSE_REAL_LED_GEOMETRY: Array<{ x: number; y: number; label: string }> = [
+  { x: 134, y: 128, label: 'LED0' },
+  { x: 144, y: 128, label: 'LED1' },
+  { x: 154, y: 128, label: 'LED2' },
+  { x: 164, y: 128, label: 'LED3' },
+  { x: 174, y: 128, label: 'LED4' },
+  { x: 184, y: 128, label: 'LED5' },
+  { x: 190, y: 128, label: 'LED6' },
+  { x: 198, y: 128, label: 'LED7' },
+];
+
+export class HandysenseRealBoardElement extends HandysenseProBoardElement {
+  readonly pinInfo: ElementPin[] = HANDYSENSE_REAL_PIN_INFO;
+  private boardFaceMode: BoardFaceMode = 'photo';
+  private faceToggleElement: HTMLDivElement | null = null;
+  private controlOverlayElement: HTMLDivElement | null = null;
+  private readonly controlButtonElements = new Map<HandysenseRealBoardControlName, HTMLButtonElement>();
+  private hostStyleObserver: MutationObserver | null = null;
+  private overlayStyleObserver: MutationObserver | null = null;
+  private readonly syncFaceTogglePositionBound = () => this.syncFaceTogglePosition();
+  private readonly controlPressedState: Record<HandysenseRealBoardControlName, boolean> = {
+    reset: false,
+    boot: false,
+    button0: false,
+    button1: false,
+    button2: false,
+    button3: false,
+  };
+  private readonly ledState = new Array<boolean>(8).fill(false);
+
+  setLedState(index: number, on: boolean) {
+    if (index < 0 || index >= this.ledState.length) {
+      return;
+    }
+    if (this.ledState[index] === on) {
+      return;
+    }
+    this.ledState[index] = on;
+    this.requestUpdate();
+  }
+
+  private consumePointer(event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  private consumeControlInteraction(event: Event) {
+    this.consumePointer(event);
+  }
+
+  private dispatchBoardControl(control: HandysenseRealBoardControlName, pressed: boolean) {
+    this.dispatchEvent(new CustomEvent<HandysenseRealBoardControlDetail>(HANDYSENSE_REAL_BOARD_CONTROL_EVENT, {
+      bubbles: true,
+      composed: true,
+      detail: { control, pressed },
+    }));
+  }
+
+  private setControlPressed(control: HandysenseRealBoardControlName, pressed: boolean) {
+    if (this.controlPressedState[control] === pressed) {
+      return;
+    }
+    this.controlPressedState[control] = pressed;
+    this.syncControlOverlayState();
+  }
+
+  private releaseMomentaryControl(control: HandysenseRealMomentaryControlName) {
+    if (!this.controlPressedState[control]) {
+      return;
+    }
+    this.setControlPressed(control, false);
+    this.dispatchBoardControl(control, false);
+  }
+
+  private handleResetPointerDown(event: PointerEvent) {
+    this.consumePointer(event);
+    this.setControlPressed('reset', true);
+    this.dispatchBoardControl('reset', true);
+    window.setTimeout(() => this.setControlPressed('reset', false), 120);
+  }
+
+  private handleMomentaryControlPointerDown(control: HandysenseRealMomentaryControlName, event: PointerEvent, target?: HTMLElement | null) {
+    this.consumePointer(event);
+    target?.setPointerCapture?.(event.pointerId);
+    this.setControlPressed(control, true);
+    this.dispatchBoardControl(control, true);
+  }
+
+  private handleMomentaryControlPointerUp(control: HandysenseRealMomentaryControlName, event: PointerEvent, target?: HTMLElement | null) {
+    this.consumePointer(event);
+    if (target?.hasPointerCapture?.(event.pointerId)) {
+      target.releasePointerCapture(event.pointerId);
+    }
+    this.releaseMomentaryControl(control);
+  }
+
+  private handleMomentaryControlPointerCancel(control: HandysenseRealMomentaryControlName, event: PointerEvent) {
+    this.consumePointer(event);
+    this.releaseMomentaryControl(control);
+  }
+
+  private ensureControlOverlay() {
+    if (this.controlOverlayElement) {
+      return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'handysense-real-board-controls';
+    overlay.setAttribute('aria-hidden', 'false');
+
+    const controls: HandysenseRealBoardControlName[] = ['reset', 'boot', 'button0', 'button1', 'button2', 'button3'];
+    controls.forEach((control) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `handysense-real-board-control handysense-real-board-control--${control === 'reset' ? 'reset' : 'momentary'}`;
+      button.textContent = HANDYSENSE_REAL_CONTROL_LABELS[control];
+      button.dataset.control = control;
+      button.setAttribute('aria-label', HANDYSENSE_REAL_CONTROL_LABELS[control]);
+      button.addEventListener('pointerdown', (event) => {
+        this.consumeControlInteraction(event);
+        if (control === 'reset') {
+          this.handleResetPointerDown(event);
+          return;
+        }
+        this.handleMomentaryControlPointerDown(control, event, button);
+      });
+      button.addEventListener('pointerup', (event) => {
+        this.consumeControlInteraction(event);
+        if (control === 'reset') {
+          return;
+        }
+        this.handleMomentaryControlPointerUp(control, event, button);
+      });
+      button.addEventListener('pointercancel', (event) => {
+        this.consumeControlInteraction(event);
+        if (control === 'reset') {
+          return;
+        }
+        this.handleMomentaryControlPointerCancel(control, event);
+      });
+      button.addEventListener('lostpointercapture', (event) => {
+        this.consumeControlInteraction(event);
+        if (control === 'reset') {
+          return;
+        }
+        this.releaseMomentaryControl(control);
+      });
+      button.addEventListener('click', (event) => this.consumeControlInteraction(event));
+      button.addEventListener('mousedown', (event) => this.consumeControlInteraction(event));
+      button.addEventListener('mouseup', (event) => this.consumeControlInteraction(event));
+      button.addEventListener('touchstart', (event) => this.consumeControlInteraction(event));
+      button.addEventListener('touchend', (event) => this.consumeControlInteraction(event));
+      overlay.appendChild(button);
+      this.controlButtonElements.set(control, button);
+    });
+
+    document.body.appendChild(overlay);
+    this.controlOverlayElement = overlay;
+    this.syncControlOverlayPosition();
+    this.syncControlOverlayState();
+  }
+
+  private syncControlOverlayPosition() {
+    if (!this.controlOverlayElement) {
+      return;
+    }
+
+    const rect = this.getBoundingClientRect();
+    const scaleX = rect.width / 240;
+    const scaleY = rect.height / 280;
+
+    this.controlButtonElements.forEach((button, control) => {
+      const { x, y, radius } = HANDYSENSE_REAL_CONTROL_GEOMETRY[control];
+      const diameter = Math.max(radius * 2 * Math.min(scaleX, scaleY), 18);
+      const left = rect.left + (x * scaleX) - (diameter / 2);
+      const top = rect.top + (y * scaleY) - (diameter / 2);
+      button.style.left = `${left}px`;
+      button.style.top = `${top}px`;
+      button.style.width = `${diameter}px`;
+      button.style.height = `${diameter}px`;
+      button.style.fontSize = `${Math.max(diameter * (control === 'boot' ? 0.2 : 0.24), 8)}px`;
+    });
+  }
+
+  private syncControlOverlayState() {
+    this.controlButtonElements.forEach((button, control) => {
+      const pressed = this.controlPressedState[control];
+      button.classList.toggle('pressed', pressed);
+      button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+    });
+  }
+
+  private handleBoardFaceToggle(mode: BoardFaceMode, event: Event) {
+    this.consumePointer(event);
+    this.setBoardFace(mode);
+  }
+
+  private setBoardFace(mode: BoardFaceMode) {
+    if (this.boardFaceMode !== mode) {
+      this.boardFaceMode = mode;
+      this.syncFaceToggleState();
+      this.requestUpdate();
+    }
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    queueMicrotask(() => {
+      this.ensureFaceToggle();
+      this.ensureControlOverlay();
+      this.syncFaceTogglePosition();
+      this.syncControlOverlayPosition();
+      this.syncFaceToggleState();
+      this.syncControlOverlayState();
+      this.observeHostStyle();
+    });
+  }
+
+  disconnectedCallback() {
+    this.hostStyleObserver?.disconnect();
+    this.hostStyleObserver = null;
+    this.overlayStyleObserver?.disconnect();
+    this.overlayStyleObserver = null;
+    window.removeEventListener('resize', this.syncFaceTogglePositionBound);
+    window.removeEventListener('scroll', this.syncFaceTogglePositionBound, true);
+    this.faceToggleElement?.remove();
+    this.faceToggleElement = null;
+    this.controlOverlayElement?.remove();
+    this.controlOverlayElement = null;
+    this.controlButtonElements.clear();
+    super.disconnectedCallback();
+  }
+
+  private ensureFaceToggle() {
+    if (this.faceToggleElement) {
+      return;
+    }
+
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.display = 'flex';
+    container.style.gap = '4px';
+    container.style.padding = '4px';
+    container.style.borderRadius = '10px';
+    container.style.background = 'rgba(15,44,23,0.92)';
+    container.style.border = '1px solid #b8dcbf';
+    container.style.zIndex = '9999';
+    container.style.pointerEvents = 'auto';
+
+    const createButton = (label: string, mode: BoardFaceMode) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = label;
+      button.dataset.mode = mode;
+      button.style.borderRadius = '999px';
+      button.style.padding = '2px 9px';
+      button.style.font = '700 11px Arial';
+      button.style.cursor = 'pointer';
+      button.style.pointerEvents = 'auto';
+      button.addEventListener('pointerdown', (event) => this.consumePointer(event));
+      button.addEventListener('mousedown', (event) => this.consumePointer(event));
+      button.addEventListener('touchstart', (event) => this.consumePointer(event));
+      button.addEventListener('click', (event) => this.handleBoardFaceToggle(mode, event));
+      return button;
+    };
+
+    container.append(createButton('PHOTO', 'photo'), createButton('SVG', 'svg'));
+    document.body.appendChild(container);
+    this.faceToggleElement = container;
+    window.addEventListener('resize', this.syncFaceTogglePositionBound);
+    window.addEventListener('scroll', this.syncFaceTogglePositionBound, true);
+  }
+
+  private observeHostStyle() {
+    if (this.hostStyleObserver) {
+      return;
+    }
+
+    this.hostStyleObserver = new MutationObserver(() => this.syncFaceTogglePosition());
+    this.hostStyleObserver.observe(this, { attributes: true, attributeFilter: ['style'] });
+
+    const overlayContainer = this.parentElement;
+    if (overlayContainer && !this.overlayStyleObserver) {
+      this.overlayStyleObserver = new MutationObserver(() => this.syncFaceTogglePosition());
+      this.overlayStyleObserver.observe(overlayContainer, { attributes: true, attributeFilter: ['style'] });
+    }
+  }
+
+  private syncFaceTogglePosition() {
+    if (!this.faceToggleElement) {
+      return;
+    }
+
+    const svgElement = this.shadowRoot?.querySelector('svg');
+    const rect = this.getBoundingClientRect();
+    const boardWidth = svgElement ? unitToPx(svgElement.getAttribute('width') || '0') : rect.width;
+    const top = rect.top - 28;
+    const left = rect.left + Math.max(boardWidth - this.faceToggleElement.offsetWidth, 0);
+
+    this.faceToggleElement.style.top = `${top}px`;
+    this.faceToggleElement.style.left = `${left}px`;
+    this.syncControlOverlayPosition();
+  }
+
+  private syncFaceToggleState() {
+    if (!this.faceToggleElement) {
+      return;
+    }
+
+    const buttons = Array.from(this.faceToggleElement.querySelectorAll('button'));
+    buttons.forEach((button) => {
+      const active = button.dataset.mode === this.boardFaceMode;
+      button.style.border = `1px solid ${active ? '#ffffff' : '#9fd0a6'}`;
+      button.style.background = active ? '#f2f8f2' : '#2f6d3d';
+      button.style.color = active ? '#184b28' : '#eef7ee';
+    });
+  }
+
+  render() {
+    const boardFaceHref = this.boardFaceMode === 'photo'
+      ? './assets/handysense-real-board.png'
+      : './assets/handysense-real-board-alt.svg';
+
+    queueMicrotask(() => {
+      this.ensureFaceToggle();
+      this.ensureControlOverlay();
+      this.syncFaceTogglePosition();
+      this.syncControlOverlayPosition();
+      this.syncFaceToggleState();
+      this.syncControlOverlayState();
+    });
+
+    return html`${svg`
+      <svg width="63mm" height="74mm" version="1.1" viewBox="0 0 240 280" xmlns="http://www.w3.org/2000/svg">
+        <image
+          href="${boardFaceHref}"
+          x="0"
+          y="0"
+          width="240"
+          height="280"
+          preserveAspectRatio="none"
+        />
+        ${HANDYSENSE_REAL_LED_GEOMETRY.map((led, index) => {
+          const isOn = this.ledState[index];
+          return svg`
+            <g pointer-events="none" aria-label="${led.label}">
+              <circle
+                cx="${led.x}"
+                cy="${led.y}"
+                r="3.2"
+                fill="${isOn ? '#fff06a' : '#38443a'}"
+                stroke="${isOn ? '#ffde38' : '#80907f'}"
+                stroke-width="0.8"
+                opacity="${isOn ? '1' : '0.78'}"
+              />
+              <circle
+                cx="${led.x}"
+                cy="${led.y}"
+                r="${isOn ? 5.8 : 4.7}"
+                fill="${isOn ? '#fff06a' : '#263529'}"
+                opacity="${isOn ? '0.34' : '0.22'}"
+              />
+              <text
+                x="${led.x}"
+                y="${led.y - 5.8}"
+                text-anchor="middle"
+                font-size="3.2"
+                font-family="Arial, sans-serif"
+                font-weight="700"
+                fill="${isOn ? '#fff8a8' : '#c8d2c6'}"
+                paint-order="stroke"
+                stroke="#122016"
+                stroke-width="0.7"
+              >${index}</text>
+            </g>
+          `;
+        })}
+      </svg>
+    `}`;
+  }
+}
+
+customElements.define('handysense-real-board', HandysenseRealBoardElement);

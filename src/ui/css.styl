@@ -424,3 +424,47 @@
       #hackCable-canvas
         min-width 400px
         min-height 300px
+
+.handysense-real-board-controls
+  position fixed
+  inset 0
+  pointer-events none
+  z-index 9998
+
+  .handysense-real-board-control
+    position fixed
+    display flex
+    align-items center
+    justify-content center
+    border-radius 999px
+    border 1px solid #baf0c3
+    background-color #4f9b62
+    color #eef8ef
+    font-family Arial, sans-serif
+    font-weight 700
+    line-height 1
+    padding 0
+    cursor pointer
+    user-select none
+    pointer-events auto
+    box-shadow 0 1px 4px rgba(0, 0, 0, 0.25)
+    transition background-color 0.12s ease, transform 0.08s ease, box-shadow 0.12s ease
+
+    &:hover
+      box-shadow 0 2px 7px rgba(0, 0, 0, 0.33)
+
+    &:active
+      transform scale(0.97)
+
+    &.pressed
+      background-color #69c77f
+      border-color #7bf38f
+      color #ffffff
+
+    &--reset
+      background-color #cf5a49
+      border-color #ffb0a4
+
+      &.pressed
+        background-color #f06d59
+        border-color #ff8c7a

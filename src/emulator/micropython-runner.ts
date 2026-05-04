@@ -40,6 +40,7 @@ export class MicroPythonRunner {
     private supportedPins: Set<number>;
     private unsupportedWriteWarnings: Set<number> = new Set();
     private resumeLoopScheduler: (() => void) | null = null;
+    private externallyDrivenPins: Set<number> = new Set();
 
     // ESP32 common GPIO pins
     private readonly availablePins = [2, 4, 5, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33];
@@ -525,6 +526,9 @@ except Exception:
             (globalThis as any)._micropython_set_pin_mode = (pin: number, mode: number, pull: number) => {
                 const pinState = this.ensurePinState(pin);
                 pinState.mode = mode === 1 ? 'OUTPUT' : (pull === 2 ? 'INPUT_PULLUP' : 'INPUT');
+                if (pinState.mode === 'INPUT_PULLUP' && !this.externallyDrivenPins.has(pin)) {
+                    pinState.value = true;
+                }
                 console.log(`[MicroPython] Pin ${pin} mode set to ${pinState.mode}`);
             };
 
@@ -878,6 +882,7 @@ except Exception:
 
     setInputPin(pin: number, value: boolean): void {
         const pinState = this.ensurePinState(pin);
+        this.externallyDrivenPins.add(pin);
         if (pinState.mode !== 'OUTPUT') {
             pinState.value = value;
         }

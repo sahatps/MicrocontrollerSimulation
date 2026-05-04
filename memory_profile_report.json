@@ -1,0 +1,96 @@
+{
+  "target": "http://localhost:3000/#circuit",
+  "samples": [
+    {
+      "state": "1_idle_circuit",
+      "top_js_heap_used_mb": 28.39,
+      "top_js_heap_total_mb": 47.62,
+      "frame_js_heap_used_mb": 37.12,
+      "frame_js_heap_total_mb": 56.35,
+      "frame_js_heap_limit_mb": 4096.0,
+      "figure_count": null,
+      "dom_nodes": 15130
+    },
+    {
+      "state": "2_shell_blocks_view",
+      "top_js_heap_used_mb": 28.6,
+      "top_js_heap_total_mb": 47.62,
+      "frame_js_heap_used_mb": 37.33,
+      "frame_js_heap_total_mb": 56.35,
+      "frame_js_heap_limit_mb": 4096.0,
+      "figure_count": null,
+      "dom_nodes": 15133
+    },
+    {
+      "state": "3_shell_back_to_circuit",
+      "top_js_heap_used_mb": 28.72,
+      "top_js_heap_total_mb": 47.62,
+      "frame_js_heap_used_mb": 37.46,
+      "frame_js_heap_total_mb": 56.35,
+      "frame_js_heap_limit_mb": 4096.0,
+      "figure_count": null,
+      "dom_nodes": 15264
+    },
+    {
+      "state": "4_after_compile",
+      "top_js_heap_used_mb": 29.12,
+      "top_js_heap_total_mb": 47.62,
+      "frame_js_heap_used_mb": 37.86,
+      "frame_js_heap_total_mb": 56.35,
+      "frame_js_heap_limit_mb": 4096.0,
+      "figure_count": null,
+      "dom_nodes": 15271
+    },
+    {
+      "state": "5_after_execute",
+      "top_js_heap_used_mb": 30.29,
+      "top_js_heap_total_mb": 47.87,
+      "frame_js_heap_used_mb": 39.12,
+      "frame_js_heap_total_mb": 56.7,
+      "frame_js_heap_limit_mb": 4096.0,
+      "figure_count": null,
+      "dom_nodes": 15349
+    },
+    {
+      "state": "6_io_tab_unavailable",
+      "top_js_heap_used_mb": 30.38,
+      "top_js_heap_total_mb": 47.87,
+      "frame_js_heap_used_mb": 39.21,
+      "frame_js_heap_total_mb": 56.7,
+      "frame_js_heap_limit_mb": 4096.0,
+      "figure_count": null,
+      "dom_nodes": 15349
+    },
+    {
+      "state": "7_load_hybrid_example",
+      "top_js_heap_used_mb": 33.41,
+      "top_js_heap_total_mb": 49.12,
+      "frame_js_heap_used_mb": 42.25,
+      "frame_js_heap_total_mb": 57.96,
+      "frame_js_heap_limit_mb": 4096.0,
+      "figure_count": null,
+      "dom_nodes": 13965
+    },
+    {
+      "state": "8_hybrid_compile_execute",
+      "top_js_heap_used_mb": 29.02,
+      "top_js_heap_total_mb": 47.87,
+      "frame_js_heap_used_mb": 37.86,
+      "frame_js_heap_total_mb": 56.7,
+      "frame_js_heap_limit_mb": 4096.0,
+      "figure_count": null,
+      "dom_nodes": 13348
+    },
+    {
+      "state": "9_after_stop",
+      "top_js_heap_used_mb": 28.91,
+      "top_js_heap_total_mb": 33.37,
+      "frame_js_heap_used_mb": 37.74,
+      "frame_js_heap_total_mb": 42.2,
+      "frame_js_heap_limit_mb": 4096.0,
+      "figure_count": null,
+      "dom_nodes": 13332
+    }
+  ],
+  "captured_at": "2026-04-20 23:46:28"
+}

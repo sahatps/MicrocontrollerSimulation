@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="647" height="759" viewBox="0 0 647 759">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#8d0000" flood-opacity="0.35"/>
+    </filter>
+    <style>
+      .box {
+        fill: none;
+        stroke: #ff2a2a;
+        stroke-width: 6;
+        filter: url(#shadow);
+      }
+      .label {
+        fill: #ffd21a;
+        font-family: Arial, Helvetica, sans-serif;
+        font-weight: 700;
+        font-size: 34px;
+        paint-order: stroke;
+        stroke: #9a4200;
+        stroke-width: 3px;
+        stroke-linejoin: round;
+      }
+    </style>
+  </defs>
+  <image href="handysense-layout-base.png" x="0" y="0" width="647" height="759" preserveAspectRatio="none" />
+
+  <rect class="box" x="16" y="640" width="49" height="86" rx="10" ry="10" />
+  <text class="label" x="38" y="724">1</text>
+  <rect class="box" x="195" y="643" width="48" height="82" rx="10" ry="10" />
+  <text class="label" x="198" y="691">2</text>
+  <rect class="box" x="272" y="574" width="334" height="153" rx="12" ry="12" />
+  <text class="label" x="357" y="582">3</text>
+  <rect class="box" x="551" y="430" width="67" height="236" rx="12" ry="12" />
+  <text class="label" x="603" y="548">4</text>
+  <rect class="box" x="551" y="273" width="67" height="131" rx="12" ry="12" />
+  <text class="label" x="605" y="393">5</text>
+  <rect class="box" x="344" y="455" width="211" height="74" rx="12" ry="12" />
+  <text class="label" x="455" y="470">6</text>
+  <rect class="box" x="551" y="186" width="67" height="131" rx="12" ry="12" />
+  <text class="label" x="604" y="305">7</text>
+  <rect class="box" x="486" y="139" width="118" height="114" rx="12" ry="12" />
+  <text class="label" x="506" y="216">8</text>
+  <rect class="box" x="519" y="62" width="100" height="63" rx="12" ry="12" />
+  <text class="label" x="556" y="112">9</text>
+  <rect class="box" x="325" y="17" width="129" height="129" rx="14" ry="14" />
+  <text class="label" x="400" y="190">10</text>
+  <rect class="box" x="191" y="12" width="134" height="153" rx="14" ry="14" />
+  <text class="label" x="247" y="132">11</text>
+  <rect class="box" x="74" y="13" width="106" height="64" rx="12" ry="12" />
+  <text class="label" x="107" y="82">12</text>
+  <rect class="box" x="18" y="81" width="69" height="183" rx="12" ry="12" />
+  <text class="label" x="86" y="189">13</text>
+  <rect class="box" x="18" y="266" width="69" height="182" rx="12" ry="12" />
+  <text class="label" x="86" y="331">14</text>
+  <rect class="box" x="242" y="341" width="123" height="111" rx="12" ry="12" />
+  <text class="label" x="316" y="404">15</text>
+  <rect class="box" x="229" y="217" width="148" height="95" rx="12" ry="12" />
+  <text class="label" x="240" y="253">16</text>
+</svg>

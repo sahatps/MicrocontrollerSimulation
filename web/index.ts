@@ -12,6 +12,8 @@ import { ClangWasmRunner } from './clang-runner';
 import { ArduinoWasmShim } from './arduino-wasm-shim';
 import { getArduinoHeaders } from './arduino-headers';
 import { convertBfarmMacroToCpp, hasBfarmMacroMarkers } from './bfarm-macro-converter';
+import { HANDYSENSE_REAL_BOARD_CONTROL_EVENT } from '../src/components/handysense-real-board';
+import type { HandysenseRealBoardControlDetail, HandysenseRealBoardControlName } from '../src/components/handysense-real-board';
 
 console.log("Running HackCable web interface")
 
@@ -31,11 +33,15 @@ let emscriptenAvailable = false;
 const clangRunner = new ClangWasmRunner();
 let lastClangResult: Uint8Array | null = null;
 let activeClangLoopHandle: ReturnType<typeof setInterval> | null = null;
+let activeClangShim: ArduinoWasmShim | null = null;
 
 // Native Clang WASM state
 let lastClangNativeResult: Uint8Array | null = null;
 let activeClangNativeLoopHandle: ReturnType<typeof setInterval> | null = null;
+let activeClangNativeShim: ArduinoWasmShim | null = null;
 let clangNativeAvailable = false;
+const emscriptenInputPinStates = new Map<number, boolean>();
+const emscriptenPinModes = new Map<number, number>();
 
 const SIM_FIXED_STEP_MS = 16;
 const SIM_MAX_STEPS_PER_TICK = 240;
@@ -223,7 +229,7 @@ function autoSetupBasicCircuit(forceSetup = false) {
 // Call auto-setup after a short delay to ensure everything is loaded
 setTimeout(() => {
     // Check which board should be loaded
-    const selectedBoard = localStorage.getItem('hackCable-selectedBoard') || 'handysense-pro';
+    const selectedBoard = normalizeBoardSelection(localStorage.getItem('hackCable-selectedBoard'));
     const savedCircuit = localStorage.getItem('savedEditor');
 
     // Auto-restore saved circuit if it has figures, otherwise run default setup
@@ -245,8 +251,8 @@ setTimeout(() => {
             setupESP32Circuit();
         } else if (selectedBoard === 'custom-esp32') {
             setupCustomESP32Circuit();
-        } else if (selectedBoard === 'handysense-pro') {
-            setupNewBfarmSmartGreenhouseCircuit();
+        } else if (isHandysenseBoard(selectedBoard)) {
+            setupHandysenseCircuit(selectedBoard);
         } else {
             autoSetupBasicCircuit();
         }
@@ -308,6 +314,13 @@ const EXAMPLE_SELECTION_STORAGE_KEY = 'hackCable-webExample-selected';
 
 const compilerModeSelect = document.getElementById('compiler-mode') as HTMLSelectElement;
 const boardSelectEl = document.getElementById('board-select') as HTMLSelectElement;
+const HANDYSENSE_REAL_RUNTIME_INPUT_PINS: Record<Exclude<HandysenseRealBoardControlName, 'reset'>, number> = {
+    boot: 0,
+    button0: 32,
+    button1: 33,
+    button2: 15,
+    button3: 39,
+};
 
 type MockSource = 'text' | 'timeline';
 type SensorKey = 'humidity' | 'temperature' | 'ph' | 'lux' | 'soil' | 'co2' | 'pressure';
@@ -378,6 +391,17 @@ let runControlState: RunControlState = 'needs-compile';
 let isCompilingCode = false;
 let codeMirrorEditor: any = null;
 const CODE_EDITOR_MIN_HEIGHT = 220;
+
+function setEmscriptenInputPin(pin: number, value: boolean): void {
+    emscriptenInputPinStates.set(pin, value);
+}
+
+function setEsp32RuntimeInputPin(pin: number, value: boolean): void {
+    hackCable.emulatorManager.setInputPin(pin, value);
+    activeClangShim?.setInputPin(pin, value);
+    activeClangNativeShim?.setInputPin(pin, value);
+    setEmscriptenInputPin(pin, value);
+}
 
 function getCodeEditorInput(): HTMLTextAreaElement | null {
     return codeInput instanceof HTMLTextAreaElement ? codeInput : null;
@@ -501,8 +525,8 @@ function markCompileStale() {
 }
 
 function updateCompilerVisibility() {
-    const board = boardSelectEl?.value;
-    const isESP32 = board === 'esp32' || board === 'custom-esp32' || board === 'handysense-pro';
+    const board = normalizeBoardSelection(boardSelectEl?.value);
+    const isESP32 = board === 'esp32' || board === 'custom-esp32' || isHandysenseBoard(board);
     if (compilerModeSelect) {
         compilerModeSelect.style.display = isESP32 ? 'inline-block' : 'none';
     }
@@ -768,6 +792,7 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                 () => readBridgeNumber('hackcable_sht31_humidity', [], 60),
                 () => readBridgeNumber('hackcable_bh1750_lux', [], 500),
             );
+            activeClangNativeShim = shimNative;
             WebAssembly.instantiate(lastClangNativeResult, shimNative.buildImports())
                 .then(({ instance }) => {
                     const exp = instance.exports as any;
@@ -812,6 +837,7 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                 () => readBridgeNumber('hackcable_sht31_humidity', [], 60),
                 () => readBridgeNumber('hackcable_bh1750_lux', [], 500),
             );
+            activeClangShim = shim;
             WebAssembly.instantiate(lastClangResult, shim.buildImports())
                 .then(({ instance }) => {
                     const exp = instance.exports as any;
@@ -854,6 +880,22 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
             hackCable.emulatorManager.run();
         }
     }
+
+    document.addEventListener(HANDYSENSE_REAL_BOARD_CONTROL_EVENT, (event: Event) => {
+        const controlEvent = event as CustomEvent<HandysenseRealBoardControlDetail>;
+        const detail = controlEvent.detail;
+        if (!detail) return;
+
+        if (detail.control === 'reset') {
+            clearSerial();
+            execute();
+            setTimeout(startIOMonitor, 200);
+            return;
+        }
+
+        const pin = HANDYSENSE_REAL_RUNTIME_INPUT_PINS[detail.control];
+        setEsp32RuntimeInputPin(pin, detail.pressed ? false : true);
+    });
 }
 
 // Tab switching
@@ -2388,8 +2430,18 @@ simHttpPathInput?.addEventListener('keydown', (event) => {
 (window as any).hackcable_update_pin = (pin: number, value: boolean) => {
     hackCable.esp32PinUpdate(pin, value);
 };
-(window as any).hackcable_pin_mode = (_pin: number, _mode: number) => {};
-(window as any).hackcable_read_pin = (_pin: number): boolean => false;
+(window as any).hackcable_pin_mode = (pin: number, mode: number) => {
+    emscriptenPinModes.set(pin, mode);
+    if (mode === 2 && !emscriptenInputPinStates.has(pin)) {
+        emscriptenInputPinStates.set(pin, true);
+    }
+};
+(window as any).hackcable_read_pin = (pin: number): boolean => {
+    if (emscriptenInputPinStates.has(pin)) {
+        return emscriptenInputPinStates.get(pin) === true;
+    }
+    return emscriptenPinModes.get(pin) === 2;
+};
 (window as any).hackcable_analog_read = (pin: number): number => {
     if (pin === 36) return getMock('soil', 50) * 40.95; // 0-100% → 0-4095 ADC
     return 0;
@@ -2475,10 +2527,12 @@ async function cleanupWasmInstance() {
         clearInterval(activeClangLoopHandle);
         activeClangLoopHandle = null;
     }
+    activeClangShim = null;
     if (activeClangNativeLoopHandle !== null) {
         clearInterval(activeClangNativeLoopHandle);
         activeClangNativeLoopHandle = null;
     }
+    activeClangNativeShim = null;
 }
 
 // Emscripten WASM loader
@@ -3193,6 +3247,361 @@ void loop() {
   delay(500);
 }`
 ,
+
+    handysense_relay_load_no: `// HandySense Relay Load Test (NO contacts)
+// Load wiring:
+// R1_COM->VIN_1, R1_NO->LED1.A, LED1.C->GND_5
+// R2_COM->VIN_2, R2_NO->LED2.A, LED2.C->GND_6
+// R3_COM->3V3_R1, R3_NO->LED3.A, LED3.C->GND_R1
+// R4_COM->3V3_R2, R4_NO->LED4.A, LED4.C->GND_R2
+// Expected: LEDs are OFF when relay is LOW, ON when relay is HIGH
+
+const int RELAY1_PIN = 25;
+const int RELAY2_PIN = 4;
+const int RELAY3_PIN = 12;
+const int RELAY4_PIN = 13;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(RELAY1_PIN, OUTPUT);
+  pinMode(RELAY2_PIN, OUTPUT);
+  pinMode(RELAY3_PIN, OUTPUT);
+  pinMode(RELAY4_PIN, OUTPUT);
+  digitalWrite(RELAY1_PIN, LOW);
+  digitalWrite(RELAY2_PIN, LOW);
+  digitalWrite(RELAY3_PIN, LOW);
+  digitalWrite(RELAY4_PIN, LOW);
+  Serial.println("HandySense relay NO load test started");
+}
+
+void loop() {
+  digitalWrite(RELAY1_PIN, HIGH); delay(400);
+  digitalWrite(RELAY1_PIN, LOW);  delay(250);
+  digitalWrite(RELAY2_PIN, HIGH); delay(400);
+  digitalWrite(RELAY2_PIN, LOW);  delay(250);
+  digitalWrite(RELAY3_PIN, HIGH); delay(400);
+  digitalWrite(RELAY3_PIN, LOW);  delay(250);
+  digitalWrite(RELAY4_PIN, HIGH); delay(400);
+  digitalWrite(RELAY4_PIN, LOW);  delay(600);
+}`,
+
+    handysense_relay_load_nc: `// HandySense Relay Load Test (NC contacts)
+// Load wiring:
+// R1_COM->VIN_1, R1_NC->LED1.A, LED1.C->GND_5
+// R2_COM->VIN_2, R2_NC->LED2.A, LED2.C->GND_6
+// R3_COM->3V3_R1, R3_NC->LED3.A, LED3.C->GND_R1
+// R4_COM->3V3_R2, R4_NC->LED4.A, LED4.C->GND_R2
+// Expected: LEDs are ON when relay is LOW, OFF when relay is HIGH
+
+const int RELAY1_PIN = 25;
+const int RELAY2_PIN = 4;
+const int RELAY3_PIN = 12;
+const int RELAY4_PIN = 13;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(RELAY1_PIN, OUTPUT);
+  pinMode(RELAY2_PIN, OUTPUT);
+  pinMode(RELAY3_PIN, OUTPUT);
+  pinMode(RELAY4_PIN, OUTPUT);
+  digitalWrite(RELAY1_PIN, LOW);
+  digitalWrite(RELAY2_PIN, LOW);
+  digitalWrite(RELAY3_PIN, LOW);
+  digitalWrite(RELAY4_PIN, LOW);
+  Serial.println("HandySense relay NC load test started");
+}
+
+void loop() {
+  digitalWrite(RELAY1_PIN, HIGH); delay(400);
+  digitalWrite(RELAY1_PIN, LOW);  delay(250);
+  digitalWrite(RELAY2_PIN, HIGH); delay(400);
+  digitalWrite(RELAY2_PIN, LOW);  delay(250);
+  digitalWrite(RELAY3_PIN, HIGH); delay(400);
+  digitalWrite(RELAY3_PIN, LOW);  delay(250);
+  digitalWrite(RELAY4_PIN, HIGH); delay(400);
+  digitalWrite(RELAY4_PIN, LOW);  delay(600);
+}`,
+
+    handysense_real_six_button_test: `// Handysense real - 6 Button Test
+// On-board controls:
+// RESET -> restarts this sketch and prints the setup banner again
+// BOOT  -> GPIO0 active LOW while held
+// B0    -> GPIO32 active LOW while held, drives relay R1 (IO25)
+// B1    -> GPIO33 active LOW while held, drives relay R2 (IO4)
+// B2    -> GPIO15 active LOW while held, drives relay R3 (IO12)
+// B3    -> GPIO39 active LOW while held, drives relay R4 (IO13)
+
+void setup() {
+  Serial.begin(115200);
+  delay(150);
+
+  pinMode(0, INPUT_PULLUP);
+  pinMode(32, INPUT_PULLUP);
+  pinMode(33, INPUT_PULLUP);
+  pinMode(15, INPUT_PULLUP);
+  pinMode(39, INPUT_PULLUP);
+  pinMode(25, OUTPUT);
+  pinMode(4, OUTPUT);
+  pinMode(12, OUTPUT);
+  pinMode(13, OUTPUT);
+  digitalWrite(25, LOW);
+  digitalWrite(4, LOW);
+  digitalWrite(12, LOW);
+  digitalWrite(13, LOW);
+
+  Serial.println();
+  Serial.println("Handysense real 6-button test ready");
+  Serial.println("Press RESET to restart this sketch.");
+  Serial.println("Press BOOT to watch GPIO0 change in Serial.");
+  Serial.println("Press B0-B3 to drive relays R1-R4.");
+}
+
+void loop() {
+  bool bootPressed = digitalRead(0) == LOW;
+  bool button0Pressed = digitalRead(32) == LOW;
+  if (button0Pressed) {
+    digitalWrite(25, HIGH);
+  } else {
+    digitalWrite(25, LOW);
+  }
+
+  bool button1Pressed = digitalRead(33) == LOW;
+  if (button1Pressed) {
+    digitalWrite(4, HIGH);
+  } else {
+    digitalWrite(4, LOW);
+  }
+
+  bool button2Pressed = digitalRead(15) == LOW;
+  if (button2Pressed) {
+    digitalWrite(12, HIGH);
+  } else {
+    digitalWrite(12, LOW);
+  }
+
+  bool button3Pressed = digitalRead(39) == LOW;
+  if (button3Pressed) {
+    digitalWrite(13, HIGH);
+  } else {
+    digitalWrite(13, LOW);
+  }
+
+  Serial.print("BOOT=");
+  if (bootPressed) {
+    Serial.print("LOW");
+  } else {
+    Serial.print("HIGH");
+  }
+
+  Serial.print(" B0=");
+  if (button0Pressed) {
+    Serial.print("LOW");
+  } else {
+    Serial.print("HIGH");
+  }
+
+  Serial.print(" B1=");
+  if (button1Pressed) {
+    Serial.print("LOW");
+  } else {
+    Serial.print("HIGH");
+  }
+
+  Serial.print(" B2=");
+  if (button2Pressed) {
+    Serial.print("LOW");
+  } else {
+    Serial.print("HIGH");
+  }
+
+  Serial.print(" B3=");
+  if (button3Pressed) {
+    Serial.println("LOW");
+  } else {
+    Serial.println("HIGH");
+  }
+
+  delay(300);
+}`,
+
+    handysense_real_eight_led_test: `// Handysense real - 8 LED Test
+// Built-in LEDs:
+// LED0 -> GPIO2
+// LED1 -> GPIO5
+// LED2 -> GPIO18
+// LED3 -> GPIO19
+// LED4 -> GPIO21
+// LED5 -> GPIO22
+// LED6 -> GPIO23
+// LED7 -> GPIO27
+
+void setup() {
+  Serial.begin(115200);
+  delay(150);
+
+  pinMode(2, OUTPUT);
+  pinMode(5, OUTPUT);
+  pinMode(18, OUTPUT);
+  pinMode(19, OUTPUT);
+  pinMode(21, OUTPUT);
+  pinMode(22, OUTPUT);
+  pinMode(23, OUTPUT);
+  pinMode(27, OUTPUT);
+
+  digitalWrite(2, LOW);
+  digitalWrite(5, LOW);
+  digitalWrite(18, LOW);
+  digitalWrite(19, LOW);
+  digitalWrite(21, LOW);
+  digitalWrite(22, LOW);
+  digitalWrite(23, LOW);
+  digitalWrite(27, LOW);
+
+  Serial.println();
+  Serial.println("Handysense real 8-LED test ready");
+  Serial.println("LED0-LED7 blink in sequence.");
+}
+
+void loop() {
+  digitalWrite(2, HIGH);
+  Serial.println("LED0 ON");
+  delay(180);
+  digitalWrite(2, LOW);
+
+  digitalWrite(5, HIGH);
+  Serial.println("LED1 ON");
+  delay(180);
+  digitalWrite(5, LOW);
+
+  digitalWrite(18, HIGH);
+  Serial.println("LED2 ON");
+  delay(180);
+  digitalWrite(18, LOW);
+
+  digitalWrite(19, HIGH);
+  Serial.println("LED3 ON");
+  delay(180);
+  digitalWrite(19, LOW);
+
+  digitalWrite(21, HIGH);
+  Serial.println("LED4 ON");
+  delay(180);
+  digitalWrite(21, LOW);
+
+  digitalWrite(22, HIGH);
+  Serial.println("LED5 ON");
+  delay(180);
+  digitalWrite(22, LOW);
+
+  digitalWrite(23, HIGH);
+  Serial.println("LED6 ON");
+  delay(180);
+  digitalWrite(23, LOW);
+
+  digitalWrite(27, HIGH);
+  Serial.println("LED7 ON");
+  delay(180);
+  digitalWrite(27, LOW);
+
+  delay(250);
+}`,
+
+    handysense_real_buttons_leds_test: `// Handysense real - Buttons + LEDs Test
+// RESET restarts this sketch and prints the setup banner again.
+// BOOT drives LED0 while held.
+// B0-B3 drive LED1-LED4 while held.
+// LED5-LED7 run a small chase pattern so all 8 LEDs are tested.
+
+void setup() {
+  Serial.begin(115200);
+  delay(150);
+
+  pinMode(0, INPUT_PULLUP);
+  pinMode(32, INPUT_PULLUP);
+  pinMode(33, INPUT_PULLUP);
+  pinMode(15, INPUT_PULLUP);
+  pinMode(39, INPUT_PULLUP);
+
+  pinMode(2, OUTPUT);
+  pinMode(5, OUTPUT);
+  pinMode(18, OUTPUT);
+  pinMode(19, OUTPUT);
+  pinMode(21, OUTPUT);
+  pinMode(22, OUTPUT);
+  pinMode(23, OUTPUT);
+  pinMode(27, OUTPUT);
+
+  digitalWrite(2, LOW);
+  digitalWrite(5, LOW);
+  digitalWrite(18, LOW);
+  digitalWrite(19, LOW);
+  digitalWrite(21, LOW);
+  digitalWrite(22, LOW);
+  digitalWrite(23, LOW);
+  digitalWrite(27, LOW);
+
+  Serial.println();
+  Serial.println("Handysense real buttons + LEDs test ready");
+  Serial.println("BOOT -> LED0");
+  Serial.println("B0-B3 -> LED1-LED4");
+  Serial.println("LED5-LED7 chase automatically.");
+}
+
+void loop() {
+  bool bootPressed = digitalRead(0) == LOW;
+  bool button0Pressed = digitalRead(32) == LOW;
+  bool button1Pressed = digitalRead(33) == LOW;
+  bool button2Pressed = digitalRead(15) == LOW;
+  bool button3Pressed = digitalRead(39) == LOW;
+
+  if (bootPressed) {
+    digitalWrite(2, HIGH);
+  } else {
+    digitalWrite(2, LOW);
+  }
+
+  if (button0Pressed) {
+    digitalWrite(5, HIGH);
+  } else {
+    digitalWrite(5, LOW);
+  }
+
+  if (button1Pressed) {
+    digitalWrite(18, HIGH);
+  } else {
+    digitalWrite(18, LOW);
+  }
+
+  if (button2Pressed) {
+    digitalWrite(19, HIGH);
+  } else {
+    digitalWrite(19, LOW);
+  }
+
+  if (button3Pressed) {
+    digitalWrite(21, HIGH);
+  } else {
+    digitalWrite(21, LOW);
+  }
+
+  digitalWrite(22, HIGH);
+  digitalWrite(23, LOW);
+  digitalWrite(27, LOW);
+  Serial.println("CHASE LED5");
+  delay(160);
+
+  digitalWrite(22, LOW);
+  digitalWrite(23, HIGH);
+  digitalWrite(27, LOW);
+  Serial.println("CHASE LED6");
+  delay(160);
+
+  digitalWrite(22, LOW);
+  digitalWrite(23, LOW);
+  digitalWrite(27, HIGH);
+  Serial.println("CHASE LED7");
+  delay(160);
+}`,
 
     // ============================================
     // BFarm - Field Sensor Examples
@@ -4488,8 +4897,48 @@ function repairCachedNewBfarmCodeIfNeeded(): void {
     console.log('Repaired stale cached code for new_bfarm_awd_automation.');
 }
 
+function isBrokenCachedHandysenseRealSixButtonCode(code: string): boolean {
+    if (!code) return false;
+    return (
+        (
+            code.includes('const int BUTTON_PINS[4] = {32, 33, 15, 39};')
+            && code.includes('const int RELAY_PINS[4] = {25, 4, 12, 13};')
+            && code.includes('const char* BUTTON_NAMES[4] = {"B0", "B1", "B2", "B3"};')
+        ) || (
+            code.includes('Handysense real 6-button test ready')
+            && code.includes('lastBootPressed')
+            && code.includes('lastButton0Pressed')
+        ) || (
+            code.includes('Handysense real 6-button test ready')
+            && code.includes('digitalRead(BOOT_PIN)')
+        ) || (
+            code.includes('Handysense real 6-button test ready')
+            && code.includes('const int BOOT_PIN = 0;')
+            && code.includes('const int BUTTON0_PIN = 32;')
+        )
+    );
+}
+
+function repairCachedHandysenseRealSixButtonCodeIfNeeded(): void {
+    const cachedCode = localStorage.getItem('hackCable-webExample-inputCode');
+    if (!cachedCode || !isBrokenCachedHandysenseRealSixButtonCode(cachedCode)) return;
+
+    const fixedCode = preprocessExampleCode(
+        'handysense_real_six_button_test',
+        codeExamples['handysense_real_six_button_test']
+    );
+
+    localStorage.setItem('hackCable-webExample-inputCode', fixedCode);
+    localStorage.setItem(EXAMPLE_SELECTION_STORAGE_KEY, 'handysense_real_six_button_test');
+    if (codeInput instanceof HTMLTextAreaElement) {
+        setCodeEditorValue(fixedCode);
+    }
+    console.log('Repaired stale cached code for handysense_real_six_button_test.');
+}
+
 const codeExamplesSelect = document.getElementById('code-examples') as HTMLSelectElement;
 repairCachedNewBfarmCodeIfNeeded();
+repairCachedHandysenseRealSixButtonCodeIfNeeded();
 
 if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
     codeExamplesSelect.addEventListener('change', () => {
@@ -4525,6 +4974,21 @@ if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
                     break;
                 case 'relaySequentialBlink':
                     setupRelayBlinkCircuit();
+                    break;
+                case 'handysense_relay_load_no':
+                    setupHandySenseRelayLoadTestCircuit(false);
+                    break;
+                case 'handysense_relay_load_nc':
+                    setupHandySenseRelayLoadTestCircuit(true);
+                    break;
+                case 'handysense_real_six_button_test':
+                    setupHandysenseRealSixButtonTestCircuit();
+                    break;
+                case 'handysense_real_eight_led_test':
+                    setupHandysenseRealEightLedTestCircuit();
+                    break;
+                case 'handysense_real_buttons_leds_test':
+                    setupHandysenseRealButtonsLedsTestCircuit();
                     break;
                 case 'mcpSmartControl':
                     setupMcpSmartControlCircuit();
@@ -4622,6 +5086,30 @@ const getCurrentLanguage = () => {
     return localStorage.getItem(languageStorageKey) === 'th_th' ? 'th_th' : 'en_us';
 };
 
+function normalizeBoardSelection(board: string | null | undefined): 'arduino' | 'esp32' | 'custom-esp32' | 'handysense' | 'handysense-real' | 'handysense-pro' {
+    switch (board) {
+        case 'arduino':
+        case 'esp32':
+        case 'custom-esp32':
+        case 'handysense':
+        case 'handysense-real':
+        case 'handysense-pro':
+            return board;
+        default:
+            return 'handysense-pro';
+    }
+}
+
+function isHandysenseBoard(board: string | null | undefined): board is 'handysense' | 'handysense-real' | 'handysense-pro' {
+    return board === 'handysense' || board === 'handysense-real' || board === 'handysense-pro';
+}
+
+function getHandysenseComponentId(board: string | null | undefined): number {
+    if (board === 'handysense') return 50;
+    if (board === 'handysense-real') return 51;
+    return 28;
+}
+
 const updateLanguageToggleLabel = () => {
     if (!languageToggle) return;
     const currentLanguage = getCurrentLanguage();
@@ -4644,9 +5132,10 @@ const boardSelect = document.getElementById('board-select') as HTMLSelectElement
 
 if (boardSelect) {
     // Load saved board selection
-    const savedBoard = localStorage.getItem('hackCable-selectedBoard');
+    const savedBoard = normalizeBoardSelection(localStorage.getItem('hackCable-selectedBoard'));
     if (savedBoard) {
         boardSelect.value = savedBoard;
+        localStorage.setItem('hackCable-selectedBoard', savedBoard);
     } else {
         // Set default to Handysense pro
         boardSelect.value = 'handysense-pro';
@@ -4654,7 +5143,7 @@ if (boardSelect) {
     }
 
     boardSelect.addEventListener('change', () => {
-        const selectedBoard = boardSelect.value;
+        const selectedBoard = normalizeBoardSelection(boardSelect.value);
         console.log(`Board changed to: ${selectedBoard}`);
 
         // Save selection to localStorage
@@ -4671,15 +5160,15 @@ if (boardSelect) {
                     setupESP32Circuit();
                 } else if (selectedBoard === 'custom-esp32') {
                     setupCustomESP32Circuit();
-                } else if (selectedBoard === 'handysense-pro') {
-                    setupHandysenseProCircuit();
+                } else if (isHandysenseBoard(selectedBoard)) {
+                    setupHandysenseCircuit(selectedBoard);
                 } else {
                     autoSetupBasicCircuit(true);
                 }
             }, 100);
         } else {
             // Revert dropdown to previous value
-            const currentBoard = localStorage.getItem('hackCable-selectedBoard') || 'handysense-pro';
+            const currentBoard = normalizeBoardSelection(localStorage.getItem('hackCable-selectedBoard'));
             boardSelect.value = currentBoard;
         }
     });
@@ -4801,62 +5290,29 @@ function setupCustomESP32Circuit() {
     }, 500);
 }
 
-// Auto-setup: Create Handysense pro board with LED on pin D2
-function setupHandysenseProCircuit() {
-    console.log("Setting up Handysense pro with LED on pin D2...");
+// Auto-setup: Create Handysense / Handysense real / Handysense pro board
+function setupHandysenseCircuit(board: 'handysense' | 'handysense-real' | 'handysense-pro' = 'handysense') {
+    const componentId = getHandysenseComponentId(board);
+    const boardLabel = board === 'handysense'
+        ? 'Handysense'
+        : board === 'handysense-real'
+            ? 'Handysense real'
+            : 'Handysense pro';
+    console.log(`Setting up ${boardLabel} board...`);
 
-    // Create Handysense pro (component id: 28)
-    const handysenseProFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(handysenseProFigure.setX(200).setY(100));
+    const handysenseFigure = new ComponentFigure(wokwiComponentById[componentId]);
+    hackCable.editor.canvas.add(handysenseFigure.setX(200).setY(100));
 
-    // Create LED (component id: 1)
-    const ledFigure = new ComponentFigure(wokwiComponentById[1]);
-    hackCable.editor.canvas.add(ledFigure.setX(500).setY(200));
+    console.log(`${boardLabel} board added to circuit.`);
+}
 
-    // Wait for components to be fully rendered before wiring
-    setTimeout(() => {
-        try {
-            // Connect LED anode to Handysense pro pin D2
-            const pin2Port = handysenseProFigure.getPortByName("D2");
-            const ledAnodePort = ledFigure.getPortByName("A");
-
-            if (pin2Port && ledAnodePort) {
-                let connection1 = new draw2d.Connection();
-                connection1.setRouter(new draw2d.layout.connection.VertexRouter());
-                connection1.setSource(pin2Port);
-                connection1.setTarget(ledAnodePort);
-                hackCable.editor.canvas.add(connection1);
-                console.log("Connected D2 to LED anode");
-            } else {
-                console.error("Could not find ports:", {
-                    pin2Port: pin2Port ? "found" : "NOT FOUND",
-                    ledAnodePort: ledAnodePort ? "found" : "NOT FOUND"
-                });
-            }
-
-            // Connect LED cathode to Handysense pro GND
-            const gndPort = handysenseProFigure.getPortByName("GND.1");
-            const ledCathodePort = ledFigure.getPortByName("C");
-
-            if (gndPort && ledCathodePort) {
-                let connection2 = new draw2d.Connection();
-                connection2.setRouter(new draw2d.layout.connection.VertexRouter());
-                connection2.setSource(ledCathodePort);
-                connection2.setTarget(gndPort);
-                hackCable.editor.canvas.add(connection2);
-                console.log("Connected LED cathode to GND");
-            } else {
-                console.error("Could not find ports:", {
-                    gndPort: gndPort ? "found" : "NOT FOUND",
-                    ledCathodePort: ledCathodePort ? "found" : "NOT FOUND"
-                });
-            }
-
-            console.log("Handysense pro auto-setup complete!");
-        } catch (error) {
-            console.error("Error during Handysense pro auto-wiring:", error);
-        }
-    }, 500);
+function selectBoardForExample(board: 'arduino' | 'esp32' | 'custom-esp32' | 'handysense' | 'handysense-real' | 'handysense-pro') {
+    if (boardSelect) {
+        boardSelect.value = board;
+    }
+    localStorage.setItem('hackCable-selectedBoard', board);
+    updateCompilerVisibility();
+    markCompileStale();
 }
 
 // ============================================
@@ -4887,6 +5343,27 @@ function connectPorts(
 // ============================================
 // Handysense Pro Smart Farm Circuit Setup Functions
 // ============================================
+
+function setupHandysenseRealSixButtonTestCircuit() {
+    console.log("Setting up Handysense real 6-button test circuit...");
+    selectBoardForExample('handysense-real');
+    hackCable.editor.canvas.clear();
+    setupHandysenseCircuit('handysense-real');
+}
+
+function setupHandysenseRealEightLedTestCircuit() {
+    console.log("Setting up Handysense real 8-LED test circuit...");
+    selectBoardForExample('handysense-real');
+    hackCable.editor.canvas.clear();
+    setupHandysenseCircuit('handysense-real');
+}
+
+function setupHandysenseRealButtonsLedsTestCircuit() {
+    console.log("Setting up Handysense real buttons + LEDs test circuit...");
+    selectBoardForExample('handysense-real');
+    hackCable.editor.canvas.clear();
+    setupHandysenseCircuit('handysense-real');
+}
 
 // Example 1: pH Misting Control Circuit Setup (1 sensor + 1 actuator)
 function setupPhMistingCircuit() {
@@ -5168,6 +5645,49 @@ function setupRelayBlinkCircuit() {
             console.log("Relay Sequential Blink circuit setup complete!");
         } catch (error) {
             console.error("Error during wiring:", error);
+        }
+    }, 500);
+}
+
+function setupHandySenseRelayLoadTestCircuit(useNormallyClosed: boolean) {
+    console.log(`Setting up HandySense relay load test (${useNormallyClosed ? 'NC' : 'NO'})...`);
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
+    hackCable.editor.canvas.add(boardFigure.setX(180).setY(40));
+
+    const led1Figure = new ComponentFigure(wokwiComponentById[1]);
+    hackCable.editor.canvas.add(led1Figure.setX(35).setY(235));
+    const led2Figure = new ComponentFigure(wokwiComponentById[1]);
+    hackCable.editor.canvas.add(led2Figure.setX(95).setY(235));
+    const led3Figure = new ComponentFigure(wokwiComponentById[1]);
+    hackCable.editor.canvas.add(led3Figure.setX(155).setY(235));
+    const led4Figure = new ComponentFigure(wokwiComponentById[1]);
+    hackCable.editor.canvas.add(led4Figure.setX(215).setY(235));
+
+    const contactSuffix = useNormallyClosed ? 'NC' : 'NO';
+
+    setTimeout(() => {
+        try {
+            connectPorts(boardFigure, 'VIN_1', boardFigure, 'R1_COM');
+            connectPorts(boardFigure, `R1_${contactSuffix}`, led1Figure, 'A');
+            connectPorts(led1Figure, 'C', boardFigure, 'GND_5');
+
+            connectPorts(boardFigure, 'VIN_2', boardFigure, 'R2_COM');
+            connectPorts(boardFigure, `R2_${contactSuffix}`, led2Figure, 'A');
+            connectPorts(led2Figure, 'C', boardFigure, 'GND_6');
+
+            connectPorts(boardFigure, '3V3_R1', boardFigure, 'R3_COM');
+            connectPorts(boardFigure, `R3_${contactSuffix}`, led3Figure, 'A');
+            connectPorts(led3Figure, 'C', boardFigure, 'GND_R1');
+
+            connectPorts(boardFigure, '3V3_R2', boardFigure, 'R4_COM');
+            connectPorts(boardFigure, `R4_${contactSuffix}`, led4Figure, 'A');
+            connectPorts(led4Figure, 'C', boardFigure, 'GND_R2');
+
+            console.log(`HandySense relay load test (${useNormallyClosed ? 'NC' : 'NO'}) setup complete!`);
+        } catch (error) {
+            console.error(`Error during HandySense relay load test (${useNormallyClosed ? 'NC' : 'NO'}) wiring:`, error);
         }
     }, 500);
 }

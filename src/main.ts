@@ -10,6 +10,8 @@ import {FanElement} from "./components/fan-element";
 import {RelayElement} from "./components/relay-element";
 import {FourChannelRelayElement} from "./components/four-channel-relay-element";
 import {CustomESP32BoardElement} from "./components/custom-esp32-board";
+import {resolveHandysensePinNumber} from "./components/handysense-board";
+import {HandysenseRealBoardElement} from "./components/handysense-real-board";
 import {HandysenseProBoardElement} from "./components/handysense-pro-board";
 import {Sht31SensorElement} from "./components/sht31-sensor-element";
 import {Bh1750SensorElement} from "./components/bh1750-sensor-element";
@@ -45,6 +47,8 @@ export class HackCable {
     private readonly _emulatorManager: EmulatorManager;
     private readonly _catalog: Catalog;
     private readonly _editor: Editor;
+    private readonly HANDYSENSE_RELAY_CONTROL_PINS = [25, 4, 12, 13];
+    private readonly esp32PinStates = new Map<number, boolean>();
 
     constructor(mountDiv: HTMLElement, language = 'en_us'){
         console.log("Mounting HackCable...");
@@ -120,6 +124,9 @@ export class HackCable {
     }
 
     private parseBoardPinNumber(pinName: string): number | null {
+        const handysensePin = resolveHandysensePinNumber(pinName);
+        if (handysensePin !== null) return handysensePin;
+
         const ioMatch = /^IO(\d+)$/.exec(pinName);
         if (ioMatch) return parseInt(ioMatch[1], 10);
 
@@ -192,11 +199,281 @@ export class HackCable {
                 if (pinNumber !== null) pins.add(pinNumber);
             });
         });
+        this.getHandySenseRelayLoadPins().forEach((pin) => pins.add(pin));
         return Array.from(pins).sort((a, b) => a - b);
     }
 
     public hasActuatorControlPin(pin: number): boolean {
         return this.getConnectedActuatorControlPins().includes(pin);
+    }
+
+    private readonly HANDYSENSE_REAL_LED_PINS = [2, 5, 18, 19, 21, 22, 23, 27];
+
+    private getPortName(port: any): string {
+        return port?.getLocator?.().portId ?? '';
+    }
+
+    private getPortParentFigure(port: any): any {
+        return port?.getParent?.() ?? null;
+    }
+
+    private getPortPinInfo(port: any): any | null {
+        const figure = this.getPortParentFigure(port);
+        const pinName = this.getPortName(port);
+        const pinInfo = figure?.componentElement?.pinInfo;
+        if (!Array.isArray(pinInfo)) return null;
+        return pinInfo.find((entry: any) => entry?.name === pinName) ?? null;
+    }
+
+    private isBoardPowerPort(port: any, signal: 'VCC' | 'GND'): boolean {
+        const figure = this.getPortParentFigure(port);
+        const element = figure?.componentElement;
+        if (!element || !this.isESP32BoardElement(element)) return false;
+        const pinInfo = this.getPortPinInfo(port);
+        if (!pinInfo || !Array.isArray(pinInfo.signals)) return false;
+        return pinInfo.signals.some((entry: any) => entry?.type === 'power' && entry?.signal === signal);
+    }
+
+    private isBoardHighSourcePort(port: any): boolean {
+        const figure = this.getPortParentFigure(port);
+        const element = figure?.componentElement;
+        if (!element || !this.isESP32BoardElement(element)) return false;
+
+        const pinNumber = this.parseBoardPinNumber(this.getPortName(port));
+        if (pinNumber === null) return false;
+        return this.esp32PinStates.get(pinNumber) === true;
+    }
+
+    private getPortKey(port: any): string {
+        const figure = this.getPortParentFigure(port);
+        const figureId = figure?.getId?.() ?? 'unknown';
+        return `${figureId}:${this.getPortName(port)}`;
+    }
+
+    private getWireNeighbors(port: any): any[] {
+        return (port?.getConnections?.().data ?? [])
+            .map((connection: any) => connection.sourcePort === port ? connection.targetPort : connection.sourcePort)
+            .filter((neighbor: any) => !!neighbor);
+    }
+
+    private getSwitchedRelayNeighbors(port: any): any[] {
+        const figure = this.getPortParentFigure(port);
+        const element = figure?.componentElement;
+
+        if (element instanceof HandysenseProBoardElement) {
+            const match = /^R([1-4])_(COM|NC|NO)$/.exec(this.getPortName(port));
+            if (!match) return [];
+
+            const relayIndex = parseInt(match[1], 10) - 1;
+            const relayPin = this.HANDYSENSE_RELAY_CONTROL_PINS[relayIndex];
+            const relayOn = this.esp32PinStates.get(relayPin) === true;
+            const suffix = match[2];
+            const linkedPortName = relayOn
+                ? (suffix === 'COM' ? `R${relayIndex + 1}_NO` : suffix === 'NO' ? `R${relayIndex + 1}_COM` : '')
+                : (suffix === 'COM' ? `R${relayIndex + 1}_NC` : suffix === 'NC' ? `R${relayIndex + 1}_COM` : '');
+
+            if (!linkedPortName) return [];
+            const linkedPort = figure.getPortByName?.(linkedPortName);
+            return linkedPort ? [linkedPort] : [];
+        }
+
+        if (element instanceof RelayElement) {
+            const suffix = this.getPortName(port);
+            if (!['COM', 'NC', 'NO'].includes(suffix)) return [];
+
+            const relayOn = element.isOn === true;
+            const linkedPortName = relayOn
+                ? (suffix === 'COM' ? 'NO' : suffix === 'NO' ? 'COM' : '')
+                : (suffix === 'COM' ? 'NC' : suffix === 'NC' ? 'COM' : '');
+
+            if (!linkedPortName) return [];
+            const linkedPort = figure.getPortByName?.(linkedPortName);
+            return linkedPort ? [linkedPort] : [];
+        }
+
+        if (element instanceof FourChannelRelayElement) {
+            const match = /^R([1-4])_(COM|NC|NO)$/.exec(this.getPortName(port));
+            if (!match) return [];
+
+            const relayIndex = parseInt(match[1], 10);
+            const relayOn = relayIndex === 1 ? element.ch1
+                : relayIndex === 2 ? element.ch2
+                : relayIndex === 3 ? element.ch3
+                : element.ch4;
+            const suffix = match[2];
+            const linkedPortName = relayOn
+                ? (suffix === 'COM' ? `R${relayIndex}_NO` : suffix === 'NO' ? `R${relayIndex}_COM` : '')
+                : (suffix === 'COM' ? `R${relayIndex}_NC` : suffix === 'NC' ? `R${relayIndex}_COM` : '');
+
+            if (!linkedPortName) return [];
+            const linkedPort = figure.getPortByName?.(linkedPortName);
+            return linkedPort ? [linkedPort] : [];
+        }
+
+        return [];
+    }
+
+    private collectElectricallyConnectedPorts(startPort: any): any[] {
+        if (!startPort) return [];
+
+        const visited = new Set<string>();
+        const queue: any[] = [startPort];
+        const connected: any[] = [];
+
+        while (queue.length > 0) {
+            const port = queue.shift();
+            if (!port) continue;
+
+            const key = this.getPortKey(port);
+            if (visited.has(key)) continue;
+            visited.add(key);
+            connected.push(port);
+
+            const neighbors = [
+                ...this.getWireNeighbors(port),
+                ...this.getSwitchedRelayNeighbors(port),
+            ];
+            neighbors.forEach((neighbor) => {
+                const neighborKey = this.getPortKey(neighbor);
+                if (!visited.has(neighborKey)) queue.push(neighbor);
+            });
+        }
+
+        return connected;
+    }
+
+    private portHasActiveSource(port: any): boolean {
+        return this.collectElectricallyConnectedPorts(port).some((candidate) => {
+            return this.isBoardPowerPort(candidate, 'VCC') || this.isBoardHighSourcePort(candidate);
+        });
+    }
+
+    private portHasGround(port: any): boolean {
+        return this.collectElectricallyConnectedPorts(port).some((candidate) => {
+            return this.isBoardPowerPort(candidate, 'GND');
+        });
+    }
+
+    private getHandySenseRelayLoadPins(): number[] {
+        const pins = new Set<number>();
+        const figures = this._editor.canvas.getAllFigures();
+
+        figures.forEach((figure: any) => {
+            const element = figure.componentElement;
+            if (!(element instanceof HandysenseProBoardElement)) return;
+
+            this.HANDYSENSE_RELAY_CONTROL_PINS.forEach((pin, index) => {
+                const relayPorts = ['COM', 'NC', 'NO']
+                    .map((suffix) => figure.getPortByName?.(`R${index + 1}_${suffix}`))
+                    .filter((port: any) => !!port);
+
+                if (relayPorts.some((port: any) => (port.getConnections?.().data ?? []).length > 0)) {
+                    pins.add(pin);
+                }
+            });
+        });
+
+        return Array.from(pins);
+    }
+
+    private syncHandySenseRelayVisuals(): void {
+        const figures = this._editor.canvas.getAllFigures();
+        figures.forEach((figure: any) => {
+            const element = figure.componentElement;
+            if (!(element instanceof HandysenseProBoardElement)) return;
+
+            element.relay1On = this.esp32PinStates.get(25) === true;
+            element.relay2On = this.esp32PinStates.get(4) === true;
+            element.relay3On = this.esp32PinStates.get(12) === true;
+            element.relay4On = this.esp32PinStates.get(13) === true;
+            element.requestUpdate();
+        });
+    }
+
+    private syncHandySenseRealLedVisuals(): void {
+        const figures = this._editor.canvas.getAllFigures();
+        figures.forEach((figure: any) => {
+            const element = figure.componentElement;
+            if (!(element instanceof HandysenseRealBoardElement)) return;
+
+            this.HANDYSENSE_REAL_LED_PINS.forEach((pin, index) => {
+                element.setLedState(index, this.esp32PinStates.get(pin) === true);
+            });
+        });
+    }
+
+    private updateRelayComponentStates(): void {
+        const figures = this._editor.canvas.getAllFigures();
+        figures.forEach((figure: any) => {
+            const element = figure.componentElement;
+            if (!element) return;
+
+            if (element instanceof RelayElement) {
+                const inPort = figure.getPortByName?.('IN');
+                const nextValue = Boolean(inPort && this.portHasActiveSource(inPort));
+                if (element.isOn !== nextValue) {
+                    element.isOn = nextValue;
+                    element.requestUpdate();
+                }
+                return;
+            }
+
+            if (element instanceof FourChannelRelayElement) {
+                const nextCh1 = Boolean(figure.getPortByName?.('IN1') && this.portHasActiveSource(figure.getPortByName('IN1')));
+                const nextCh2 = Boolean(figure.getPortByName?.('IN2') && this.portHasActiveSource(figure.getPortByName('IN2')));
+                const nextCh3 = Boolean(figure.getPortByName?.('IN3') && this.portHasActiveSource(figure.getPortByName('IN3')));
+                const nextCh4 = Boolean(figure.getPortByName?.('IN4') && this.portHasActiveSource(figure.getPortByName('IN4')));
+
+                if (element.ch1 !== nextCh1 || element.ch2 !== nextCh2 || element.ch3 !== nextCh3 || element.ch4 !== nextCh4) {
+                    element.ch1 = nextCh1;
+                    element.ch2 = nextCh2;
+                    element.ch3 = nextCh3;
+                    element.ch4 = nextCh4;
+                    element.requestUpdate();
+                }
+            }
+        });
+    }
+
+    private recomputeESP32DrivenComponents(): void {
+        this.syncHandySenseRelayVisuals();
+        this.syncHandySenseRealLedVisuals();
+        this.updateRelayComponentStates();
+
+        const figures = this._editor.canvas.getAllFigures();
+        figures.forEach((figure: any) => {
+            const element = figure.componentElement;
+            if (!element) return;
+
+            if (element instanceof LEDElement) {
+                const anodePort = figure.getPortByName?.('A');
+                const cathodePort = figure.getPortByName?.('C');
+                const nextValue = Boolean(
+                    (anodePort && this.portHasActiveSource(anodePort) && (!cathodePort || this.portHasGround(cathodePort))) ||
+                    (anodePort && this.isBoardHighSourcePort(anodePort)) ||
+                    (cathodePort && this.isBoardHighSourcePort(cathodePort))
+                );
+
+                if (element.value !== nextValue) {
+                    element.value = nextValue;
+                    element.requestUpdate();
+                }
+                return;
+            }
+
+            if (element instanceof MistingPumpElement ||
+                element instanceof WaterPumpElement ||
+                element instanceof FanElement) {
+                const sigPort = figure.getPortByName?.('SIG');
+                const nextValue = Boolean(sigPort && this.portHasActiveSource(sigPort));
+                if (element.isOn !== nextValue || element.ledPower !== nextValue) {
+                    element.isOn = nextValue;
+                    element.ledPower = nextValue;
+                    element.requestUpdate();
+                }
+                return;
+            }
+        });
     }
 
     private updateLEDs(port: avr8js.AVRIOPort, pinMap: {[key: string]: number}) {
@@ -305,73 +582,8 @@ export class HackCable {
 
     public esp32PinUpdate(pin: number, value: boolean) {
         console.log(`[esp32PinUpdate] ESP32 Pin ${pin} update triggered, value: ${value}`);
-
-        // Update all LED elements on the canvas based on ESP32 pin states
-        const figures = this._editor.canvas.getAllFigures();
-        console.log(`[esp32PinUpdate] Found ${figures.length} figures on canvas`);
-
-        figures.forEach((figure: any) => {
-            const element = figure.componentElement;
-            if (!element) return;
-
-            // LEDs: any board pin match can drive state.
-            if (element instanceof LEDElement) {
-                const ports = figure.getPorts().data;
-                ports.forEach((figurePort: any) => {
-                    const pinNumber = this.getBoardPinConnectedToPort(figurePort);
-                    if (pinNumber === pin) {
-                        element.value = value;
-                        element.requestUpdate();
-                    }
-                });
-            }
-
-            // Actuators: strict control-port matching only.
-            if (element instanceof MistingPumpElement ||
-                element instanceof WaterPumpElement ||
-                element instanceof FanElement) {
-                const ports = figure.getPorts().data;
-                ports.forEach((figurePort: any) => {
-                    const portId = figurePort.getLocator()?.portId ?? '';
-                    if (portId !== 'SIG') return;
-                    const pinNumber = this.getBoardPinConnectedToPort(figurePort);
-                    if (pinNumber === pin) {
-                        element.isOn = value;
-                        element.ledPower = value;
-                        element.requestUpdate();
-                    }
-                });
-            }
-
-            if (element instanceof FourChannelRelayElement) {
-                const ports = figure.getPorts().data;
-                ports.forEach((figurePort: any) => {
-                    const portId = figurePort.getLocator()?.portId ?? '';
-                    if (!/^IN[1-4]$/.test(portId)) return;
-                    const pinNumber = this.getBoardPinConnectedToPort(figurePort);
-                    if (pinNumber !== pin) return;
-
-                    if (portId === 'IN1') element.ch1 = value;
-                    else if (portId === 'IN2') element.ch2 = value;
-                    else if (portId === 'IN3') element.ch3 = value;
-                    else if (portId === 'IN4') element.ch4 = value;
-                    element.requestUpdate();
-                });
-            }
-
-            if (element instanceof RelayElement) {
-                const ports = figure.getPorts().data;
-                ports.forEach((figurePort: any) => {
-                    const portId = figurePort.getLocator()?.portId ?? '';
-                    if (portId !== 'IN') return;
-                    const pinNumber = this.getBoardPinConnectedToPort(figurePort);
-                    if (pinNumber === pin) {
-                        element.isOn = value;
-                        element.requestUpdate();
-                    }
-                });
-            }
-        });
+        this.esp32PinStates.set(pin, value);
+        this.recomputeESP32DrivenComponents();
     }
 
     private readonly BFARM_SENSOR_TYPES = [
@@ -404,10 +616,7 @@ export class HackCable {
                           otherEl instanceof CustomESP32BoardElement ||
                           otherEl instanceof HandysenseProBoardElement)) return;
                     const pinName: string = otherPort.getLocator().portId;
-                    let pinNumber = -1;
-                    if (pinName.startsWith('IO')) pinNumber = parseInt(pinName.substring(2));
-                    else if (pinName.startsWith('D')) pinNumber = parseInt(pinName.substring(1));
-                    else if (!isNaN(parseInt(pinName))) pinNumber = parseInt(pinName);
+                    const pinNumber = this.parseBoardPinNumber(pinName) ?? -1;
                     if (pinNumber === pin1 || pinNumber === pin2) matched = true;
                 });
             });
@@ -433,6 +642,7 @@ export class HackCable {
     }
 
     public deactivateAllActuators() {
+        this.esp32PinStates.clear();
         const figures = this._editor.canvas.getAllFigures();
         figures.forEach((figure: any) => {
             const element = figure.componentElement;
@@ -458,6 +668,18 @@ export class HackCable {
                 element.ch2 = false;
                 element.ch3 = false;
                 element.ch4 = false;
+                element.requestUpdate();
+                return;
+            }
+
+            if (element instanceof HandysenseProBoardElement) {
+                element.relay1On = false;
+                element.relay2On = false;
+                element.relay3On = false;
+                element.relay4On = false;
+                if (element instanceof HandysenseRealBoardElement) {
+                    this.HANDYSENSE_REAL_LED_PINS.forEach((_pin, index) => element.setLedState(index, false));
+                }
                 element.requestUpdate();
             }
         });
