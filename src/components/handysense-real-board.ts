@@ -139,6 +139,67 @@ const HANDYSENSE_REAL_LED_GEOMETRY: Array<{ x: number; y: number; label: string 
   { x: 198, y: 128, label: 'LED7' },
 ];
 
+type PinLabelAnchor = 'start' | 'end';
+type PinLabelOrientation = 'horizontal' | 'vertical';
+
+const PIN_LABEL_TEXT_SIZE = 2.8;
+const PIN_LABEL_PADDING_X = 1.6;
+const PIN_LABEL_HEIGHT = 5.3;
+const PIN_LABEL_VERTICAL_WIDTH = 5.8;
+
+function labelPos(pin: ElementPin): { anchor: PinLabelAnchor; x: number; y: number; orientation: PinLabelOrientation; rotation: number } {
+  const anchor: PinLabelAnchor = pin.x > 198 ? 'end' : 'start';
+  let x = pin.x + (anchor === 'end' ? -6 : 6);
+  let orientation: PinLabelOrientation = 'horizontal';
+  let rotation = 0;
+
+  let y = pin.y + 0.9;
+  if (
+    pin.name.startsWith('I2C3_')
+    || pin.name.startsWith('LEDS_')
+    || pin.name.startsWith('LED_VCC_')
+  ) {
+    x = pin.x + (anchor === 'end' ? -0.8 : 0.8);
+    y = pin.y + 10;
+    orientation = 'vertical';
+    rotation = -90;
+  }
+  if (pin.y < 18) {
+    y = pin.y + 10;
+    x = pin.x + (anchor === 'end' ? -0.8 : 0.8);
+    orientation = 'vertical';
+    rotation = -90;
+  } else if (pin.y > 262) {
+    y = pin.y - 8;
+    x = pin.x + (anchor === 'end' ? -1 : 1);
+    orientation = 'vertical';
+    rotation = -90;
+  }
+
+  return { anchor, x, y, orientation, rotation };
+}
+
+function pinLabelWidth(name: string): number {
+  return Math.max(16, (name.length * 1.75) + (PIN_LABEL_PADDING_X * 2));
+}
+
+function pinLabelGroupKey(name: string): string {
+  if (name.startsWith('BTN_')) {
+    return 'BTN';
+  }
+  if (name.startsWith('LEDR_')) {
+    return 'LEDR';
+  }
+  if (name.startsWith('LEDS_') || name.startsWith('LED_VCC_')) {
+    return 'LEDS';
+  }
+  const parts = name.split('_');
+  if (parts.length >= 2 && /^\d+$/.test(parts[1])) {
+    return `${parts[0]}_${parts[1]}`;
+  }
+  return parts[0];
+}
+
 export class HandysenseRealBoardElement extends HandysenseProBoardElement {
   readonly pinInfo: ElementPin[] = HANDYSENSE_REAL_PIN_INFO;
   private boardFaceMode: BoardFaceMode = 'photo';
@@ -505,6 +566,84 @@ export class HandysenseRealBoardElement extends HandysenseProBoardElement {
             </g>
           `;
         })}
+        ${(() => {
+          const labels = HANDYSENSE_REAL_PIN_INFO.map((pin) => {
+          const placement = labelPos(pin);
+          const horizontalWidth = pinLabelWidth(pin.name);
+          const isVertical = placement.orientation === 'vertical';
+          const rectWidth = isVertical ? PIN_LABEL_VERTICAL_WIDTH : horizontalWidth;
+          const rectHeight = isVertical ? horizontalWidth : PIN_LABEL_HEIGHT;
+          const rectX = isVertical
+            ? placement.x - (rectWidth / 2)
+            : placement.anchor === 'start'
+              ? placement.x - PIN_LABEL_PADDING_X
+              : placement.x - horizontalWidth + PIN_LABEL_PADDING_X;
+          const rectY = isVertical
+            ? placement.y - (rectHeight / 2)
+            : placement.y - 2.1;
+          const textAnchor = isVertical
+            ? 'middle'
+            : (placement.anchor === 'start' ? 'start' : 'end');
+          const textTransform = isVertical
+            ? `rotate(${placement.rotation} ${placement.x} ${placement.y})`
+            : undefined;
+          return { pin, placement, rectX, rectY, rectWidth, rectHeight, textAnchor, textTransform };
+          });
+
+          const groupBounds = new Map<string, { minX: number; minY: number; maxX: number; maxY: number }>();
+          for (const label of labels) {
+            const key = pinLabelGroupKey(label.pin.name);
+            const current = groupBounds.get(key);
+            const minX = label.rectX;
+            const minY = label.rectY;
+            const maxX = label.rectX + label.rectWidth;
+            const maxY = label.rectY + label.rectHeight;
+            if (!current) {
+              groupBounds.set(key, { minX, minY, maxX, maxY });
+            } else {
+              current.minX = Math.min(current.minX, minX);
+              current.minY = Math.min(current.minY, minY);
+              current.maxX = Math.max(current.maxX, maxX);
+              current.maxY = Math.max(current.maxY, maxY);
+            }
+          }
+
+          const groupBoxes = Array.from(groupBounds.values()).map((bounds) => {
+            const padding = 1.1;
+            return svg`
+              <rect
+                x="${bounds.minX - padding}"
+                y="${bounds.minY - padding}"
+                width="${(bounds.maxX - bounds.minX) + (padding * 2)}"
+                height="${(bounds.maxY - bounds.minY) + (padding * 2)}"
+                rx="1.4"
+                ry="1.4"
+                fill="#000"
+              />
+            `;
+          });
+
+          const texts = labels.map((label) => svg`
+            <text
+              x="${label.placement.x}"
+              y="${label.placement.y}"
+              text-anchor="${label.textAnchor}"
+              dominant-baseline="middle"
+              font-size="${PIN_LABEL_TEXT_SIZE}"
+              font-family="Arial, sans-serif"
+              font-weight="700"
+              fill="#fff"
+              transform="${label.textTransform || ''}"
+            >${label.pin.name}</text>
+          `);
+
+          return svg`
+            <g pointer-events="none" aria-hidden="true">
+              ${groupBoxes}
+              ${texts}
+            </g>
+          `;
+        })()}
       </svg>
     `}`;
   }

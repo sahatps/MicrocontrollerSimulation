@@ -5,6 +5,41 @@ import {CoordinatePortLocator} from "./coordinate-port-locator";
 import {css, unitToPx} from "../utils/dom";
 import {Port} from "draw2d-types";
 
+function disableDraw2dPortDragPreview(): void {
+    const draw2dAny = draw2d as any;
+    if (draw2dAny.__hackCablePortDragPreviewDisabled) {
+        return;
+    }
+    draw2dAny.__hackCablePortDragPreviewDisabled = true;
+
+    if (draw2dAny.Port?.prototype) {
+        const originalRepaint = draw2dAny.Port.prototype.repaint;
+        if (typeof originalRepaint === "function") {
+            draw2dAny.Port.prototype.repaint = function (attributes: any) {
+                const nextAttributes = attributes ? { ...attributes, cursor: "default" } : { cursor: "default" };
+                return originalRepaint.call(this, nextAttributes);
+            };
+        }
+        draw2dAny.Port.prototype.onDragStart = function () {
+            return false;
+        };
+        draw2dAny.Port.prototype.onDrag = function () {};
+        draw2dAny.Port.prototype.onDragEnd = function () {};
+    }
+
+    if (draw2dAny.policy?.port?.IntrusivePortsFeedbackPolicy?.prototype) {
+        draw2dAny.policy.port.IntrusivePortsFeedbackPolicy.prototype.onDragStart = function () {
+            return false;
+        };
+        draw2dAny.policy.port.IntrusivePortsFeedbackPolicy.prototype.onDrag = function () {};
+        draw2dAny.policy.port.IntrusivePortsFeedbackPolicy.prototype.onDragEnd = function () {};
+        draw2dAny.policy.port.IntrusivePortsFeedbackPolicy.prototype.onHoverEnter = function () {};
+        draw2dAny.policy.port.IntrusivePortsFeedbackPolicy.prototype.onHoverLeave = function () {};
+    }
+}
+
+disableDraw2dPortDragPreview();
+
 export declare type FigureData = {componentId: number, figureId: string, x: number, y: number}
 export declare type WiringData = {svgPath: string, fromFigure: string, fromPortName: string, targetFigure: string, targetPortName: string}
 
@@ -31,10 +66,28 @@ export class ComponentFigure extends draw2d.shape.basic.Rectangle{
 
         element.pinInfo.forEach((pinInfo: ElementPin) => {
             let port = this.createPort("hybrid", new CoordinatePortLocator(pinInfo.name, pinInfo.x, pinInfo.y));
-            port.setAlpha(.7)
+
+            // Click-only wiring: remove all port drag feedback and veto any drag start
+            // so the connector dot never enlarges or visually detaches from the board.
+            const removablePolicies: any[] = [];
+            port.editPolicy.each((_index: number, policy: any) => {
+                if (policy instanceof draw2d.policy.port.PortFeedbackPolicy) {
+                    removablePolicies.push(policy);
+                }
+            });
+            removablePolicies.forEach((policy) => port.uninstallEditPolicy(policy));
+
+            port.setDraggable(false)
+            port.onDragStart = () => false;
+            port.onDrag = () => {};
+            port.onDragEnd = () => {};
+            port.setAlpha(1)
             port.setBackgroundColor('#424B5A')
             port.setDiameter(7)
-            port.on("connect", () => port.setVisible(false));
+            port.setVisible(true);
+            port.on("connect", (_emitter: any, _event: any) => {
+                port.setVisible(true);
+            });
             port.on("disconnect", () => port.setVisible(true));
         })
 

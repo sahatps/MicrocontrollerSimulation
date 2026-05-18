@@ -37,6 +37,8 @@ export class Canvas extends draw2d.Canvas{
         this.installEditPolicy(new draw2d.policy.canvas.SnapToGeometryEditPolicy())
         this.installEditPolicy(new draw2d.policy.canvas.SnapToInBetweenEditPolicy())
         this.installEditPolicy(new draw2d.policy.canvas.SnapToCenterEditPolicy())
+        this.uninstallEditPolicy("draw2d.policy.connection.ComposedConnectionCreatePolicy")
+        this.uninstallEditPolicy("draw2d.policy.connection.DragConnectionCreatePolicy")
         this.installEditPolicy(connectionsPolicy);
 
         // Initialize code generator

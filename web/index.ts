@@ -199,7 +199,7 @@ function autoSetupBasicCircuit(forceSetup = false) {
 
             if (pin13Port && ledAnodePort) {
                 let connection1 = new draw2d.Connection();
-                connection1.setRouter(new draw2d.layout.connection.VertexRouter());
+                connection1.setRouter(new draw2d.layout.connection.InteractiveManhattanConnectionRouter());
                 connection1.setSource(pin13Port);
                 connection1.setTarget(ledAnodePort);
                 hackCable.editor.canvas.add(connection1);
@@ -212,7 +212,7 @@ function autoSetupBasicCircuit(forceSetup = false) {
 
             if (gndPort && ledCathodePort) {
                 let connection2 = new draw2d.Connection();
-                connection2.setRouter(new draw2d.layout.connection.VertexRouter());
+                connection2.setRouter(new draw2d.layout.connection.InteractiveManhattanConnectionRouter());
                 connection2.setSource(ledCathodePort);
                 connection2.setTarget(gndPort);
                 hackCable.editor.canvas.add(connection2);
@@ -3603,6 +3603,171 @@ void loop() {
   delay(160);
 }`,
 
+    handysense_real_bfarm_ph_misting: `// Handysense real - BFARM RS485 pH + Misting Pump
+// Sensor wiring:
+// VCC -> RS485_24V, GND -> RS485_GND, A+ -> RS485_A (TX2/GPIO17), B- -> RS485_B (RX2/GPIO16)
+// Actuator wiring:
+// Misting Pump SIG -> LEDR_0 (GPIO25)
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+
+const int RXD = 16;
+const int TXD = 17;
+const int MIST_PUMP_PIN = 25;
+
+ModbusMaster phSensor;
+float phValue = 7.0f;
+const float PH_HIGH_THRESHOLD = 7.2f;
+const float PH_LOW_THRESHOLD = 6.8f;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+
+  pinMode(MIST_PUMP_PIN, OUTPUT);
+  digitalWrite(MIST_PUMP_PIN, LOW);
+
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  phSensor.begin(1, Serial2);
+
+  Serial.println("Handysense real RS485 pH + Misting Pump ready");
+}
+
+void loop() {
+  uint8_t result = phSensor.readHoldingRegisters(0, 2);
+  if (result == ModbusMaster::ku8MBSuccess) {
+    phValue = phSensor.getResponseBuffer(1) / 10.0f;
+  }
+
+  if (phValue > PH_HIGH_THRESHOLD) {
+    digitalWrite(MIST_PUMP_PIN, HIGH);
+  } else if (phValue < PH_LOW_THRESHOLD) {
+    digitalWrite(MIST_PUMP_PIN, LOW);
+  }
+
+  Serial.print("pH=");
+  Serial.print(phValue, 2);
+  Serial.print(",mist=");
+  Serial.println(digitalRead(MIST_PUMP_PIN));
+  delay(1000);
+}`,
+
+    handysense_real_bfarm_soil_watering: `// Handysense real - BFARM Soil Moisture + Water Pump
+// Sensor wiring:
+// VCC -> A05_1_VCC, GND -> A05_1_GND, AO -> A05_1_SIG (GPIO36)
+// Actuator wiring:
+// Water Pump SIG -> LEDR_1 (GPIO4)
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+
+const int SOIL_PIN = 36;
+const int WATER_PUMP_PIN = 4;
+const int SOIL_DRY_THRESHOLD = 45;   // %: lower means drier
+const int SOIL_WET_THRESHOLD = 60;   // %: higher means wet enough
+
+int soilRaw = 0;
+int soilPercent = 0;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+
+  pinMode(WATER_PUMP_PIN, OUTPUT);
+  digitalWrite(WATER_PUMP_PIN, LOW);
+
+  Serial.println("Handysense real Soil Moisture + Water Pump ready");
+}
+
+void loop() {
+  soilRaw = analogRead(SOIL_PIN);
+  soilPercent = map(soilRaw, 4095, 0, 0, 100);
+
+  if (soilPercent < SOIL_DRY_THRESHOLD) {
+    digitalWrite(WATER_PUMP_PIN, HIGH);
+  } else if (soilPercent > SOIL_WET_THRESHOLD) {
+    digitalWrite(WATER_PUMP_PIN, LOW);
+  }
+
+  Serial.print("soil_raw=");
+  Serial.print(soilRaw);
+  Serial.print(",soil_percent=");
+  Serial.print(soilPercent);
+  Serial.print(",pump=");
+  Serial.println(digitalRead(WATER_PUMP_PIN));
+  delay(1000);
+}`,
+
+    handysense_real_bfarm_sht31_fan: `// Handysense real - BFARM SHT31 + Fan
+// Sensor wiring:
+// VCC -> I2C1_VCC, GND -> I2C1_GND, SDA -> I2C1_SDA (GPIO21), SCL -> I2C1_SCL (GPIO22)
+// Actuator wiring:
+// Fan SIG -> LEDR_1 (GPIO4)
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <SHT31.h>
+
+const int FAN_PIN = 4;
+const float HUMIDITY_HIGH = 80.0f;
+const float HUMIDITY_LOW = 70.0f;
+const float TEMP_HIGH = 33.0f;
+const float TEMP_LOW = 30.0f;
+
+SHT31 sht31;
+float temperatureC = 0.0f;
+float humidityRh = 0.0f;
+bool fanOn = false;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+
+  Wire.begin();
+  Wire.setClock(10000);
+  sht31.begin(0x44);
+
+  pinMode(FAN_PIN, OUTPUT);
+  digitalWrite(FAN_PIN, LOW);
+
+  Serial.println("Handysense real SHT31 + Fan ready");
+}
+
+void loop() {
+  sht31.read();
+  temperatureC = sht31.getTemperature();
+  humidityRh = sht31.getHumidity();
+
+  if ((humidityRh >= HUMIDITY_HIGH) || (temperatureC >= TEMP_HIGH)) {
+    fanOn = true;
+  } else if ((humidityRh <= HUMIDITY_LOW) && (temperatureC <= TEMP_LOW)) {
+    fanOn = false;
+  }
+
+  digitalWrite(FAN_PIN, fanOn ? HIGH : LOW);
+
+  Serial.print("temp=");
+  Serial.print(temperatureC, 1);
+  Serial.print(",humidity=");
+  Serial.print(humidityRh, 1);
+  Serial.print(",fan=");
+  Serial.println(fanOn ? 1 : 0);
+  delay(1000);
+}`,
+
     // ============================================
     // BFarm - Field Sensor Examples
     // ============================================
@@ -4990,6 +5155,15 @@ if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
                 case 'handysense_real_buttons_leds_test':
                     setupHandysenseRealButtonsLedsTestCircuit();
                     break;
+                case 'handysense_real_bfarm_ph_misting':
+                    setupHandysenseRealBfarmPhMistingCircuit();
+                    break;
+                case 'handysense_real_bfarm_soil_watering':
+                    setupHandysenseRealBfarmSoilWateringCircuit();
+                    break;
+                case 'handysense_real_bfarm_sht31_fan':
+                    setupHandysenseRealBfarmSht31FanCircuit();
+                    break;
                 case 'mcpSmartControl':
                     setupMcpSmartControlCircuit();
                     break;
@@ -5195,7 +5369,7 @@ function setupESP32Circuit() {
 
             if (pin2Port && ledAnodePort) {
                 let connection1 = new draw2d.Connection();
-                connection1.setRouter(new draw2d.layout.connection.VertexRouter());
+                connection1.setRouter(new draw2d.layout.connection.InteractiveManhattanConnectionRouter());
                 connection1.setSource(pin2Port);
                 connection1.setTarget(ledAnodePort);
                 hackCable.editor.canvas.add(connection1);
@@ -5213,7 +5387,7 @@ function setupESP32Circuit() {
 
             if (gndPort && ledCathodePort) {
                 let connection2 = new draw2d.Connection();
-                connection2.setRouter(new draw2d.layout.connection.VertexRouter());
+                connection2.setRouter(new draw2d.layout.connection.InteractiveManhattanConnectionRouter());
                 connection2.setSource(ledCathodePort);
                 connection2.setTarget(gndPort);
                 hackCable.editor.canvas.add(connection2);
@@ -5253,7 +5427,7 @@ function setupCustomESP32Circuit() {
 
             if (pin2Port && ledAnodePort) {
                 let connection1 = new draw2d.Connection();
-                connection1.setRouter(new draw2d.layout.connection.VertexRouter());
+                connection1.setRouter(new draw2d.layout.connection.InteractiveManhattanConnectionRouter());
                 connection1.setSource(pin2Port);
                 connection1.setTarget(ledAnodePort);
                 hackCable.editor.canvas.add(connection1);
@@ -5271,7 +5445,7 @@ function setupCustomESP32Circuit() {
 
             if (gndPort && ledCathodePort) {
                 let connection2 = new draw2d.Connection();
-                connection2.setRouter(new draw2d.layout.connection.VertexRouter());
+                connection2.setRouter(new draw2d.layout.connection.InteractiveManhattanConnectionRouter());
                 connection2.setSource(ledCathodePort);
                 connection2.setTarget(gndPort);
                 hackCable.editor.canvas.add(connection2);
@@ -5329,7 +5503,7 @@ function connectPorts(
 
     if (sourcePort && targetPort) {
         let connection = new draw2d.Connection();
-        connection.setRouter(new draw2d.layout.connection.ManhattanConnectionRouter());
+        connection.setRouter(new draw2d.layout.connection.InteractiveManhattanConnectionRouter());
         connection.setSource(sourcePort);
         connection.setTarget(targetPort);
         connection.installEditPolicy(new DisconnectableConnectionPolicy());
@@ -5363,6 +5537,101 @@ function setupHandysenseRealButtonsLedsTestCircuit() {
     selectBoardForExample('handysense-real');
     hackCable.editor.canvas.clear();
     setupHandysenseCircuit('handysense-real');
+}
+
+function setupHandysenseRealBfarmPhMistingCircuit() {
+    console.log("Setting up Handysense real BFARM RS485 pH + Misting Pump circuit...");
+    selectBoardForExample('handysense-real');
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[51]);
+    hackCable.editor.canvas.add(boardFigure.setX(180).setY(40));
+
+    const phSensorFigure = new ComponentFigure(wokwiComponentById[35]);
+    hackCable.editor.canvas.add(phSensorFigure.setX(500).setY(60));
+
+    const mistPumpFigure = new ComponentFigure(wokwiComponentById[31]);
+    hackCable.editor.canvas.add(mistPumpFigure.setX(500).setY(210));
+
+    setTimeout(() => {
+        try {
+            connectPorts(phSensorFigure, 'VCC', boardFigure, 'RS485_24V');
+            connectPorts(phSensorFigure, 'GND', boardFigure, 'RS485_GND');
+            connectPorts(phSensorFigure, 'A+', boardFigure, 'RS485_A');
+            connectPorts(phSensorFigure, 'B-', boardFigure, 'RS485_B');
+
+            connectPorts(mistPumpFigure, 'VCC', boardFigure, 'RELAY5V_VIN');
+            connectPorts(mistPumpFigure, 'GND', boardFigure, 'RELAY5V_GND');
+            connectPorts(mistPumpFigure, 'SIG', boardFigure, 'LEDR_0');
+
+            console.log("Handysense real BFARM RS485 pH + Misting Pump setup complete!");
+        } catch (error) {
+            console.error("Error during Handysense real BFARM RS485 pH + Misting Pump wiring:", error);
+        }
+    }, 500);
+}
+
+function setupHandysenseRealBfarmSoilWateringCircuit() {
+    console.log("Setting up Handysense real BFARM Soil Moisture + Water Pump circuit...");
+    selectBoardForExample('handysense-real');
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[51]);
+    hackCable.editor.canvas.add(boardFigure.setX(180).setY(40));
+
+    const soilSensorFigure = new ComponentFigure(wokwiComponentById[44]);
+    hackCable.editor.canvas.add(soilSensorFigure.setX(40).setY(60));
+
+    const waterPumpFigure = new ComponentFigure(wokwiComponentById[32]);
+    hackCable.editor.canvas.add(waterPumpFigure.setX(500).setY(210));
+
+    setTimeout(() => {
+        try {
+            connectPorts(soilSensorFigure, 'VCC', boardFigure, 'A05_1_VCC');
+            connectPorts(soilSensorFigure, 'GND', boardFigure, 'A05_1_GND');
+            connectPorts(soilSensorFigure, 'AO', boardFigure, 'A05_1_SIG');
+
+            connectPorts(waterPumpFigure, 'VCC', boardFigure, 'RELAY5V_VIN');
+            connectPorts(waterPumpFigure, 'GND', boardFigure, 'RELAY5V_GND');
+            connectPorts(waterPumpFigure, 'SIG', boardFigure, 'LEDR_1');
+
+            console.log("Handysense real BFARM Soil Moisture + Water Pump setup complete!");
+        } catch (error) {
+            console.error("Error during Handysense real BFARM Soil Moisture + Water Pump wiring:", error);
+        }
+    }, 500);
+}
+
+function setupHandysenseRealBfarmSht31FanCircuit() {
+    console.log("Setting up Handysense real BFARM SHT31 + Fan circuit...");
+    selectBoardForExample('handysense-real');
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[51]);
+    hackCable.editor.canvas.add(boardFigure.setX(180).setY(40));
+
+    const sht31Figure = new ComponentFigure(wokwiComponentById[41]);
+    hackCable.editor.canvas.add(sht31Figure.setX(500).setY(60));
+
+    const fanFigure = new ComponentFigure(wokwiComponentById[33]);
+    hackCable.editor.canvas.add(fanFigure.setX(500).setY(210));
+
+    setTimeout(() => {
+        try {
+            connectPorts(sht31Figure, 'VCC', boardFigure, 'I2C1_VCC');
+            connectPorts(sht31Figure, 'GND', boardFigure, 'I2C1_GND');
+            connectPorts(sht31Figure, 'SDA', boardFigure, 'I2C1_SDA');
+            connectPorts(sht31Figure, 'SCL', boardFigure, 'I2C1_SCL');
+
+            connectPorts(fanFigure, 'VCC', boardFigure, 'RELAY5V_VIN');
+            connectPorts(fanFigure, 'GND', boardFigure, 'RELAY5V_GND');
+            connectPorts(fanFigure, 'SIG', boardFigure, 'LEDR_1');
+
+            console.log("Handysense real BFARM SHT31 + Fan setup complete!");
+        } catch (error) {
+            console.error("Error during Handysense real BFARM SHT31 + Fan wiring:", error);
+        }
+    }, 500);
 }
 
 // Example 1: pH Misting Control Circuit Setup (1 sensor + 1 actuator)
@@ -6291,3 +6560,4 @@ autoSyncBlocksCheckbox?.addEventListener('change', () => {
         autoSyncBlocksHandler = null;
     }
 });
+

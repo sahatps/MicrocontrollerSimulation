@@ -59,7 +59,7 @@ export class Editor{
                 const targetPort: Port = targetFigure.getPortByName(connectionData.targetPortName)
                 if(sourcePort && targetPort){
                     let con = new draw2d.Connection();
-                    con.setRouter(new draw2d.layout.connection.ManhattanConnectionRouter());
+                    con.setRouter(new draw2d.layout.connection.InteractiveManhattanConnectionRouter());
                     con.setSource(sourcePort)
                     con.setTarget(targetPort)
                     con.installEditPolicy(new DisconnectableConnectionPolicy())
