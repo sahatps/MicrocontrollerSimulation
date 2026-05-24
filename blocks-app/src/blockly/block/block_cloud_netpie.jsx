@@ -68,26 +68,26 @@ Blockly.Blocks["netpie_begin"] = {
             .appendField(new Blockly.FieldImage("/icon/netpie-logo.png", 24, 24, "*"))
             .appendField("NETPIE Begin");
         this.appendDummyInput()
-            .setAlign(Blockly.ALIGN_LEFT)
+            .setAlign(Blockly.inputs.Align.LEFT)
             .appendField("HOST")
             .appendField(
                 new Blockly.FieldTextInput("broker.netpie.io"),
                 "MQTT_HOST"
             );
         this.appendDummyInput()
-            .setAlign(Blockly.ALIGN_LEFT)
+            .setAlign(Blockly.inputs.Align.LEFT)
             .appendField("Client ID")
             .appendField(new Blockly.FieldTextInput(""), "CLIENT_ID");
         this.appendDummyInput()
-            .setAlign(Blockly.ALIGN_LEFT)
+            .setAlign(Blockly.inputs.Align.LEFT)
             .appendField("Token")
             .appendField(new Blockly.FieldTextInput(""), "MQTT_USERNAME");
         this.appendDummyInput()
-            .setAlign(Blockly.ALIGN_LEFT)
+            .setAlign(Blockly.inputs.Align.LEFT)
             .appendField("Secret")
             .appendField(new Blockly.FieldTextInput(""), "MQTT_PASSWORD");
         this.appendDummyInput()
-            .setAlign(Blockly.ALIGN_LEFT)
+            .setAlign(Blockly.inputs.Align.LEFT)
             .appendField("PORT")
             .appendField(new Blockly.FieldTextInput("1883"), "MQTT_PORT");
         this.setPreviousStatement(true, null);

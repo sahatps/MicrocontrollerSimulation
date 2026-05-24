@@ -17,15 +17,15 @@ Blockly.Blocks["magellan_begin"] = {
       // this.appendDummyInput()
       //   .appendField("Magellan Begin");
       this.appendDummyInput()
-        .setAlign(Blockly.ALIGN_LEFT)
+        .setAlign(Blockly.inputs.Align.LEFT)
         .appendField("Endpoint")
         .appendField(new Blockly.FieldTextInput("magellan.ais.co.th"), "MQTT_HOST");
       this.appendDummyInput()
-        .setAlign(Blockly.ALIGN_LEFT)
+        .setAlign(Blockly.inputs.Align.LEFT)
         .appendField("ThingIdentifier")
         .appendField(new Blockly.FieldTextInput(""), "MQTT_THING_IDENT");
       this.appendDummyInput()
-        .setAlign(Blockly.ALIGN_LEFT)
+        .setAlign(Blockly.inputs.Align.LEFT)
         .appendField("ThingSecret")
         .appendField(new Blockly.FieldTextInput(""), "MQTT_THING_SECRET");
       // this.appendDummyInput()
@@ -106,12 +106,12 @@ Blockly.Blocks["magellan_begin"] = {
         .appendField(new Blockly.FieldDropdown([["magellan.ais.co.th", "magellan.ais.co.th"], ["enterprise-magellan.ais.co.th", "device-entmagellan.ais.co.th"]]), "endpoint");
 
       this.appendDummyInput()
-        .setAlign(Blockly.ALIGN_LEFT)
+        .setAlign(Blockly.inputs.Align.LEFT)
         .appendField("ThingIdentifier")
 
         .appendField(new Blockly.FieldTextInput(""), "MQTT_THING_IDENT");
       this.appendDummyInput()
-        .setAlign(Blockly.ALIGN_LEFT)
+        .setAlign(Blockly.inputs.Align.LEFT)
         .appendField("ThingSecret")
         .appendField(new Blockly.FieldTextInput(""), "MQTT_THING_SECRET");
       // this.appendDummyInput()

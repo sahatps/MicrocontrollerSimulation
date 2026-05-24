@@ -10,15 +10,15 @@ Blockly.Blocks["Thingspeak_begin"] = {
                 "*"))
             .appendField("Thingspeak Begin");
         this.appendDummyInput()
-            .setAlign(Blockly.ALIGN_LEFT)
+            .setAlign(Blockly.inputs.Align.LEFT)
             .appendField("WRITE API KEY")
             .appendField(new Blockly.FieldTextInput(""), "WRITE_API_KEY");
         this.appendDummyInput()
-            .setAlign(Blockly.ALIGN_LEFT)
+            .setAlign(Blockly.inputs.Align.LEFT)
             .appendField("WIFI SSID")
             .appendField(new Blockly.FieldTextInput(""), "WIFI_SSID");
         this.appendDummyInput()
-            .setAlign(Blockly.ALIGN_LEFT)
+            .setAlign(Blockly.inputs.Align.LEFT)
             .appendField("WIFI PASS")
             .appendField(new Blockly.FieldTextInput(""), "WIFI_PASS");
 
@@ -40,7 +40,7 @@ Blockly.Blocks["Thingspeak_connectWifi"] = {
                 24,
                 24,
                 "*"))
-            .setAlign(Blockly.ALIGN_LEFT)
+            .setAlign(Blockly.inputs.Align.LEFT)
             .appendField("connectWifi")
 
         this.setPreviousStatement(true, null);
@@ -60,7 +60,7 @@ Blockly.Blocks["Thingspeak_Finish"] = {
                 24,
                 24,
                 "*"))
-            .setAlign(Blockly.ALIGN_LEFT)
+            .setAlign(Blockly.inputs.Align.LEFT)
             .appendField("Finish")
 
 

@@ -1,14 +1,23 @@
 import * as Blockly from 'blockly/core';
 
 /** ---------- shared helpers (keep in this file) ---------- */
-function getNameDB() {
-  // Version-safe variable/name DB (some Blockly versions use nameDB_)
-  return (Blockly.JavaScript && (Blockly.JavaScript.variableDB_ || Blockly.JavaScript.nameDB_)) || null;
-}
+function distinctJobName(block, base = 'MyJob', fieldName = 'jobname') {
+  const ws = block?.workspace;
+  if (!ws) return base;
 
-function distinctJobName(base = 'MyJob') {
-  const db = getNameDB();
-  return db ? db.getDistinctName(base, Blockly.Variables.NAME_TYPE) : base;
+  const used = new Set();
+  ws.getAllBlocks(false).forEach((candidate) => {
+    const value = candidate.getFieldValue?.(fieldName);
+    if (typeof value === 'string' && value.trim()) {
+      used.add(value.trim());
+    }
+  });
+
+  if (!used.has(base)) return base;
+
+  let i = 2;
+  while (used.has(`${base}${i}`)) i++;
+  return `${base}${i}`;
 }
 
 function pad2(n) {
@@ -64,7 +73,7 @@ Blockly.Blocks['CJOB_begin'] = {
 
 Blockly.Blocks['CJOB_addschedule'] = {
   init: function () {
-    const job_name = distinctJobName('MyJob');
+    const job_name = distinctJobName(this, 'MyJob');
     const commentText =
       '+-------------- second (0 - 59)\n' +
       '| +---------------- minute (0 - 59)\n' +
@@ -101,7 +110,7 @@ Blockly.Blocks['CJOB_addschedule'] = {
 
 Blockly.Blocks['CJOB_addschedule_every_seconds'] = {
   init: function () {
-    const job_name = distinctJobName('MyJob');
+    const job_name = distinctJobName(this, 'MyJob');
 
     this.appendDummyInput().appendField('CronJob add schedule second period');
 
@@ -129,7 +138,7 @@ Blockly.Blocks['CJOB_addschedule_every_seconds'] = {
 
 Blockly.Blocks['CJOB_addschedule_every_minutes'] = {
   init: function () {
-    const job_name = distinctJobName('MyJob');
+    const job_name = distinctJobName(this, 'MyJob');
 
     this.appendDummyInput().appendField('CronJob add schedule minute period');
 
@@ -161,7 +170,7 @@ Blockly.Blocks['CJOB_addschedule_every_minutes'] = {
 
 Blockly.Blocks['CJOB_addschedule_every_hours'] = {
   init: function () {
-    const job_name = distinctJobName('MyJob');
+    const job_name = distinctJobName(this, 'MyJob');
 
     this.appendDummyInput().appendField('CronJob add schedule hour period');
 
@@ -195,7 +204,7 @@ Blockly.Blocks['CJOB_addschedule_every_hours'] = {
 
 Blockly.Blocks['CJOB_add_schedule_time'] = {
   init: function () {
-    const job_name = distinctJobName('MyJob');
+    const job_name = distinctJobName(this, 'MyJob');
 
     this.appendDummyInput().appendField('CronJob add daily schedule time');
 
@@ -226,7 +235,7 @@ Blockly.Blocks['CJOB_add_schedule_time'] = {
 
 Blockly.Blocks['CJOB_add_schedule_datetime'] = {
   init: function () {
-    const job_name = distinctJobName('MyJob');
+    const job_name = distinctJobName(this, 'MyJob');
 
     this.appendDummyInput().appendField('CronJob add schedule datetime');
 
@@ -261,7 +270,7 @@ Blockly.Blocks['CJOB_add_schedule_datetime'] = {
 
 Blockly.Blocks['CJOB_add_schedule_weekday'] = {
   init: function () {
-    const job_name = distinctJobName('MyJob');
+    const job_name = distinctJobName(this, 'MyJob');
 
     this.appendDummyInput().appendField('CronJob add schedule weekday');
 

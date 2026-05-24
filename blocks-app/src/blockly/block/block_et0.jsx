@@ -14,7 +14,7 @@ Blockly.Blocks["HandySense_et0v1_begin"] = {
             )
             .appendField("Evapotranspiration Begin");
         this.appendDummyInput()
-            .setAlign(Blockly.ALIGN_LEFT)
+            .setAlign(Blockly.inputs.Align.LEFT)
             .appendField(new Blockly.FieldImage("/icon/sun.png", 20, 20, "*"))
             .appendField("Sensor");
         this.appendValueInput("value_temp").appendField("  ▸ Temperature (°C)");
@@ -23,7 +23,7 @@ Blockly.Blocks["HandySense_et0v1_begin"] = {
         this.appendValueInput("value_radw").appendField("  ▸ Net surface radiation (MJ/m²/day)");
         this.appendValueInput("value_Heat").appendField("  ▸ Heat flow in soil (MJ/m²/day)");
         this.appendDummyInput()
-            .setAlign(Blockly.ALIGN_LEFT)
+            .setAlign(Blockly.inputs.Align.LEFT)
             .appendField(new Blockly.FieldImage("/icon/plus.png", 20, 20, "*"))
             .appendField("Setting more");
         this.appendValueInput("value_kc").appendField("  ▸ Crop Coefficient");

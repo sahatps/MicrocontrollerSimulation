@@ -41,16 +41,23 @@ function getProcedureName(block) {
   return nameDB.getName(block.getFieldValue('NAME'), Blockly.Procedures.NAME_TYPE);
 }
 
+function getVariableTypeFromWorkspace(block, variableName) {
+  const workspace = block?.workspace;
+  if (!workspace || !variableName) return null;
+
+  const variables = workspace.getVariableMap()?.getAllVariables?.() || [];
+  const match = variables.find((variable) => variable.getName() === variableName);
+  const type = match?.getType?.();
+  return type || null;
+}
+
 function getTypedArgs(block) {
   const nameDB = getNameDB();
   const argsIncType = [];
 
   for (let i = 0; i < block.arguments_.length; i++) {
     const argName = nameDB.getName(block.arguments_[i], Blockly.Variables.NAME_TYPE);
-    const vType =
-      (Blockly.dbNameType && Blockly.dbNameType[argName] && Blockly.dbNameType[argName].type)
-        ? Blockly.dbNameType[argName].type
-        : 'int';
+    const vType = getVariableTypeFromWorkspace(block, block.arguments_[i]) || 'int';
     argsIncType.push(`${vType} ${argName}`);
   }
 
@@ -88,8 +95,9 @@ function inferReturnType(block, returnExpr) {
   //    (avoid mapping for complex expression like "a + b")
   const token = (returnExpr || '').trim();
   const isSingleToken = /^[A-Za-z_]\w*$/.test(token);
-  if (isSingleToken && Blockly.dbNameType && Blockly.dbNameType[token]) {
-    return Blockly.dbNameType[token].type;
+  if (isSingleToken) {
+    const variableType = getVariableTypeFromWorkspace(block, token);
+    if (variableType) return variableType;
   }
 
   return 'void';

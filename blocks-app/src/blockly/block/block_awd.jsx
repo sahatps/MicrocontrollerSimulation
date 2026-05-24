@@ -14,31 +14,31 @@ Blockly.Blocks["HandySense_awdv1"] = {
             )
             .appendField("Alternate Wetting and Drying");
         this.appendDummyInput()
-            .setAlign(Blockly.ALIGN_LEFT)
+            .setAlign(Blockly.inputs.Align.LEFT)
             .appendField(new Blockly.FieldImage("/icon/netpie-logo.png", 20, 20, "*"))
             .appendField("NETPIE setting")
         this.appendDummyInput()
-            .setAlign(Blockly.ALIGN_LEFT)
+            .setAlign(Blockly.inputs.Align.LEFT)
             .appendField("    ▸ Client ID")
             .appendField(new Blockly.FieldTextInput(""), "n_id");
         this.appendDummyInput()
-            .setAlign(Blockly.ALIGN_LEFT)
+            .setAlign(Blockly.inputs.Align.LEFT)
             .appendField("    ▸ Token")
             .appendField(new Blockly.FieldTextInput(""), "n_token");
         this.appendDummyInput()
-            .setAlign(Blockly.ALIGN_LEFT)
+            .setAlign(Blockly.inputs.Align.LEFT)
             .appendField("    ▸ Secret")
             .appendField(new Blockly.FieldTextInput(""), "n_secret");
         this.appendDummyInput()
-            .setAlign(Blockly.ALIGN_LEFT)
+            .setAlign(Blockly.inputs.Align.LEFT)
             .appendField(new Blockly.FieldImage("/icon/icons8_thinkspeak.png", 20, 20, "*"))
             .appendField("Thinkspeak setting")
         this.appendDummyInput()
-            .setAlign(Blockly.ALIGN_LEFT)
+            .setAlign(Blockly.inputs.Align.LEFT)
             .appendField("    ▸ API")
             .appendField(new Blockly.FieldTextInput(""), "t_api");
         this.appendDummyInput()
-            .setAlign(Blockly.ALIGN_LEFT)
+            .setAlign(Blockly.inputs.Align.LEFT)
             .appendField(new Blockly.FieldImage("/icon/sun.png", 20, 20, "*"))
             .appendField("Sensor")
         this.appendValueInput("value_sensor1")
@@ -60,7 +60,7 @@ Blockly.Blocks["HandySense_awdv1"] = {
         //   .setCheck(null)
         //   .appendField("Sensor 3");
         this.appendDummyInput()
-            .setAlign(Blockly.ALIGN_LEFT)
+            .setAlign(Blockly.inputs.Align.LEFT)
             .appendField(new Blockly.FieldImage("/icon/icons8_Story_Time_96px-d.png", 20, 20, "*"))
             .appendField("Delay")
             .appendField(new Blockly.FieldTextInput("300000"), "delay");
