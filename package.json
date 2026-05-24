@@ -12,10 +12,10 @@
     "build:web:core": "webpack --mode=production --config ./webpack.config.web.js",
     "build:web": "npm run build:web:core && npm run build:bfarm && npm run copy:bfarm",
     "build:bfarm": "node -e \"const fs=require('fs');const {execSync}=require('child_process');if(!fs.existsSync('blocks-app/package.json')){console.log('Skipping bfarm build: blocks-app/package.json not found');process.exit(0);}execSync('npm --prefix blocks-app install',{stdio:'inherit'});execSync('npm --prefix blocks-app run build',{stdio:'inherit'});\"",
-    "copy:bfarm": "node -e \"const fs=require('fs');const src='blocks-app/dist';if(!fs.existsSync(src)){console.log('Skipping bfarm copy: blocks-app/dist not found');process.exit(0);}fs.mkdirSync('dist/web/blocks',{recursive:true});fs.cpSync(src,'dist/web/blocks',{recursive:true})\"",
+    "copy:bfarm": "node -e \"const fs=require('fs');const src='blocks-app/dist';const dest='dist/web/blocks';if(!fs.existsSync(src)){console.log('Skipping bfarm copy: blocks-app/dist not found');process.exit(0);}fs.rmSync(dest,{recursive:true,force:true});fs.cpSync(src,dest,{recursive:true,force:true})\"",
     "build:all": "npm run build:web",
     "compat:wasm": "node scripts/wasm-compat-help.js",
-    "serve:web": "npx webpack serve --mode=development --config ./webpack.config.web.js",
+    "serve:web": "npm run build:bfarm && npx webpack serve --mode=development --config ./webpack.config.web.js",
     "serve:backend": "node server.js",
     "dev": "concurrently \"npm run serve:web\" \"npm run serve:backend\"",
     "start:prod": "node server.js"

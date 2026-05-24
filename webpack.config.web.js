@@ -32,8 +32,8 @@ module.exports = {
                 publicPath: '/hackcable'
             },
             {
-                directory: path.join(__dirname, 'bfarm/dist'),
-                publicPath: '/bfarm'
+                directory: path.join(__dirname, 'blocks-app/dist'),
+                publicPath: '/blocks'
             }
         ],
         headers: {

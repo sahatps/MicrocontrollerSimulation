@@ -59,7 +59,7 @@ The project is already configured with the necessary Vercel settings in `vercel.
 - **Output Directory**: `dist/web`
 - **Headers**: Cross-Origin headers are configured for WebAssembly support
 
-`npm run build:web` now builds the HackCable web bundle, builds the tracked `blocks-app/` web app, and copies that output into `dist/web/blocks` so the shell's `/blocks/index.html` iframe route is present in production.
+`npm run build:web` now builds the HackCable web bundle, builds the tracked `blocks-app/` web app, and copies that output into `dist/web/blocks` so the shell's `/blocks/index.html` iframe route is present in production. The Vite base for `blocks-app/` must stay aligned with `/blocks/` so the generated asset URLs resolve correctly on Vercel.
 
 ### Important Headers
 
