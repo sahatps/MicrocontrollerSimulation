@@ -1,0 +1,29 @@
+.codebox {
+    position: fixed;
+    width: 30%;
+    height: 70%;
+    right: 6%;
+    top: 15%;
+    z-index: 1000;
+    padding: 16px;
+    border-radius: 16px;
+    background: #1e1e1e;
+    overflow: hidden;
+    scrollbar-width: none;
+}
+
+@media (max-width: 1000px) {
+    .codebox {
+        position: fixed;
+        width: 70%;
+        height: 80%;
+        right: 6%;
+        top: 10%;
+        z-index: 1000;
+        padding: 16px;
+        border-radius: 16px;
+        background: #1e1e1e;
+        overflow: hidden;
+        scrollbar-width: none;
+    }
+}
