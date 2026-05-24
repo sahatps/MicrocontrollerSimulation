@@ -59,6 +59,8 @@ The project is already configured with the necessary Vercel settings in `vercel.
 - **Output Directory**: `dist/web`
 - **Headers**: Cross-Origin headers are configured for WebAssembly support
 
+`npm run build:web` now builds the HackCable web bundle, builds `bfarm/`, and copies the BFARM output into `dist/web/bfarm` so the shell's `/bfarm/index.html` iframe route is present in production.
+
 ### Important Headers
 
 The following headers are required for MicroPython (WebAssembly) to work:
