@@ -236,7 +236,6 @@ const DisconnectableStartHandle = draw2d.shape.basic.LineStartResizeHandle.exten
             this.setAlpha(1);
             return;
         }
-        // For non-Connection lines, use default behavior
         this._super(x, y, shiftKey, ctrlKey);
     }
 });
@@ -272,7 +271,7 @@ const DisconnectableEndHandle = draw2d.shape.basic.LineEndResizeHandle.extend({
 });
 
 // Orthogonal-constrained start endpoint handle for standalone lines (drag to extend)
-const OrthogonalStartHandle = DisconnectableStartHandle.extend({
+const OrthogonalStartHandle = draw2d.shape.basic.LineStartResizeHandle.extend({
     NAME: "OrthogonalStartHandle",
     onDrag: function(dx: number, dy: number, dx2: number, dy2: number, shiftKey: boolean, ctrlKey: boolean) {
         this._super(dx, dy, dx2, dy2, shiftKey, ctrlKey);
@@ -289,7 +288,7 @@ const OrthogonalStartHandle = DisconnectableStartHandle.extend({
 });
 
 // Orthogonal-constrained end endpoint handle for standalone lines (drag to extend)
-const OrthogonalEndHandle = DisconnectableEndHandle.extend({
+const OrthogonalEndHandle = draw2d.shape.basic.LineEndResizeHandle.extend({
     NAME: "OrthogonalEndHandle",
     onDrag: function(dx: number, dy: number, dx2: number, dy2: number, shiftKey: boolean, ctrlKey: boolean) {
         this._super(dx, dy, dx2, dy2, shiftKey, ctrlKey);
@@ -432,7 +431,7 @@ export const DisconnectableConnectionPolicy = draw2d.policy.line.OrthogonalSelec
             figure.selectionHandles.add(new OrthogonalStartHandle(figure));
             figure.selectionHandles.add(new OrthogonalEndHandle(figure));
         } else {
-            // Connected lines: keep disconnectable endpoint handles.
+            // Connected lines: keep endpoint reconnect/disconnect handles.
             figure.selectionHandles.add(new DisconnectableStartHandle(figure));
             figure.selectionHandles.add(new DisconnectableEndHandle(figure));
         }
@@ -447,7 +446,7 @@ export const DisconnectableConnectionPolicy = draw2d.policy.line.OrthogonalSelec
 
         figure.selectionHandles.each(function(_i: number, e: any) {
             // Connections are not "resizeable" figures, but these handles must stay draggable
-            // for orthogonal segment editing and endpoint reconnect/disconnect.
+            // for orthogonal segment editing and standalone endpoint editing.
             e.setDraggable(true);
             e.show(canvas);
         });

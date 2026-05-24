@@ -1,0 +1,36 @@
+FROM node:20-bookworm-slim AS builder
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build:all
+
+FROM node:20-bookworm-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        clang \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/server.js ./server.js
+COPY --from=builder /app/arduino-mock ./arduino-mock
+COPY --from=builder /app/mock_env ./mock_env
+COPY --from=builder /app/simulator_core.cpp ./simulator_core.cpp
+
+ENV NODE_ENV=production
+ENV SERVE_STATIC=1
+ENV PORT=3000
+
+EXPOSE 3000
+
+CMD ["node", "server.js"]

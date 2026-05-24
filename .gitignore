@@ -35,6 +35,10 @@ coverage/
 # Temporary files
 *.tmp
 .cache/
+*.tar
+*.tar.gz
+*.zip
+*.7z
 
 # bfarm subproject
 bfarm/

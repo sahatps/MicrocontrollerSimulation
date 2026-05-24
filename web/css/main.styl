@@ -576,10 +576,24 @@ body.controlbar-hidden #hackCable
                 color #0d7380
                 outline-color rgba(150, 228, 233, 0.75)
 
+            &.is-cancel
+                border-color #ef6f6c
+                background-color #ff8a86
+                color #7f1d1d
+                outline-color rgba(255, 183, 178, 0.55)
+
+                &:hover:not(:disabled)
+                    background-color #f27571
+                    color #6b1717
+                    outline-color rgba(255, 183, 178, 0.8)
+
         #compile.run-circle-btn::before
             content '\2713'
             font-size 24px
             font-weight 800
+
+        #compile.run-circle-btn.is-cancel::before
+            content '\00D7'
 
         #execute.run-circle-btn::before
             content '\25B6'

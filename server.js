@@ -5,14 +5,26 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const { Readable } = require('stream');
 
 const app = express();
-const PORT = 3001;
+const shouldServeStatic = process.env.SERVE_STATIC === '1';
+const PORT = Number(process.env.PORT || (shouldServeStatic ? 3000 : 3001));
+const DIST_WEB_DIR = path.join(__dirname, 'dist', 'web');
+const WASM_CLANG_ORIGIN = 'https://binji.github.io';
 const EMSCRIPTEN_INITIAL_MEMORY_BYTES = 64 * 1024 * 1024;
 const EMSCRIPTEN_MAX_MEMORY_BYTES = 256 * 1024 * 1024;
 
 app.use(cors());
 app.use(express.json({ limit: '100kb' }));
+
+if (shouldServeStatic) {
+    app.use((req, res, next) => {
+        res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+        res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
+        next();
+    });
+}
 
 // --- em++ path resolution ---
 let emscriptenAvailable = false;
@@ -351,6 +363,63 @@ app.post('/api/compile/clang', async (req, res) => {
     }
 });
 
+app.get('/health', (_req, res) => {
+    res.json({
+        ok: true,
+        serveStatic: shouldServeStatic,
+        port: PORT,
+        emscriptenAvailable,
+        clangAvailable,
+    });
+});
+
+if (shouldServeStatic) {
+    app.use('/wasm-clang', async (req, res) => {
+        const targetUrl = new URL(req.originalUrl, WASM_CLANG_ORIGIN);
+        const controller = new AbortController();
+        const onClose = () => controller.abort();
+        req.on('close', onClose);
+
+        try {
+            const upstream = await fetch(targetUrl, {
+                method: req.method,
+                signal: controller.signal,
+            });
+
+            res.status(upstream.status);
+            for (const [key, value] of upstream.headers.entries()) {
+                if (key.toLowerCase() === 'transfer-encoding') continue;
+                res.setHeader(key, value);
+            }
+
+            if (!upstream.body) {
+                res.end();
+                return;
+            }
+
+            Readable.fromWeb(upstream.body).pipe(res);
+        } catch (error) {
+            if (!res.headersSent) {
+                res.status(502).json({
+                    error: 'Failed to fetch wasm-clang assets',
+                    code: 'WASM_CLANG_PROXY_ERROR',
+                    details: error.message || String(error),
+                });
+            } else {
+                res.end();
+            }
+        } finally {
+            req.off('close', onClose);
+        }
+    });
+
+    app.use(express.static(DIST_WEB_DIR));
+
+    app.get('/', (_req, res) => {
+        res.sendFile(path.join(DIST_WEB_DIR, 'index.html'));
+    });
+}
+
 app.listen(PORT, () => {
-    console.log(`HackCable Emscripten backend running on http://localhost:${PORT}`);
+    console.log(`HackCable server running on http://localhost:${PORT}`);
 });

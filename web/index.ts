@@ -8,14 +8,16 @@ import {wokwiComponentById, wokwiComponentByClass, ComponentType} from "../src/p
 import {ComponentFigure} from "../src/editor/component-figure";
 import * as draw2d from "draw2d";
 import {DisconnectableConnectionPolicy} from "../src/editor/connections-policies";
-import { ClangWasmRunner } from './clang-runner';
+import { ClangWasmRunner, isClangCancellation } from './clang-runner';
 import { ArduinoWasmShim } from './arduino-wasm-shim';
 import { getArduinoHeaders } from './arduino-headers';
 import { convertBfarmMacroToCpp, hasBfarmMacroMarkers } from './bfarm-macro-converter';
+import { installWasmCompatHarness } from './wasm-compat-runner';
 import { HANDYSENSE_REAL_BOARD_CONTROL_EVENT } from '../src/components/handysense-real-board';
 import type { HandysenseRealBoardControlDetail, HandysenseRealBoardControlName } from '../src/components/handysense-real-board';
 
 console.log("Running HackCable web interface")
+installWasmCompatHarness();
 
 const mountingDiv = document.getElementById('hackCable');
 if(!mountingDiv) throw new DOMException("Mounting div not found")
@@ -40,6 +42,7 @@ let lastClangNativeResult: Uint8Array | null = null;
 let activeClangNativeLoopHandle: ReturnType<typeof setInterval> | null = null;
 let activeClangNativeShim: ArduinoWasmShim | null = null;
 let clangNativeAvailable = false;
+const DEFAULT_COMPILER_MODE = 'clang-llvm';
 const emscriptenInputPinStates = new Map<number, boolean>();
 const emscriptenPinModes = new Map<number, number>();
 
@@ -119,7 +122,7 @@ function updateEmscriptenOption() {
         opt.textContent = 'Emscripten C++ (unavailable)';
         opt.disabled = true;
         if (compilerModeSelect.value === 'emscripten') {
-            compilerModeSelect.value = 'micropython';
+            compilerModeSelect.value = DEFAULT_COMPILER_MODE;
         }
     }
 }
@@ -156,7 +159,7 @@ function updateClangNativeOption() {
         opt.textContent = 'Native Clang WASM (unavailable)';
         opt.disabled = true;
         if (compilerModeSelect.value === 'clang-native') {
-            compilerModeSelect.value = 'micropython';
+            compilerModeSelect.value = DEFAULT_COMPILER_MODE;
         }
     }
 }
@@ -305,6 +308,7 @@ const compileButton = document.getElementById('compile');
 const executeButton = document.getElementById('execute');
 const stopButton = document.getElementById('stop');
 const pauseButton = document.getElementById('pause');
+const buildCircuitFromCodeButton = document.getElementById('build-circuit-from-code');
 const codeInput = document.getElementById('code-editor');
 const hexInput = document.getElementById('code-compiled');
 const statusMessage = document.getElementById('status-message');
@@ -389,6 +393,8 @@ let graphDidDrag = false;
 type RunControlState = 'needs-compile' | 'compiling' | 'compiled' | 'executing';
 let runControlState: RunControlState = 'needs-compile';
 let isCompilingCode = false;
+let compileOperationId = 0;
+let activeCompileCancel: (() => void) | null = null;
 let codeMirrorEditor: any = null;
 const CODE_EDITOR_MIN_HEIGHT = 220;
 
@@ -490,6 +496,7 @@ function setRunControlState(state: RunControlState) {
     }
 
     runControlState = state;
+    updateCompileButtonMode(state === 'compiling' && activeCompileCancel !== null);
 
     switch (state) {
         case 'needs-compile':
@@ -519,6 +526,13 @@ function setRunControlState(state: RunControlState) {
     }
 }
 
+function updateCompileButtonMode(isCancel: boolean) {
+    if (!(compileButton instanceof HTMLButtonElement)) return;
+    compileButton.classList.toggle('is-cancel', isCancel);
+    compileButton.title = isCancel ? 'Cancel compile' : 'Compile';
+    compileButton.setAttribute('aria-label', isCancel ? 'Cancel compile' : 'Compile');
+}
+
 function markCompileStale() {
     if (isCompilingCode) return;
     setRunControlState('needs-compile');
@@ -532,10 +546,12 @@ function updateCompilerVisibility() {
     }
 }
 boardSelectEl?.addEventListener('change', () => {
+    activeCompileCancel?.();
     updateCompilerVisibility();
     markCompileStale();
 });
 compilerModeSelect?.addEventListener('change', () => {
+    activeCompileCancel?.();
     markCompileStale();
     if (compilerModeSelect.value !== 'clang-llvm') {
         clangRunner.dispose();
@@ -563,6 +579,7 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
 
     compileButton.addEventListener("click", () => compile());
     executeButton.addEventListener("click", () => { clearSerial(); execute(); setTimeout(startIOMonitor, 200); });
+    buildCircuitFromCodeButton?.addEventListener('click', () => buildCircuitFromCurrentCode());
     stopButton.addEventListener("click", () => {
         if ((stopButton as HTMLButtonElement).disabled) return;
         hackCable.emulatorManager.stop();
@@ -577,7 +594,10 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
 
     function compile(){
         if(!(codeInput instanceof HTMLTextAreaElement && hexInput instanceof HTMLTextAreaElement)) return;
-        if (isCompilingCode) return;
+        if (isCompilingCode) {
+            activeCompileCancel?.();
+            return;
+        }
         const rawSourceCode = getCodeEditorValue();
         const sourceCode = normalizeBfarmMacroCode(rawSourceCode);
         if (sourceCode !== rawSourceCode) {
@@ -587,7 +607,9 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
         const boardType = hackCable.editor.canvas.getBoardType();
         if (boardType) hackCable.emulatorManager.setBoardType(boardType);
 
-        const mode = compilerModeSelect?.value ?? 'micropython';
+        const mode = compilerModeSelect?.value ?? DEFAULT_COMPILER_MODE;
+        const currentCompileId = ++compileOperationId;
+        const isCurrentCompile = () => currentCompileId === compileOperationId;
 
         isCompilingCode = true;
         setRunControlState('compiling');
@@ -595,14 +617,26 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
         localStorage.setItem('hackCable-webExample-inputCode', sourceCode);
 
         const onCompileSuccess = () => {
+            if (!isCurrentCompile()) return;
             isCompilingCode = false;
+            activeCompileCancel = null;
             setRunControlState('compiled');
             showStatus('ui.status.compileComplete', 'success');
         };
         const onCompileFailure = () => {
+            if (!isCurrentCompile()) return;
             isCompilingCode = false;
+            activeCompileCancel = null;
             setRunControlState('needs-compile');
             showStatus('ui.status.compileFailed', 'error');
+        };
+        const onCompileCancelled = () => {
+            if (!isCurrentCompile()) return;
+            isCompilingCode = false;
+            activeCompileCancel = null;
+            setRunControlState('needs-compile');
+            hexInput.value = '// Clang/LLVM compile cancelled. Click Compile to try again.';
+            showStatus('ui.status.compileCancelled', 'info');
         };
 
         if (boardType === 'esp32' && mode === 'emscripten') {
@@ -684,21 +718,43 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
 
         } else if (boardType === 'esp32' && mode === 'clang-llvm') {
             // --- CLANG/LLVM IN-BROWSER PATH ---
-            hexInput.value = '// Loading Clang/LLVM (~35 MB first use)...';
+            const clangAbortController = new AbortController();
+            activeCompileCancel = () => {
+                ++compileOperationId;
+                clangAbortController.abort();
+                clangRunner.cancel();
+                isCompilingCode = false;
+                activeCompileCancel = null;
+                lastClangResult = null;
+                setRunControlState('needs-compile');
+                hexInput.value = '// Clang/LLVM compile cancelled. Click Compile to try again.';
+                showStatus('ui.status.compileCancelled', 'info');
+            };
+            setRunControlState('compiling');
+            lastClangResult = null;
+            hexInput.value = '// Loading Clang/LLVM (first download ~35 MB)...';
             clangRunner.load((loaded, total, label) => {
+                if (!isCurrentCompile()) return;
                 if (total > 0) {
                     const pct = Math.round(loaded / total * 100);
                     hexInput.value = `// Downloading ${label}: ${pct}%`;
                 }
-            }).then(() => {
+            }, clangAbortController.signal).then(() => {
+                if (!isCurrentCompile()) throw new Error('Stale Clang compile ignored');
                 hexInput.value = '// Compiling with Clang/LLVM...';
                 return clangRunner.compile(sourceCode, getArduinoHeaders());
             }).then(result => {
+                if (!isCurrentCompile()) return;
                 if (result.stderr) console.warn('[clang]', result.stderr);
                 lastClangResult = result.wasmBytes;
                 hexInput.value = '// Clang/LLVM compilation OK. Click Execute.';
                 onCompileSuccess();
             }).catch(err => {
+                if (!isCurrentCompile()) return;
+                if (isClangCancellation(err)) {
+                    onCompileCancelled();
+                    return;
+                }
                 hexInput.value = '// Clang/LLVM error:\n' + err.message;
                 onCompileFailure();
             }).finally(() => {
@@ -746,7 +802,7 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
         const boardType = hackCable.editor.canvas.getBoardType();
         if (boardType) hackCable.emulatorManager.setBoardType(boardType);
 
-        const mode = compilerModeSelect?.value ?? 'micropython';
+        const mode = compilerModeSelect?.value ?? DEFAULT_COMPILER_MODE;
 
         if(!(hexInput instanceof HTMLTextAreaElement && codeInput instanceof HTMLTextAreaElement)) return;
         showStatus('ui.status.executing', 'info');
@@ -845,7 +901,17 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                     if (typeof exp.setup === 'function') exp.setup();
                     if (typeof exp.loop === 'function') {
                         activeClangLoopHandle = startFixedStepSimulationLoop(
-                            () => exp.loop(),
+                            () => {
+                                if (shim.isLoopDelayActive()) return;
+                                shim.beginLoopFrame();
+                                try {
+                                    exp.loop();
+                                } catch (error) {
+                                    shim.clearScheduledPinEvents();
+                                    throw error;
+                                }
+                                shim.finishLoopFrame();
+                            },
                             (e) => {
                                 if (activeClangLoopHandle !== null) {
                                     clearInterval(activeClangLoopHandle);
@@ -2527,11 +2593,13 @@ async function cleanupWasmInstance() {
         clearInterval(activeClangLoopHandle);
         activeClangLoopHandle = null;
     }
+    activeClangShim?.clearScheduledPinEvents();
     activeClangShim = null;
     if (activeClangNativeLoopHandle !== null) {
         clearInterval(activeClangNativeLoopHandle);
         activeClangNativeLoopHandle = null;
     }
+    activeClangNativeShim?.clearScheduledPinEvents();
     activeClangNativeShim = null;
 }
 
@@ -5512,6 +5580,633 @@ function connectPorts(
     } else {
         console.error(`Could not find ports: ${sourcePortName} or ${targetPortName}`);
     }
+}
+
+type AutoCircuitKind =
+    | 'buzzer'
+    | 'fan'
+    | 'water-pump'
+    | 'misting-pump'
+    | 'servo'
+    | 'ultrasonic'
+    | 'ky040'
+    | 'ntc'
+    | 'rgb-led'
+    | 'neopixel'
+    | 'led-ring'
+    | 'lcd1602'
+    | 'lcd2004'
+    | 'ds1307'
+    | 'rs485-ph'
+    | 'soil-moisture'
+    | 'sht31';
+
+type AutoCircuitPlanItem = {
+    kind: AutoCircuitKind;
+    dedupeKey: string;
+    pin?: number;
+    pinA?: number;
+    pinB?: number;
+    pinC?: number;
+};
+
+type AutoCircuitPlan = {
+    items: AutoCircuitPlanItem[];
+    unsupported: string[];
+    notes: string[];
+};
+
+type AutoCircuitBoardMode = 'esp32' | 'handysense-real';
+
+const AUTO_CIRCUIT_COMPONENT_IDS: Record<AutoCircuitKind, number> = {
+    'buzzer': 9,
+    'fan': 33,
+    'water-pump': 32,
+    'misting-pump': 31,
+    'servo': 21,
+    'ultrasonic': 17,
+    'ky040': 22,
+    'ntc': 18,
+    'rgb-led': 2,
+    'neopixel': 4,
+    'led-ring': 6,
+    'lcd1602': 7,
+    'lcd2004': 8,
+    'ds1307': 25,
+    'rs485-ph': 35,
+    'soil-moisture': 44,
+    'sht31': 41,
+};
+
+function pushAutoCircuitItem(plan: AutoCircuitPlan, item: AutoCircuitPlanItem): void {
+    if (plan.items.some(existing => existing.dedupeKey === item.dedupeKey)) {
+        return;
+    }
+    plan.items.push(item);
+}
+
+function pushAutoCircuitNotice(target: string[], message: string): void {
+    if (!target.includes(message)) {
+        target.push(message);
+    }
+}
+
+function getAutoCircuitBoardMode(board: string | null | undefined): AutoCircuitBoardMode {
+    return board === 'handysense-real' ? 'handysense-real' : 'esp32';
+}
+
+function getAutoCircuitBoardLabel(boardMode: AutoCircuitBoardMode): string {
+    return boardMode === 'handysense-real' ? 'Handysense real' : 'ESP32';
+}
+
+function getAutoCircuitBoardComponentId(boardMode: AutoCircuitBoardMode): number {
+    return boardMode === 'handysense-real' ? 51 : 26;
+}
+
+function getAutoCircuitSupportedKinds(boardMode: AutoCircuitBoardMode): Set<AutoCircuitKind> {
+    if (boardMode === 'handysense-real') {
+        return new Set<AutoCircuitKind>([
+            'fan',
+            'water-pump',
+            'misting-pump',
+            'lcd1602',
+            'lcd2004',
+            'ds1307',
+            'rs485-ph',
+            'soil-moisture',
+            'sht31',
+        ]);
+    }
+    return new Set<AutoCircuitKind>([
+        'buzzer',
+        'fan',
+        'water-pump',
+        'misting-pump',
+        'servo',
+        'ultrasonic',
+        'ky040',
+        'ntc',
+        'rgb-led',
+        'neopixel',
+        'led-ring',
+        'lcd1602',
+        'lcd2004',
+        'ds1307',
+    ]);
+}
+
+function getAutoCircuitSelectedBoard(): ReturnType<typeof normalizeBoardSelection> {
+    const boardValue = boardSelect?.value ?? localStorage.getItem('hackCable-selectedBoard');
+    return normalizeBoardSelection(boardValue);
+}
+
+function filterAutoCircuitPlanForBoard(plan: AutoCircuitPlan, boardMode: AutoCircuitBoardMode): AutoCircuitPlan {
+    const supportedKinds = getAutoCircuitSupportedKinds(boardMode);
+    const filteredItems = plan.items.filter((item) => supportedKinds.has(item.kind));
+    const droppedKinds = [...new Set(
+        plan.items
+            .filter((item) => !supportedKinds.has(item.kind))
+            .map((item) => item.kind)
+    )];
+
+    const filteredPlan: AutoCircuitPlan = {
+        items: filteredItems,
+        unsupported: [...plan.unsupported],
+        notes: [...plan.notes],
+    };
+
+    if (droppedKinds.length > 0) {
+        pushAutoCircuitNotice(
+            filteredPlan.notes,
+            `${getAutoCircuitBoardLabel(boardMode)} auto-build does not wire ${droppedKinds.join(', ')} yet.`
+        );
+    }
+
+    return filteredPlan;
+}
+
+function parseNamedPinConstants(source: string): Map<string, number> {
+    const pinConstants = new Map<string, number>();
+    const pinConstRegex = /(?:const\s+)?(?:static\s+)?(?:constexpr\s+)?(?:uint8_t|int|byte)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(\d+)\s*;/g;
+    let match: RegExpExecArray | null;
+    while ((match = pinConstRegex.exec(source)) !== null) {
+        pinConstants.set(match[1], Number.parseInt(match[2], 10));
+    }
+    return pinConstants;
+}
+
+function sourceUsesPinSymbol(source: string, symbol: string): boolean {
+    const escaped = symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b(?:pinMode|digitalWrite|digitalRead|analogRead|analogWrite)\\s*\\(\\s*${escaped}\\b`).test(source);
+}
+
+function resolvePinReference(token: string, pinConstants: Map<string, number>): number | null {
+    if (/^\d+$/.test(token)) {
+        return Number.parseInt(token, 10);
+    }
+    if (pinConstants.has(token)) {
+        return pinConstants.get(token) ?? null;
+    }
+    return null;
+}
+
+function collectResolvedPinsFromCall(source: string, callRegex: RegExp, pinConstants: Map<string, number>): Set<number> {
+    const resolvedPins = new Set<number>();
+    let match: RegExpExecArray | null;
+    while ((match = callRegex.exec(source)) !== null) {
+        const pin = resolvePinReference(match[1], pinConstants);
+        if (pin !== null) {
+            resolvedPins.add(pin);
+        }
+    }
+    return resolvedPins;
+}
+
+function hasDirectOutputWriteForPin(source: string, pin: number, pinConstants: Map<string, number>): boolean {
+    const pinModeRegex = /pinMode\s*\(\s*([A-Za-z_][A-Za-z0-9_]*|\d+)\s*,\s*OUTPUT\s*\)/g;
+    const digitalWriteRegex = /digitalWrite\s*\(\s*([A-Za-z_][A-Za-z0-9_]*|\d+)\s*,/g;
+    const outputPins = collectResolvedPinsFromCall(source, pinModeRegex, pinConstants);
+    const drivenPins = collectResolvedPinsFromCall(source, digitalWriteRegex, pinConstants);
+    return outputPins.has(pin) && drivenPins.has(pin);
+}
+
+function hasSht31Context(source: string): boolean {
+    const hasSht31Instance = /\bSHT31\s+[A-Za-z_][A-Za-z0-9_]*\b/.test(source) || /Handysense real - BFARM SHT31/.test(source);
+    const hasSht31ReadUsage = /\b(?:getTemperature|getHumidity)\s*\(/.test(source);
+    return hasSht31Instance && hasSht31ReadUsage;
+}
+
+function pushNamedActuatorItems(plan: AutoCircuitPlan, source: string): void {
+    const pinConstants = parseNamedPinConstants(source);
+    pinConstants.forEach((pin, symbol) => {
+        if (!sourceUsesPinSymbol(source, symbol)) {
+            return;
+        }
+
+        const upperSymbol = symbol.toUpperCase();
+        if (upperSymbol.includes('MIST') && upperSymbol.includes('PUMP')) {
+            pushAutoCircuitItem(plan, { kind: 'misting-pump', dedupeKey: `misting-pump:${pin}`, pin });
+            return;
+        }
+        if (upperSymbol.includes('WATER') && upperSymbol.includes('PUMP')) {
+            pushAutoCircuitItem(plan, { kind: 'water-pump', dedupeKey: `water-pump:${pin}`, pin });
+            return;
+        }
+        if (upperSymbol.includes('FAN')) {
+            pushAutoCircuitItem(plan, { kind: 'fan', dedupeKey: `fan:${pin}`, pin });
+            return;
+        }
+        if (upperSymbol.includes('BUZZER')) {
+            pushAutoCircuitItem(plan, { kind: 'buzzer', dedupeKey: `buzzer:${pin}`, pin });
+        }
+    });
+}
+
+function pushCommentMappedActuatorItems(plan: AutoCircuitPlan, source: string): void {
+    const commentMappings: Array<{ regex: RegExp; kind: AutoCircuitKind }> = [
+        { regex: /\/\/\s*Misting Pump SIG\s*->.*?\(GPIO\s*(\d+)\)/gi, kind: 'misting-pump' },
+        { regex: /\/\/\s*Water Pump SIG\s*->.*?\(GPIO\s*(\d+)\)/gi, kind: 'water-pump' },
+        { regex: /\/\/\s*Fan SIG\s*->.*?\(GPIO\s*(\d+)\)/gi, kind: 'fan' },
+        { regex: /\/\/\s*Buzzer(?:\s+SIG)?\s*->.*?\(GPIO\s*(\d+)\)/gi, kind: 'buzzer' },
+    ];
+
+    commentMappings.forEach(({ regex, kind }) => {
+        let match: RegExpExecArray | null;
+        while ((match = regex.exec(source)) !== null) {
+            const pin = Number.parseInt(match[1], 10);
+            pushAutoCircuitItem(plan, { kind, dedupeKey: `${kind}:${pin}`, pin });
+        }
+    });
+}
+
+function parseAutoCircuitPlan(rawCode: string, selectedBoard: ReturnType<typeof normalizeBoardSelection>): AutoCircuitPlan {
+    const source = normalizeBfarmMacroCode(rawCode);
+    const boardMode = getAutoCircuitBoardMode(selectedBoard);
+    const pinConstants = parseNamedPinConstants(source);
+    const plan: AutoCircuitPlan = {
+        items: [],
+        unsupported: [],
+        notes: [],
+    };
+
+    let match: RegExpExecArray | null;
+
+    const servoRegex = /Servo\s+servo_pin(\d+)\s*;/g;
+    while ((match = servoRegex.exec(source)) !== null) {
+        const pin = Number.parseInt(match[1], 10);
+        pushAutoCircuitItem(plan, { kind: 'servo', dedupeKey: `servo:${pin}`, pin });
+    }
+
+    const ultrasonicRegex = /pinMode\((\d+),\s*OUTPUT\);\s*pinMode\((\d+),\s*INPUT\);[\s\S]{0,240}?pulseIn\(\2,\s*HIGH\)/g;
+    while ((match = ultrasonicRegex.exec(source)) !== null) {
+        const trigPin = Number.parseInt(match[1], 10);
+        const echoPin = Number.parseInt(match[2], 10);
+        pushAutoCircuitItem(plan, {
+            kind: 'ultrasonic',
+            dedupeKey: `ultrasonic:${trigPin}:${echoPin}`,
+            pinA: trigPin,
+            pinB: echoPin,
+        });
+    }
+
+    const ky040Regex = /ky040_counter_(\d+)[\s\S]{0,260}?pinMode\((\d+),\s*INPUT\);\s*pinMode\((\d+),\s*INPUT\);/g;
+    while ((match = ky040Regex.exec(source)) !== null) {
+        const clkPin = Number.parseInt(match[2], 10);
+        const dtPin = Number.parseInt(match[3], 10);
+        pushAutoCircuitItem(plan, {
+            kind: 'ky040',
+            dedupeKey: `ky040:${clkPin}:${dtPin}`,
+            pinA: clkPin,
+            pinB: dtPin,
+        });
+    }
+
+    const ntcRegex = /NTC_BETA_(\d+)/g;
+    while ((match = ntcRegex.exec(source)) !== null) {
+        const pin = Number.parseInt(match[1], 10);
+        pushAutoCircuitItem(plan, { kind: 'ntc', dedupeKey: `ntc:${pin}`, pin });
+    }
+
+    const rgbRegex = /analogWrite\((\d+),\s*[^;]+\);\s*analogWrite\((\d+),\s*[^;]+\);\s*analogWrite\((\d+),\s*[^;]+\);/g;
+    while ((match = rgbRegex.exec(source)) !== null) {
+        const rPin = Number.parseInt(match[1], 10);
+        const gPin = Number.parseInt(match[2], 10);
+        const bPin = Number.parseInt(match[3], 10);
+        pushAutoCircuitItem(plan, {
+            kind: 'rgb-led',
+            dedupeKey: `rgb:${rPin}:${gPin}:${bPin}`,
+            pinA: rPin,
+            pinB: gPin,
+            pinC: bPin,
+        });
+    }
+
+    const neopixelRegex = /Adafruit_NeoPixel\s+neopixel_(\d+)\s*\(\s*\d+\s*,\s*(\d+)\s*,/g;
+    while ((match = neopixelRegex.exec(source)) !== null) {
+        const pin = Number.parseInt(match[2], 10);
+        pushAutoCircuitItem(plan, { kind: 'neopixel', dedupeKey: `neopixel:${pin}`, pin });
+    }
+
+    const ledRingRegex = /Adafruit_NeoPixel\s+ledring_(\d+)\s*\(\s*\d+\s*,\s*(\d+)\s*,/g;
+    while ((match = ledRingRegex.exec(source)) !== null) {
+        const pin = Number.parseInt(match[2], 10);
+        pushAutoCircuitItem(plan, { kind: 'led-ring', dedupeKey: `led-ring:${pin}`, pin });
+    }
+
+    const lcdRegex = /LiquidCrystal_I2C\s+lcd_i2c\s*\(\s*0x27\s*,\s*(16|20)\s*,\s*(2|4)\s*\)/g;
+    while ((match = lcdRegex.exec(source)) !== null) {
+        const cols = Number.parseInt(match[1], 10);
+        const rows = Number.parseInt(match[2], 10);
+        const kind: AutoCircuitKind = cols === 20 || rows === 4 ? 'lcd2004' : 'lcd1602';
+        pushAutoCircuitItem(plan, { kind, dedupeKey: kind });
+    }
+
+    if (/RTC_DS1307\s+rtc_ds1307\b/.test(source)) {
+        pushAutoCircuitItem(plan, { kind: 'ds1307', dedupeKey: 'ds1307' });
+    }
+
+    pushNamedActuatorItems(plan, source);
+    pushCommentMappedActuatorItems(plan, source);
+
+    if (/ModbusMaster\s+phSensor\b/.test(source) || /Handysense real - BFARM RS485 pH/.test(source)) {
+        pushAutoCircuitItem(plan, { kind: 'rs485-ph', dedupeKey: 'rs485-ph' });
+    }
+
+    if (/soilPercent\s*=\s*map\(/.test(source) || /Handysense real - BFARM Soil Moisture/.test(source)) {
+        pushAutoCircuitItem(plan, { kind: 'soil-moisture', dedupeKey: 'soil-moisture' });
+    }
+
+    if (hasSht31Context(source)) {
+        pushAutoCircuitItem(plan, { kind: 'sht31', dedupeKey: 'sht31' });
+    }
+
+    if (
+        boardMode === 'handysense-real'
+        && !plan.items.some((item) => item.kind === 'misting-pump')
+        && /pinMode\(\s*25\s*,\s*OUTPUT\s*\)/.test(source)
+        && /digitalWrite\(\s*25\s*,/.test(source)
+    ) {
+        pushAutoCircuitItem(plan, { kind: 'misting-pump', dedupeKey: 'misting-pump:25', pin: 25 });
+    }
+
+    if (
+        boardMode === 'handysense-real'
+        && hasSht31Context(source)
+        && hasDirectOutputWriteForPin(source, 4, pinConstants)
+    ) {
+        pushAutoCircuitItem(plan, { kind: 'fan', dedupeKey: 'fan:4', pin: 4 });
+    }
+
+    if (/MCP23008\b/.test(source)) {
+        pushAutoCircuitNotice(plan.unsupported, 'MCP23008 LED expander blocks are not mapped to a canvas component yet.');
+    }
+    if (/Grove_LED_Bar\b/.test(source)) {
+        pushAutoCircuitNotice(plan.unsupported, 'Grove LED Bar blocks are not mapped yet because the canvas only has the raw LED bar display.');
+    }
+    if (/TM1637Display\b/.test(source)) {
+        pushAutoCircuitNotice(plan.unsupported, 'TM1637 seven-segment blocks are not mapped yet because the canvas does not have the TM1637 module component.');
+    }
+    if (/sw_onboard\[|const_relay_pin\[/.test(source)) {
+        if (boardMode === 'handysense-real') {
+            pushAutoCircuitNotice(
+                plan.notes,
+                'Handysense real relay helpers were detected. Relay channels can be recognized, but unlabeled external loads on GPIO4/GPIO12/GPIO13 may still need manual placement.'
+            );
+        } else {
+            pushAutoCircuitNotice(plan.unsupported, 'Board-specific sw_onboard/relay helper blocks still need a dedicated HandySense auto-builder.');
+        }
+    }
+    if (/analogRead\(|digitalRead\(/.test(source)) {
+        const note = boardMode === 'handysense-real'
+            ? 'Handysense real can infer some fixed sensor and relay channels, but plain analogRead/digitalRead code may still need manual component placement.'
+            : 'Plain analogRead/digitalRead/digitalWrite blocks are ambiguous in text code, so generic inputs and outputs may still need manual placement.';
+        pushAutoCircuitNotice(plan.notes, note);
+    } else if (plan.items.length === 0 && /digitalWrite\(/.test(source)) {
+        const note = boardMode === 'handysense-real'
+            ? 'Handysense real digital outputs on GPIO4/GPIO12/GPIO13 are still ambiguous from plain text code, so some external loads may need manual placement.'
+            : 'Plain digital output blocks are ambiguous in text code, so actuators like buzzer, fan, and pumps may still need manual placement.';
+        pushAutoCircuitNotice(plan.notes, note);
+    }
+
+    return plan;
+}
+
+function getEsp32PortNameForPin(pin: number): string | null {
+    switch (pin) {
+        case 1: return 'TX0';
+        case 2: return 'D2';
+        case 3: return 'RX0';
+        case 4: return 'D4';
+        case 5: return 'D5';
+        case 12: return 'D12';
+        case 13: return 'D13';
+        case 14: return 'D14';
+        case 15: return 'D15';
+        case 16: return 'RX2';
+        case 17: return 'TX2';
+        case 18: return 'D18';
+        case 19: return 'D19';
+        case 21: return 'D21';
+        case 22: return 'D22';
+        case 23: return 'D23';
+        case 25: return 'D25';
+        case 26: return 'D26';
+        case 27: return 'D27';
+        case 32: return 'D32';
+        case 33: return 'D33';
+        case 34: return 'D34';
+        case 35: return 'D35';
+        case 36: return 'VP';
+        case 39: return 'VN';
+        default: return null;
+    }
+}
+
+function nextAutoCircuitPosition(index: number): { x: number; y: number } {
+    const column = index % 2;
+    const row = Math.floor(index / 2);
+    return {
+        x: 520 + column * 240,
+        y: 70 + row * 150,
+    };
+}
+
+function showPlainStatus(message: string, type: 'info' | 'success' | 'error', autoHideMs = 0): void {
+    if (!statusMessage) return;
+    statusMessage.textContent = message;
+    statusMessage.className = `status-message status-${type}`;
+    if (autoHideMs > 0) {
+        setTimeout(() => {
+            if (statusMessage.textContent === message) {
+                statusMessage.textContent = '';
+                statusMessage.className = 'status-message';
+            }
+        }, autoHideMs);
+    }
+}
+
+function autoWireCircuitPlanItem(
+    boardMode: AutoCircuitBoardMode,
+    boardFigure: ComponentFigure,
+    componentFigure: ComponentFigure,
+    item: AutoCircuitPlanItem,
+    warnings: string[],
+): void {
+    if (boardMode === 'handysense-real') {
+        switch (item.kind) {
+            case 'misting-pump':
+                connectPorts(componentFigure, 'VCC', boardFigure, 'RELAY5V_VIN');
+                connectPorts(componentFigure, 'GND', boardFigure, 'RELAY5V_GND');
+                connectPorts(componentFigure, 'SIG', boardFigure, 'LEDR_0');
+                return;
+            case 'fan':
+            case 'water-pump':
+                connectPorts(componentFigure, 'VCC', boardFigure, 'RELAY5V_VIN');
+                connectPorts(componentFigure, 'GND', boardFigure, 'RELAY5V_GND');
+                connectPorts(componentFigure, 'SIG', boardFigure, 'LEDR_1');
+                return;
+            case 'lcd1602':
+            case 'lcd2004':
+                connectPorts(componentFigure, 'VCC', boardFigure, 'I2C1_VCC');
+                connectPorts(componentFigure, 'GND', boardFigure, 'I2C1_GND');
+                connectPorts(componentFigure, 'SDA', boardFigure, 'I2C1_SDA');
+                connectPorts(componentFigure, 'SCL', boardFigure, 'I2C1_SCL');
+                return;
+            case 'ds1307':
+                connectPorts(componentFigure, '5V', boardFigure, 'I2C1_VCC');
+                connectPorts(componentFigure, 'GND', boardFigure, 'I2C1_GND');
+                connectPorts(componentFigure, 'SDA', boardFigure, 'I2C1_SDA');
+                connectPorts(componentFigure, 'SCL', boardFigure, 'I2C1_SCL');
+                return;
+            case 'rs485-ph':
+                connectPorts(componentFigure, 'VCC', boardFigure, 'RS485_24V');
+                connectPorts(componentFigure, 'GND', boardFigure, 'RS485_GND');
+                connectPorts(componentFigure, 'A+', boardFigure, 'RS485_A');
+                connectPorts(componentFigure, 'B-', boardFigure, 'RS485_B');
+                return;
+            case 'soil-moisture':
+                connectPorts(componentFigure, 'VCC', boardFigure, 'A05_1_VCC');
+                connectPorts(componentFigure, 'GND', boardFigure, 'A05_1_GND');
+                connectPorts(componentFigure, 'AO', boardFigure, 'A05_1_SIG');
+                return;
+            case 'sht31':
+                connectPorts(componentFigure, 'VCC', boardFigure, 'I2C1_VCC');
+                connectPorts(componentFigure, 'GND', boardFigure, 'I2C1_GND');
+                connectPorts(componentFigure, 'SDA', boardFigure, 'I2C1_SDA');
+                connectPorts(componentFigure, 'SCL', boardFigure, 'I2C1_SCL');
+                return;
+            default:
+                pushAutoCircuitNotice(warnings, `${getAutoCircuitBoardLabel(boardMode)} auto-build cannot wire ${item.kind} yet.`);
+                return;
+        }
+    }
+
+    const connectBoardPin = (componentPortName: string, pin: number | undefined): void => {
+        if (pin === undefined) return;
+        const boardPortName = getEsp32PortNameForPin(pin);
+        if (!boardPortName) {
+            pushAutoCircuitNotice(warnings, `GPIO ${pin} is not available on the ESP32 DevKit auto-builder.`);
+            return;
+        }
+        connectPorts(componentFigure, componentPortName, boardFigure, boardPortName);
+    };
+
+    switch (item.kind) {
+        case 'buzzer':
+            connectBoardPin('1', item.pin);
+            connectPorts(componentFigure, '2', boardFigure, 'GND.1');
+            return;
+        case 'fan':
+        case 'water-pump':
+        case 'misting-pump':
+            connectPorts(componentFigure, 'VCC', boardFigure, 'VIN');
+            connectPorts(componentFigure, 'GND', boardFigure, 'GND.1');
+            connectBoardPin('SIG', item.pin);
+            return;
+        case 'servo':
+            connectPorts(componentFigure, 'V+', boardFigure, 'VIN');
+            connectPorts(componentFigure, 'GND', boardFigure, 'GND.1');
+            connectBoardPin('PWM', item.pin);
+            return;
+        case 'ultrasonic':
+            connectPorts(componentFigure, 'VCC', boardFigure, 'VIN');
+            connectPorts(componentFigure, 'GND', boardFigure, 'GND.1');
+            connectBoardPin('TRIG', item.pinA);
+            connectBoardPin('ECHO', item.pinB);
+            return;
+        case 'ky040':
+            connectPorts(componentFigure, 'VCC', boardFigure, '3V3');
+            connectPorts(componentFigure, 'GND', boardFigure, 'GND.1');
+            connectBoardPin('CLK', item.pinA);
+            connectBoardPin('DT', item.pinB);
+            return;
+        case 'ntc':
+            connectPorts(componentFigure, 'VCC', boardFigure, '3V3');
+            connectPorts(componentFigure, 'GND', boardFigure, 'GND.1');
+            connectBoardPin('OUT', item.pin);
+            return;
+        case 'rgb-led':
+            connectPorts(componentFigure, 'COM', boardFigure, 'GND.1');
+            connectBoardPin('R', item.pinA);
+            connectBoardPin('G', item.pinB);
+            connectBoardPin('B', item.pinC);
+            return;
+        case 'neopixel':
+            connectPorts(componentFigure, 'VDD', boardFigure, 'VIN');
+            connectPorts(componentFigure, 'VSS', boardFigure, 'GND.1');
+            connectBoardPin('DIN', item.pin);
+            return;
+        case 'led-ring':
+            connectPorts(componentFigure, 'VCC', boardFigure, 'VIN');
+            connectPorts(componentFigure, 'GND', boardFigure, 'GND.1');
+            connectBoardPin('DIN', item.pin);
+            return;
+        case 'lcd1602':
+        case 'lcd2004':
+            connectPorts(componentFigure, 'VCC', boardFigure, 'VIN');
+            connectPorts(componentFigure, 'GND', boardFigure, 'GND.1');
+            connectPorts(componentFigure, 'SDA', boardFigure, 'D21');
+            connectPorts(componentFigure, 'SCL', boardFigure, 'D22');
+            return;
+        case 'ds1307':
+            connectPorts(componentFigure, '5V', boardFigure, 'VIN');
+            connectPorts(componentFigure, 'GND', boardFigure, 'GND.1');
+            connectPorts(componentFigure, 'SDA', boardFigure, 'D21');
+            connectPorts(componentFigure, 'SCL', boardFigure, 'D22');
+            return;
+        case 'rs485-ph':
+        case 'soil-moisture':
+        case 'sht31':
+            pushAutoCircuitNotice(warnings, `${item.kind} auto-build is only wired on the Handysense real board.`);
+            return;
+    }
+}
+
+function buildCircuitFromCurrentCode(): void {
+    const rawCode = getCodeEditorValue().trim();
+    if (!rawCode) {
+        showPlainStatus('No code found. Add code first, then click Build Circuit From Code.', 'error');
+        return;
+    }
+
+    const selectedBoard = getAutoCircuitSelectedBoard();
+    const boardMode = getAutoCircuitBoardMode(selectedBoard);
+    const plan = filterAutoCircuitPlanForBoard(parseAutoCircuitPlan(rawCode, selectedBoard), boardMode);
+    if (plan.items.length === 0) {
+        const detail = plan.unsupported[0] ?? plan.notes[0] ?? 'No supported circuit patterns were detected in the current code.';
+        showPlainStatus(detail, 'error');
+        return;
+    }
+
+    selectBoardForExample(boardMode === 'handysense-real' ? 'handysense-real' : 'esp32');
+    hackCable.editor.canvas.clear();
+    const boardFigure = new ComponentFigure(wokwiComponentById[getAutoCircuitBoardComponentId(boardMode)]);
+    const boardPosition = boardMode === 'handysense-real'
+        ? { x: 180, y: 40 }
+        : { x: 200, y: 100 };
+    hackCable.editor.canvas.add(boardFigure.setX(boardPosition.x).setY(boardPosition.y));
+
+    const placed: Array<{ item: AutoCircuitPlanItem; figure: ComponentFigure }> = [];
+    plan.items.forEach((item, index) => {
+        const componentId = AUTO_CIRCUIT_COMPONENT_IDS[item.kind];
+        const position = nextAutoCircuitPosition(index);
+        const figure = new ComponentFigure(wokwiComponentById[componentId]);
+        hackCable.editor.canvas.add(figure.setX(position.x).setY(position.y));
+        placed.push({ item, figure });
+    });
+
+    setTimeout(() => {
+        const warnings = [...plan.unsupported];
+        placed.forEach(({ item, figure }) => autoWireCircuitPlanItem(boardMode, boardFigure, figure, item, warnings));
+
+        let message = `Built ${placed.length} component${placed.length === 1 ? '' : 's'} from code on the ${getAutoCircuitBoardLabel(boardMode)} canvas.`;
+        if (warnings.length > 0) {
+            message += ` ${warnings[0]}`;
+        } else if (plan.notes.length > 0) {
+            message += ` ${plan.notes[0]}`;
+        }
+        showPlainStatus(message, warnings.length > 0 ? 'info' : 'success', 4000);
+    }, 250);
 }
 
 // ============================================

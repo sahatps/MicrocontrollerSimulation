@@ -12,12 +12,23 @@ export type SerialCallback = (text: string) => void;
 export type ModbusReadCallback = (slaveId: number, regAddr: number) => number;
 export type SensorCallback = () => number;
 
+type ScheduledPinEvent = {
+    atMs: number;
+    pin: number;
+    value: boolean;
+};
+
 export class ArduinoWasmShim {
     private pinStates   = new Map<number, boolean>();
     private pinModes    = new Map<number, number>();
     private analogValues = new Map<number, number>();
     private wasmMemory: WebAssembly.Memory | null = null;
     private startTimeMs = performance.now();
+    private loopTimelineActive = false;
+    private loopTimelineMs = 0;
+    private scheduledPinEvents: ScheduledPinEvent[] = [];
+    private scheduledPinTimeouts: ReturnType<typeof setTimeout>[] = [];
+    private loopDelayUntilMs = 0;
 
     constructor(
         private onPinChange:   PinChangeCallback,
@@ -41,6 +52,49 @@ export class ArduinoWasmShim {
     /** Inject a simulated analog input value (0–4095 for ESP32 12-bit ADC) */
     setAnalogPin(pin: number, value: number) {
         this.analogValues.set(pin, value);
+    }
+
+    beginLoopFrame(): void {
+        this.loopTimelineActive = true;
+        this.loopTimelineMs = 0;
+        this.scheduledPinEvents = [];
+    }
+
+    finishLoopFrame(): number {
+        const durationMs = this.loopTimelineMs;
+        const events = this.scheduledPinEvents.slice();
+        this.loopTimelineActive = false;
+        this.loopTimelineMs = 0;
+        this.scheduledPinEvents = [];
+        this.clearScheduledPinEvents();
+
+        const now = performance.now();
+        if (events.length === 0) {
+            this.loopDelayUntilMs = durationMs > 0 ? now + Math.max(0, durationMs) : 0;
+            return durationMs;
+        }
+
+        for (const event of events) {
+            const timeout = setTimeout(() => {
+                this.pinStates.set(event.pin, event.value);
+                this.onPinChange(event.pin, event.value);
+            }, Math.max(0, event.atMs));
+            this.scheduledPinTimeouts.push(timeout);
+        }
+        this.loopDelayUntilMs = now + Math.max(0, durationMs);
+        return durationMs;
+    }
+
+    isLoopDelayActive(): boolean {
+        return performance.now() < this.loopDelayUntilMs;
+    }
+
+    clearScheduledPinEvents(): void {
+        for (const timeout of this.scheduledPinTimeouts) {
+            clearTimeout(timeout);
+        }
+        this.scheduledPinTimeouts = [];
+        this.loopDelayUntilMs = 0;
     }
 
     buildImports(): WebAssembly.Imports {
@@ -68,9 +122,7 @@ export class ArduinoWasmShim {
                     }
                 },
                 digitalWrite(pin: number, value: number) {
-                    const b = value !== 0;
-                    self.pinStates.set(pin, b);
-                    self.onPinChange(pin, b);
+                    self.writePin(pin, value !== 0);
                 },
                 digitalRead(pin: number): number {
                     return self.pinStates.get(pin) ? 1 : 0;
@@ -81,7 +133,10 @@ export class ArduinoWasmShim {
                     return self.analogValues.get(pin) ?? 0;
                 },
                 analogWrite(pin: number, value: number) {
-                    self.onPinChange(pin, value > 0);
+                    self.writePin(pin, value > 0);
+                },
+                dacWrite(pin: number, value: number) {
+                    self.writePin(pin, value > 0);
                 },
                 analogReadResolution(_bits: number) {},
                 analogWriteResolution(_bits: number) {},
@@ -90,7 +145,9 @@ export class ArduinoWasmShim {
                 // delay() cannot block the browser main thread — it is a no-op.
                 // millis() / micros() return real elapsed time so timing-based
                 // code (e.g. reading millis() to pace a loop) still works correctly.
-                delay(_ms: number) {},
+                delay(ms: number) {
+                    self.advanceDelay(ms);
+                },
                 millis(): number {
                     return Math.floor(performance.now() - self.startTimeMs);
                 },
@@ -98,6 +155,9 @@ export class ArduinoWasmShim {
                     return Math.floor((performance.now() - self.startTimeMs) * 1000);
                 },
                 delayMicroseconds(_us: number) {},
+                pulseIn(_pin: number, _value: number, _timeout: number): number {
+                    return 0;
+                },
 
                 // ---- Serial ----
                 Serial_begin(_baud: number) {},
@@ -153,9 +213,7 @@ export class ArduinoWasmShim {
 
                 // ---- Native Clang WASM bridge (simulator_core.cpp imports) ----
                 js_digitalWrite(pin: number, val: number) {
-                    const b = val !== 0;
-                    self.pinStates.set(pin, b);
-                    self.onPinChange(pin, b);
+                    self.writePin(pin, val !== 0);
                 },
                 js_console_log(msgPtr: number) {
                     self.onSerial(self.readCString(msgPtr) + '\n');
@@ -170,6 +228,24 @@ export class ArduinoWasmShim {
                 },
             }
         };
+    }
+
+    private writePin(pin: number, value: boolean): void {
+        if (this.loopTimelineActive) {
+            this.scheduledPinEvents.push({ atMs: this.loopTimelineMs, pin, value });
+            this.pinStates.set(pin, value);
+            return;
+        }
+
+        this.pinStates.set(pin, value);
+        this.onPinChange(pin, value);
+    }
+
+    private advanceDelay(ms: number): void {
+        if (!Number.isFinite(ms) || ms <= 0) return;
+        if (this.loopTimelineActive) {
+            this.loopTimelineMs += Math.min(ms, 60000);
+        }
     }
 
     private readStr(ptr: number, len: number): string {

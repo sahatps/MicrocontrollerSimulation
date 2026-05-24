@@ -29,6 +29,22 @@ const BINARY_FILES = ['clang', 'lld', 'memfs', 'sysroot.tar'] as const;
 
 export type ProgressCallback = (loaded: number, total: number, label?: string) => void;
 
+export class ClangCancelledError extends Error {
+    constructor(message = 'Clang operation cancelled') {
+        super(message);
+        this.name = 'ClangCancelledError';
+    }
+}
+
+export function isClangCancellation(error: unknown): boolean {
+    if (error instanceof ClangCancelledError) return true;
+    if (error instanceof DOMException && error.name === 'AbortError') return true;
+    if (error instanceof Error) {
+        return error.name === 'AbortError' || error.name === 'ClangCancelledError';
+    }
+    return false;
+}
+
 export interface ClangCompileResult {
     wasmBytes: Uint8Array;
     stderr: string;
@@ -39,6 +55,7 @@ export class ClangWasmRunner {
     private workerUrl: string | null = null;
     private nextId = 0;
     private pending = new Map<number, { resolve: (v: any) => void; reject: (e: any) => void }>();
+    private activeAbortController: AbortController | null = null;
 
     /** Returns true if the main clang binary is already in the browser Cache API. */
     async isCached(): Promise<boolean> {
@@ -54,21 +71,40 @@ export class ClangWasmRunner {
      * Pre-download all required binary files (with progress), then create and
      * initialise the Web Worker. Safe to call multiple times.
      */
-    async load(onProgress?: ProgressCallback): Promise<void> {
+    async load(onProgress?: ProgressCallback, signal?: AbortSignal): Promise<void> {
         if (this.worker) return;
 
-        const cache = await caches.open(CACHE_NAME);
-        for (const file of BINARY_FILES) {
-            const url = BASE_URL + file;
-            if (await cache.match(url)) {
-                onProgress?.(1, 1, `${file} (cached)`);
-                continue;
-            }
-            await this.downloadToCache(cache, url, file, onProgress);
-        }
+        const controller = new AbortController();
+        this.activeAbortController = controller;
+        const onExternalAbort = () => controller.abort();
+        signal?.addEventListener('abort', onExternalAbort, { once: true });
 
-        this.worker = this.createWorker();
-        await this.call('init');  // waits for API.ready (sysroot untar, memfs init)
+        const cache = await caches.open(CACHE_NAME);
+        try {
+            this.throwIfCancelled(controller.signal);
+            for (const file of BINARY_FILES) {
+                const url = BASE_URL + file;
+                if (await cache.match(url)) {
+                    this.throwIfCancelled(controller.signal);
+                    onProgress?.(1, 1, `${file} (cached)`);
+                    continue;
+                }
+                await this.downloadToCache(cache, url, file, onProgress, controller.signal);
+            }
+
+            this.throwIfCancelled(controller.signal);
+            this.worker = this.createWorker();
+            await this.call('init');  // waits for API.ready (sysroot untar, memfs init)
+            this.throwIfCancelled(controller.signal);
+        } catch (error) {
+            this.dispose(isClangCancellation(error) ? new ClangCancelledError() : undefined);
+            throw isClangCancellation(error) ? new ClangCancelledError() : error;
+        } finally {
+            signal?.removeEventListener('abort', onExternalAbort);
+            if (this.activeAbortController === controller) {
+                this.activeAbortController = null;
+            }
+        }
     }
 
     /**
@@ -83,7 +119,12 @@ export class ClangWasmRunner {
     /**
      * Fully release worker memory (important after a compile in low-memory mode).
      */
-    dispose(): void {
+    cancel(): void {
+        this.activeAbortController?.abort();
+        this.dispose(new ClangCancelledError());
+    }
+
+    dispose(reason?: Error): void {
         if (this.worker) {
             this.worker.terminate();
             this.worker = null;
@@ -93,7 +134,7 @@ export class ClangWasmRunner {
             this.workerUrl = null;
         }
         if (this.pending.size > 0) {
-            const err = new Error('Clang worker disposed');
+            const err = reason ?? new Error('Clang worker disposed');
             for (const pending of this.pending.values()) {
                 pending.reject(err);
             }
@@ -108,30 +149,50 @@ export class ClangWasmRunner {
         url: string,
         label: string,
         onProgress?: ProgressCallback,
+        signal?: AbortSignal,
     ): Promise<void> {
-        const res = await fetch(url);
+        this.throwIfCancelled(signal);
+        const res = await fetch(url, { signal });
         if (!res.ok) throw new Error(`Failed to download ${label}: HTTP ${res.status}`);
 
         const total = parseInt(res.headers.get('content-length') ?? '0', 10);
-        const reader = res.body!.getReader();
+        if (!res.body) throw new Error(`Failed to download ${label}: response body unavailable`);
+
+        const reader = res.body.getReader();
         const chunks: Uint8Array[] = [];
         let loaded = 0;
 
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done || !value) break;
-            chunks.push(value);
-            loaded += value.length;
-            onProgress?.(loaded, total, label);
+        try {
+            while (true) {
+                this.throwIfCancelled(signal);
+                const { done, value } = await reader.read();
+                if (done || !value) break;
+                chunks.push(value);
+                loaded += value.length;
+                onProgress?.(loaded, total, label);
+            }
+        } catch (error) {
+            try {
+                await reader.cancel();
+            } catch {
+                // Reader may already be closed by the abort.
+            }
+            throw isClangCancellation(error) ? new ClangCancelledError() : error;
         }
 
+        this.throwIfCancelled(signal);
         const buf = new Uint8Array(loaded);
         let offset = 0;
         for (const chunk of chunks) { buf.set(chunk, offset); offset += chunk.length; }
 
+        this.throwIfCancelled(signal);
         await cache.put(url, new Response(buf.buffer, {
             headers: { 'content-length': String(loaded) },
         }));
+    }
+
+    private throwIfCancelled(signal?: AbortSignal): void {
+        if (signal?.aborted) throw new ClangCancelledError();
     }
 
     private createWorker(): Worker {
@@ -177,10 +238,21 @@ function getApi() {
                 sysroot:  'sysroot.tar',
             });
             await api.ready;
+            const stdFlag = '-std=c++17';
+            if (!Array.isArray(api.clangCommonArgs)) {
+                api.clangCommonArgs = [];
+            }
+            if (!api.clangCommonArgs.some((arg) => /^-std=/.test(arg))) {
+                api.clangCommonArgs.push(stdFlag);
+            }
             return api;
         })();
     }
     return apiPromise;
+}
+
+function stripAnsi(value) {
+    return String(value || '').replace(/\\x1B(?:[@-Z\\\\-_]|\\[[0-?]*[ -/]*[@-~])/g, '');
 }
 
 self.onmessage = async (event) => {
@@ -197,11 +269,15 @@ self.onmessage = async (event) => {
         // ── compile ───────────────────────────────────────────────────────────
         if (type === 'compile') {
             const { source, headers } = payload;
-            const logLines = [];
+            const logChunks = [];
 
-            // Capture hostWrite for error reporting
+            // Capture both API logs and compiler stderr for error reporting.
             const origHostWrite = api.hostWrite.bind(api);
-            api.hostWrite = (s) => { logLines.push(s); origHostWrite(s); };
+            const origMemfsHostWrite = api.memfs.hostWrite.bind(api.memfs);
+            const captureHostWrite = (s) => { logChunks.push(s); origHostWrite(s); };
+            const captureMemfsHostWrite = (s) => { logChunks.push(s); origMemfsHostWrite(s); };
+            api.hostWrite = captureHostWrite;
+            api.memfs.hostWrite = captureMemfsHostWrite;
 
             // Inject Arduino headers into the existing /include/ directory from
             // sysroot.tar. This directory is already in Clang's -internal-isystem
@@ -209,8 +285,26 @@ self.onmessage = async (event) => {
             // Use a flag to avoid re-adding files on subsequent compilations
             // (the Worker is reused; calling addFile twice on the same path asserts).
             if (!self._headersInjected) {
-                for (const [name, content] of Object.entries(headers)) {
-                    api.memfs.addFile('/include/' + name, content);
+                let currentHeader = '';
+                try {
+                    for (const [name, content] of Object.entries(headers)) {
+                        currentHeader = name;
+                        const normalizedName = name.replace(/^\\/+/, '');
+                        const parts = normalizedName.split('/');
+                        let dir = 'include';
+                        for (let i = 0; i < parts.length - 1; i++) {
+                            dir += '/' + parts[i];
+                            try {
+                                api.memfs.addDirectory(dir);
+                            } catch (_) {
+                                // Directory may already exist after sysroot untar or a previous header.
+                            }
+                        }
+                        api.memfs.addFile('include/' + normalizedName, content);
+                    }
+                } catch (err) {
+                    const detail = err && err.message ? err.message : String(err);
+                    throw new Error('header injection failed for ' + currentHeader + ': ' + detail);
                 }
                 self._headersInjected = true;
             }
@@ -222,8 +316,14 @@ self.onmessage = async (event) => {
 
             // Helper: build a rich error that includes captured compiler output
             const makeErr = (stage, err) => {
-                const log = logLines.join('\\n');
-                return new Error('[' + stage + '] ' + (err.message || String(err)) + (log ? '\\n' + log : ''));
+                const rawMessage = err && err.message ? err.message : String(err);
+                const rawLog = logChunks.join('');
+                const message = stripAnsi(rawMessage).trim();
+                const log = stripAnsi(rawLog).trim();
+                const details = log && !message.includes(log)
+                    ? message + '\\n' + log
+                    : message;
+                return new Error('[' + stage + '] ' + details);
             };
 
             // Step 1: compile C++ → object file
@@ -235,6 +335,7 @@ self.onmessage = async (event) => {
                 });
             } catch (err) {
                 api.hostWrite = origHostWrite;
+                api.memfs.hostWrite = origMemfsHostWrite;
                 throw makeErr('clang', err);
             }
 
@@ -254,16 +355,18 @@ self.onmessage = async (event) => {
                 );
             } catch (err) {
                 api.hostWrite = origHostWrite;
+                api.memfs.hostWrite = origMemfsHostWrite;
                 throw makeErr('wasm-ld', err);
             }
 
             const wasmBytes = api.memfs.getFileContents('output.wasm').slice();
             api.hostWrite = origHostWrite;
+            api.memfs.hostWrite = origMemfsHostWrite;
 
             // Transfer wasmBytes.buffer so it is not copied across the
             // MessageChannel (zero-copy for large binaries).
             self.postMessage(
-                { id, result: { wasmBytes, stderr: logLines.join('\\n') } },
+                { id, result: { wasmBytes, stderr: logChunks.join('') } },
                 [wasmBytes.buffer],
             );
             return;

@@ -31,9 +31,9 @@
                     <option value="handysense-pro" selected>Handysense pro</option>
                 </select>
                 <select id="compiler-mode" class="controlbar-select-corner compiler-mode-corner" title="Compilation method" style="display:none">
-                    <option value="micropython" selected>MicroPython - Legacy</option>
+                    <option value="micropython">MicroPython - Legacy</option>
                     <option value="emscripten">Emscripten C++ - Native</option>
-                    <option value="clang-llvm">Clang/LLVM WASM (first use: ~35MB)</option>
+                    <option value="clang-llvm" selected>Clang/LLVM WASM (first download ~35MB)</option>
                     <option value="clang-native">Native Clang WASM</option>
                 </select>
                 <button id="language-toggle" class="language-toggle-btn language-toggle-corner" aria-label="Toggle language">EN</button>
@@ -82,6 +82,7 @@
                     <button id="sim-http-send">GET</button>
                     <pre id="sim-http-response" class="sim-http-response">Ready</pre>
                 </div>
+                <button id="build-circuit-from-code" type="button">Build Circuit From Code</button>
             </div>
             <div class="buttonBar wiring-controls" hidden>
                 <p data-i18n="ui.wiring">Wiring:</p>

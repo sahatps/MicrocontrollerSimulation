@@ -298,6 +298,13 @@ export class HandysenseRealBoardElement extends HandysenseProBoardElement {
     const overlay = document.createElement('div');
     overlay.className = 'handysense-real-board-controls';
     overlay.setAttribute('aria-hidden', 'false');
+    overlay.style.position = 'fixed';
+    overlay.style.left = '0';
+    overlay.style.top = '0';
+    overlay.style.width = '100vw';
+    overlay.style.height = '100vh';
+    overlay.style.pointerEvents = 'none';
+    overlay.style.zIndex = '10000';
 
     const controls: HandysenseRealBoardControlName[] = ['reset', 'boot', 'button0', 'button1', 'button2', 'button3'];
     controls.forEach((control) => {
@@ -307,6 +314,10 @@ export class HandysenseRealBoardElement extends HandysenseProBoardElement {
       button.textContent = HANDYSENSE_REAL_CONTROL_LABELS[control];
       button.dataset.control = control;
       button.setAttribute('aria-label', HANDYSENSE_REAL_CONTROL_LABELS[control]);
+      button.style.position = 'fixed';
+      button.style.pointerEvents = 'auto';
+      button.style.zIndex = '10001';
+      button.style.touchAction = 'none';
       button.addEventListener('pointerdown', (event) => {
         this.consumeControlInteraction(event);
         if (control === 'reset') {

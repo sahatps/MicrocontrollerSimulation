@@ -21,6 +21,7 @@
   "ui.compiledCode": "Compiled Code:",
   "ui.status.compiling": "Compiling...",
   "ui.status.compileComplete": "Compile complete!",
+  "ui.status.compileCancelled": "Compile cancelled.",
   "ui.status.executing": "Executing...",
   "ui.status.compileFailed": "Compilation failed!",
   "wokwiComponents.phSensor.name": "pH Sensor",

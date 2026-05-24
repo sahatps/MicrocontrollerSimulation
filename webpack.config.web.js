@@ -19,9 +19,11 @@ module.exports = {
         '@micropython/micropython-webassembly-pyscript': 'micropythonModule'
     },
     devServer: {
+        host: '0.0.0.0',
         client: {
             overlay: true,
         },
+        allowedHosts: 'all',
         compress: true,
         port: 3000,
         static: [

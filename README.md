@@ -38,3 +38,56 @@ Build or start the live server of the web page that use the library
 ``build:web``
 
 ``serve:web``
+
+## Docker
+
+This repository can run in Docker for local development, including:
+- the web app on `http://localhost:3000`
+- the compile backend on `http://localhost:3001`
+
+Start it with:
+
+```bash
+docker compose up --build
+```
+
+Notes:
+- The container installs both `clang` and `emscripten`, which are required by the local compile backend.
+- Source files are mounted into the container, so code changes on your machine are reflected immediately.
+- The first build can take a while because the compiler toolchain is large.
+
+## Easy Sharing
+
+If you want to send this project to someone else in the easiest possible way, use the production Docker image.
+
+Build and run locally:
+
+```bash
+docker compose -f docker-compose.prod.yml up --build
+```
+
+Then open:
+
+```text
+http://localhost:3000
+```
+
+This production image:
+- serves the built web app and API from a single container
+- uses a single public port: `3000`
+- proxies `/wasm-clang` internally, so the browser does not need a separate dev server
+- includes `clang` for native WASM compilation in the backend
+- does not bundle Emscripten in the shared image, to keep the image smaller
+
+If you want to publish it for others:
+
+```bash
+docker build -f Dockerfile.prod -t yourname/hackcable:latest .
+docker push yourname/hackcable:latest
+```
+
+Then they can run:
+
+```bash
+docker run --pull always -p 3000:3000 yourname/hackcable:latest
+```
