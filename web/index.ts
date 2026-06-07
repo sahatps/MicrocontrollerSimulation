@@ -25,26 +25,11 @@ if(!mountingDiv) throw new DOMException("Mounting div not found")
 const lang = localStorage.getItem('hackCable-webExample-language');
 let hackCable = new HackCable(mountingDiv, lang ? lang : 'en_us');
 
-// Emscripten WASM state
-let activeWasmModule: any = null;
-let activeWasmScript: HTMLScriptElement | null = null;
-let lastEmscriptenResult: { js: string; wasm: string } | null = null;
-let emscriptenAvailable = false;
-
 // Clang/LLVM WASM state
 const clangRunner = new ClangWasmRunner();
 let lastClangResult: Uint8Array | null = null;
 let activeClangLoopHandle: ReturnType<typeof setInterval> | null = null;
 let activeClangShim: ArduinoWasmShim | null = null;
-
-// Native Clang WASM state
-let lastClangNativeResult: Uint8Array | null = null;
-let activeClangNativeLoopHandle: ReturnType<typeof setInterval> | null = null;
-let activeClangNativeShim: ArduinoWasmShim | null = null;
-let clangNativeAvailable = false;
-const DEFAULT_COMPILER_MODE = 'clang-llvm';
-const emscriptenInputPinStates = new Map<number, boolean>();
-const emscriptenPinModes = new Map<number, number>();
 
 const SIM_FIXED_STEP_MS = 16;
 const SIM_MAX_STEPS_PER_TICK = 240;
@@ -88,80 +73,6 @@ function startFixedStepSimulationLoop(
         }
         pendingSteps -= stepsThisTick;
     }, SIM_FIXED_STEP_MS);
-}
-
-async function checkEmscriptenStatus(retries = 5, delayMs = 1000) {
-    for (let attempt = 0; attempt < retries; attempt++) {
-        try {
-            const res = await fetch('/api/compile/emscripten/status');
-            if (res.ok) {
-                const data = await res.json();
-                emscriptenAvailable = data.available === true;
-                updateEmscriptenOption();
-                return;
-            }
-        } catch {
-            // network error (backend not ready yet) — will retry
-        }
-        if (attempt < retries - 1) {
-            await new Promise(r => setTimeout(r, delayMs));
-        }
-    }
-    emscriptenAvailable = false;
-    updateEmscriptenOption();
-}
-
-function updateEmscriptenOption() {
-    if (!compilerModeSelect) return;
-    const opt = compilerModeSelect.querySelector('option[value="emscripten"]') as HTMLOptionElement;
-    if (!opt) return;
-    if (emscriptenAvailable) {
-        opt.textContent = 'Emscripten C++ - Native';
-        opt.disabled = false;
-    } else {
-        opt.textContent = 'Emscripten C++ (unavailable)';
-        opt.disabled = true;
-        if (compilerModeSelect.value === 'emscripten') {
-            compilerModeSelect.value = DEFAULT_COMPILER_MODE;
-        }
-    }
-}
-
-async function checkClangNativeStatus(retries = 5, delayMs = 1000) {
-    for (let attempt = 0; attempt < retries; attempt++) {
-        try {
-            const res = await fetch('/api/compile/clang/status');
-            if (res.ok) {
-                const data = await res.json();
-                clangNativeAvailable = data.available === true;
-                updateClangNativeOption();
-                return;
-            }
-        } catch {
-            // network error — will retry
-        }
-        if (attempt < retries - 1) {
-            await new Promise(r => setTimeout(r, delayMs));
-        }
-    }
-    clangNativeAvailable = false;
-    updateClangNativeOption();
-}
-
-function updateClangNativeOption() {
-    if (!compilerModeSelect) return;
-    const opt = compilerModeSelect.querySelector('option[value="clang-native"]') as HTMLOptionElement;
-    if (!opt) return;
-    if (clangNativeAvailable) {
-        opt.textContent = 'Native Clang WASM';
-        opt.disabled = false;
-    } else {
-        opt.textContent = 'Native Clang WASM (unavailable)';
-        opt.disabled = true;
-        if (compilerModeSelect.value === 'clang-native') {
-            compilerModeSelect.value = DEFAULT_COMPILER_MODE;
-        }
-    }
 }
 
 // Auto-setup: Create Arduino board with LED on pin 13
@@ -398,15 +309,9 @@ let activeCompileCancel: (() => void) | null = null;
 let codeMirrorEditor: any = null;
 const CODE_EDITOR_MIN_HEIGHT = 220;
 
-function setEmscriptenInputPin(pin: number, value: boolean): void {
-    emscriptenInputPinStates.set(pin, value);
-}
-
 function setEsp32RuntimeInputPin(pin: number, value: boolean): void {
     hackCable.emulatorManager.setInputPin(pin, value);
     activeClangShim?.setInputPin(pin, value);
-    activeClangNativeShim?.setInputPin(pin, value);
-    setEmscriptenInputPin(pin, value);
 }
 
 function getCodeEditorInput(): HTMLTextAreaElement | null {
@@ -558,8 +463,6 @@ compilerModeSelect?.addEventListener('change', () => {
     }
 });
 updateCompilerVisibility();
-checkEmscriptenStatus();
-checkClangNativeStatus();
 
 if(compileButton && executeButton && stopButton && pauseButton && codeInput instanceof HTMLTextAreaElement && hexInput instanceof HTMLTextAreaElement){
 
@@ -607,7 +510,6 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
         const boardType = hackCable.editor.canvas.getBoardType();
         if (boardType) hackCable.emulatorManager.setBoardType(boardType);
 
-        const mode = compilerModeSelect?.value ?? DEFAULT_COMPILER_MODE;
         const currentCompileId = ++compileOperationId;
         const isCurrentCompile = () => currentCompileId === compileOperationId;
 
@@ -639,84 +541,7 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
             showStatus('ui.status.compileCancelled', 'info');
         };
 
-        if (boardType === 'esp32' && mode === 'emscripten') {
-            // --- EMSCRIPTEN PATH ---
-            hexInput.value = '// Emscripten C++ compilation in progress...';
-            fetch('/api/compile/emscripten', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: sourceCode })
-            }).then(async res => {
-                const data = await res.json();
-                if (data.code === 'EMSCRIPTEN_NOT_FOUND' || data.code === 'BACKEND_UNAVAILABLE') {
-                    // Emscripten unavailable — fall back to MicroPython
-                    hexInput.value = '// Emscripten unavailable, using MicroPython fallback...';
-                    showStatus('ui.status.emscriptenFallback', 'info');
-                    emscriptenAvailable = false;
-                    updateEmscriptenOption();
-                    hackCable.emulatorManager.compileAndLoadCode(sourceCode).then(() => {
-                        onCompileSuccess();
-                    }).catch(() => {
-                        onCompileFailure();
-                    });
-                    return;
-                }
-                if (data.error) {
-                    hexInput.value = '// Compilation error:\n' + data.error;
-                    if (data.stderr) hexInput.value += '\n' + data.stderr;
-                    onCompileFailure();
-                    return;
-                }
-                lastEmscriptenResult = { js: data.js, wasm: data.wasm };
-                hexInput.value = '// Emscripten compilation OK. Click Execute.';
-                onCompileSuccess();
-            }).catch(() => {
-                // Network error (backend not running) — fall back to MicroPython
-                hexInput.value = '// Backend unreachable, using MicroPython fallback...';
-                showStatus('ui.status.emscriptenFallback', 'info');
-                emscriptenAvailable = false;
-                updateEmscriptenOption();
-                hackCable.emulatorManager.compileAndLoadCode(sourceCode).then(() => {
-                    onCompileSuccess();
-                }).catch(() => {
-                    onCompileFailure();
-                });
-            });
-
-        } else if (boardType === 'esp32' && mode === 'clang-native') {
-            // --- NATIVE CLANG SERVER-SIDE PATH ---
-            hexInput.value = '// Compiling with Native Clang (server-side)...';
-            fetch('/api/compile/clang', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: sourceCode })
-            }).then(async res => {
-                const data = await res.json();
-                if (data.code === 'CLANG_NOT_FOUND') {
-                    hexInput.value = '// Native Clang unavailable.';
-                    clangNativeAvailable = false;
-                    updateClangNativeOption();
-                    onCompileFailure();
-                    return;
-                }
-                if (data.error) {
-                    hexInput.value = '// Compilation error:\n' + data.error;
-                    if (data.stderr) hexInput.value += '\n' + data.stderr;
-                    onCompileFailure();
-                    return;
-                }
-                const wasmBytes = await fetch(`data:application/octet-stream;base64,${data.wasm}`)
-                    .then(r => r.arrayBuffer())
-                    .then(b => new Uint8Array(b));
-                lastClangNativeResult = wasmBytes;
-                hexInput.value = '// Native Clang compilation OK. Click Execute.';
-                onCompileSuccess();
-            }).catch(() => {
-                hexInput.value = '// Backend unreachable.';
-                onCompileFailure();
-            });
-
-        } else if (boardType === 'esp32' && mode === 'clang-llvm') {
+        if (boardType === 'esp32') {
             // --- CLANG/LLVM IN-BROWSER PATH ---
             const clangAbortController = new AbortController();
             activeCompileCancel = () => {
@@ -762,15 +587,6 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                 clangRunner.dispose();
             });
 
-        } else if (boardType === 'esp32') {
-            // --- MICROPYTHON LEGACY PATH ---
-            hackCable.emulatorManager.compileAndLoadCode(sourceCode).then(() => {
-                onCompileSuccess();
-            }).catch(() => {
-                onCompileFailure();
-            });
-            hexInput.value = '// ESP32 uses MicroPython - no hex compilation needed';
-
         } else {
             // --- ARDUINO AVR PATH ---
             EmulatorManager.compileCode(sourceCode).then((data: CompileResult) => {
@@ -789,7 +605,7 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
         if ((executeButton as HTMLButtonElement).disabled) return;
         if (runControlState === 'needs-compile' || runControlState === 'compiling') return;
         registerSerialDataCallback();
-        const serialDiagRunId = beginSerialPipelineDiagnostics();
+        beginSerialPipelineDiagnostics();
         const rawSourceCode = getCodeEditorValue();
         const sourceCode = normalizeBfarmMacroCode(rawSourceCode);
         if (sourceCode !== rawSourceCode) {
@@ -802,80 +618,12 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
         const boardType = hackCable.editor.canvas.getBoardType();
         if (boardType) hackCable.emulatorManager.setBoardType(boardType);
 
-        const mode = compilerModeSelect?.value ?? DEFAULT_COMPILER_MODE;
-
         if(!(hexInput instanceof HTMLTextAreaElement && codeInput instanceof HTMLTextAreaElement)) return;
         showStatus('ui.status.executing', 'info');
         resetMockRunStartTime();
         flushSerialBufferToDom(true);
 
-        if (boardType === 'esp32' && mode === 'emscripten') {
-            // --- EMSCRIPTEN PATH ---
-            if (!lastEmscriptenResult) {
-                appendSerial('Error: No compiled WASM. Click Compile first.\n');
-                setRunControlState('needs-compile');
-                showStatus('ui.status.compileFailed', 'error');
-                return;
-            }
-            setRunControlState('executing');
-            clearSerial();
-            loadEmscriptenWasm(lastEmscriptenResult.js, lastEmscriptenResult.wasm)
-                .then(() => {
-                    showStatus('ui.status.executing', 'info');
-                    autoActivateSensorsFromCode(sourceCode);
-                })
-                .catch(err => {
-                    appendSerial('WASM load error: ' + err.message + '\n');
-                    setRunControlState('compiled');
-                    showStatus('ui.status.compileFailed', 'error');
-                });
-
-        } else if (boardType === 'esp32' && mode === 'clang-native') {
-            // --- NATIVE CLANG EXECUTE ---
-            if (!lastClangNativeResult) {
-                appendSerial('Error: No compiled WASM. Click Compile first.\n');
-                setRunControlState('needs-compile');
-                showStatus('ui.status.compileFailed', 'error');
-                return;
-            }
-            setRunControlState('executing');
-            cleanupWasmInstance();
-            const shimNative = new ArduinoWasmShim(
-                (pin, value) => hackCable.esp32PinUpdate(pin, value),
-                (text) => appendSerial(text),
-                (slaveId, regAddr) => readBridgeNumber('hackcable_modbus_read', [slaveId, regAddr], 0),
-                () => readBridgeNumber('hackcable_sht31_temp', [], 25),
-                () => readBridgeNumber('hackcable_sht31_humidity', [], 60),
-                () => readBridgeNumber('hackcable_bh1750_lux', [], 500),
-            );
-            activeClangNativeShim = shimNative;
-            WebAssembly.instantiate(lastClangNativeResult, shimNative.buildImports())
-                .then(({ instance }) => {
-                    const exp = instance.exports as any;
-                    if (exp.memory) shimNative.setWasmMemory(exp.memory);
-                    if (typeof exp.sim_run_setup === 'function') exp.sim_run_setup();
-                    if (typeof exp.sim_run_loop === 'function') {
-                        activeClangNativeLoopHandle = startFixedStepSimulationLoop(
-                            () => exp.sim_run_loop(),
-                            (e) => {
-                                if (activeClangNativeLoopHandle !== null) {
-                                    clearInterval(activeClangNativeLoopHandle);
-                                    activeClangNativeLoopHandle = null;
-                                }
-                                appendSerial('Runtime error: ' + (e as Error).message + '\n');
-                            },
-                        );
-                    }
-                    autoActivateSensorsFromCode(sourceCode);
-                    showStatus('ui.status.executing', 'info');
-                })
-                .catch(err => {
-                    appendSerial('WASM load error: ' + err.message + '\n');
-                    setRunControlState('compiled');
-                    showStatus('ui.status.compileFailed', 'error');
-                });
-
-        } else if (boardType === 'esp32' && mode === 'clang-llvm') {
+        if (boardType === 'esp32') {
             // --- CLANG/LLVM EXECUTE ---
             if (!lastClangResult) {
                 appendSerial('Error: No compiled WASM. Click Compile first.\n');
@@ -929,14 +677,6 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                     setRunControlState('compiled');
                     showStatus('ui.status.compileFailed', 'error');
                 });
-
-        } else if (boardType === 'esp32') {
-            // --- MICROPYTHON ---
-            setRunControlState('executing');
-            flushSerialBufferToDom(true);
-            scheduleSerialPipelineFallbackWarning(serialDiagRunId);
-            hackCable.emulatorManager.run(sourceCode);
-            setTimeout(() => flushSerialBufferToDom(true), 0);
 
         } else {
             // --- ARDUINO AVR ---
@@ -1909,7 +1649,6 @@ interface SerialPipelineRunState {
     warningEmitted: boolean;
 }
 const SERIAL_PIPELINE_DEBUG = false;
-const SERIAL_PIPELINE_FALLBACK_DELAY_MS = 1500;
 const SERIAL_MAX_BUFFER_CHARS = 1_000_000;
 const SERIAL_MAX_PENDING_CHARS = 200_000;
 const SERIAL_TRUNCATED_NOTICE = '[Serial output truncated to latest data]\n';
@@ -2405,17 +2144,6 @@ function routeIncomingSerialData(data: string, source: SerialDataSource = 'callb
     }
 }
 
-function scheduleSerialPipelineFallbackWarning(runId: number) {
-    setTimeout(() => {
-        if (!serialPipelineState || serialPipelineState.runId !== runId) return;
-        if (serialPipelineState.callbackReceived || serialPipelineState.warningEmitted) return;
-        serialPipelineState.warningEmitted = true;
-        const msg = '[Serial Pipeline Warning] Execute started but no serial callback received. Check runtime callback wiring.\n';
-        routeIncomingSerialData(msg, 'internal');
-        debugSerialPipeline('Fallback warning emitted', serialPipelineState);
-    }, SERIAL_PIPELINE_FALLBACK_DELAY_MS);
-}
-
 function registerSerialDataCallback() {
     hackCable.serialDataCallback = (data: string) => {
         routeIncomingSerialData(data, 'callback');
@@ -2492,22 +2220,6 @@ simHttpPathInput?.addEventListener('keydown', (event) => {
     simHttpSendBtn?.click();
 });
 
-// Emscripten WASM ↔ canvas bridge callbacks
-(window as any).hackcable_update_pin = (pin: number, value: boolean) => {
-    hackCable.esp32PinUpdate(pin, value);
-};
-(window as any).hackcable_pin_mode = (pin: number, mode: number) => {
-    emscriptenPinModes.set(pin, mode);
-    if (mode === 2 && !emscriptenInputPinStates.has(pin)) {
-        emscriptenInputPinStates.set(pin, true);
-    }
-};
-(window as any).hackcable_read_pin = (pin: number): boolean => {
-    if (emscriptenInputPinStates.has(pin)) {
-        return emscriptenInputPinStates.get(pin) === true;
-    }
-    return emscriptenPinModes.get(pin) === 2;
-};
 (window as any).hackcable_analog_read = (pin: number): number => {
     if (pin === 36) return getMock('soil', 50) * 40.95; // 0-100% → 0-4095 ADC
     return 0;
@@ -2562,7 +2274,7 @@ function getMock(key: string, defaultVal: number): number {
     return value !== undefined ? value : defaultVal;
 }
 
-// Sensor data bridges (called from Emscripten WASM sensor mocks)
+// Sensor data bridges for Clang/LLVM ESP32 examples
 (window as any).hackcable_modbus_read = (_slaveId: number, regAddr: number): number => {
     const weatherKeys: Record<number, [string, number]> = {
         0: ['temperature', 25.0], 1: ['humidity', 60.0], 2: ['co2', 400.0], 3: ['pressure', 1013.0]
@@ -2574,20 +2286,7 @@ function getMock(key: string, defaultVal: number): number {
 (window as any).hackcable_sht31_humidity = (): number => getMock('humidity', 60.0);
 (window as any).hackcable_bh1750_lux = (): number => getMock('lux', 500.0);
 
-// Emscripten WASM cleanup
 async function cleanupWasmInstance() {
-    if (activeWasmModule) {
-        try {
-            if (typeof activeWasmModule.ccall === 'function') {
-                activeWasmModule.ccall('emscripten_cancel_main_loop', null, [], []);
-            }
-        } catch (e) { /* WASM may already be terminated */ }
-        activeWasmModule = null;
-    }
-    if (activeWasmScript) {
-        activeWasmScript.remove();
-        activeWasmScript = null;
-    }
     delete (window as any).HackCableModule;
     if (activeClangLoopHandle !== null) {
         clearInterval(activeClangLoopHandle);
@@ -2595,44 +2294,6 @@ async function cleanupWasmInstance() {
     }
     activeClangShim?.clearScheduledPinEvents();
     activeClangShim = null;
-    if (activeClangNativeLoopHandle !== null) {
-        clearInterval(activeClangNativeLoopHandle);
-        activeClangNativeLoopHandle = null;
-    }
-    activeClangNativeShim?.clearScheduledPinEvents();
-    activeClangNativeShim = null;
-}
-
-// Emscripten WASM loader
-async function loadEmscriptenWasm(jsGlue: string, wasmBase64: string) {
-    await cleanupWasmInstance();
-
-    // Decode base64 → ArrayBuffer
-    const bytes = Uint8Array.from(atob(wasmBase64), c => c.charCodeAt(0));
-    const wasmBinary = bytes.buffer; // Emscripten expects ArrayBuffer
-
-    // Load JS glue via Blob URL (same-origin, no CORS issues)
-    const blobUrl = URL.createObjectURL(new Blob([jsGlue], { type: 'application/javascript' }));
-    await new Promise<void>((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = blobUrl;
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error('Failed to load Emscripten JS glue'));
-        document.head.appendChild(script);
-        activeWasmScript = script;
-    });
-    URL.revokeObjectURL(blobUrl);
-
-    // Instantiate WASM module via the factory function
-    const factory = (window as any).HackCableModule;
-    if (!factory) throw new Error('HackCableModule factory not found after script load');
-
-    activeWasmModule = await factory({
-        wasmBinary,
-        print: (t: string) => appendSerial(t + '\n'),
-        printErr: (t: string) => console.warn('[Emscripten]', t),
-        locateFile: (p: string) => p
-    });
 }
 
 // Initialize sidebar toggle functionality
@@ -7255,4 +6916,7 @@ autoSyncBlocksCheckbox?.addEventListener('change', () => {
         autoSyncBlocksHandler = null;
     }
 });
+
+
+
 

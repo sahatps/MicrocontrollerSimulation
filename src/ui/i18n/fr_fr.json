@@ -15,7 +15,6 @@
   "ui.serialPlotter.title": "Traceur Série",
   "examples.relaySequentialBlink": "Clignotement Séquentiel de Relais",
   "examples.mcpSmartControl": "Contrôle Intelligent MCP23008",
-  "ui.status.emscriptenFallback": "Emscripten non disponible — utilisation de MicroPython",
   "ui.status.compileCancelled": "Compilation cancelled.",
   "ui.status.clangDownloading": "Téléchargement du compilateur Clang (~35 Mo, première utilisation)...",
   "ui.status.clangCompiling": "Compilation avec Clang/LLVM...",

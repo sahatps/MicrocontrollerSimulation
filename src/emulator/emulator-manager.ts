@@ -1,7 +1,14 @@
 import { AVRRunner } from "./avr-runner";
 import { CompileResult, compileToHex } from "./compiler";
 import { HackCable } from "../main";
-import { MicroPythonRunner, SimulatedHttpResponse } from "./micropython-runner";
+
+type SimulatedHttpResponse = {
+    id: number;
+    path: string;
+    status: number;
+    contentType: string;
+    body: string;
+};
 
 export class EmulatorManager {
 
@@ -12,7 +19,6 @@ export class EmulatorManager {
 
     private runner: AVRRunner | undefined;
     private loadingRunner: AVRRunner | undefined;
-    private micropythonRunner: MicroPythonRunner | undefined;
     private boardType: 'arduino' | 'esp32' = 'arduino';
 
     // Context for C++ to Python conversion
@@ -28,9 +34,6 @@ export class EmulatorManager {
         bh1750Sensors: Set<string>;
         helperFunctionNames: Set<string>;
     } | null = null;
-    private lastConversionValidationIssues: string[] = [];
-
-
     static async compileCode(code: string): Promise<CompileResult> {
         return compileToHex(code);
     }
@@ -41,38 +44,20 @@ export class EmulatorManager {
     }
 
     async httpGet(path: string): Promise<SimulatedHttpResponse> {
-        if (this.boardType !== 'esp32') {
-            return {
-                id: -1,
-                path,
-                status: 400,
-                contentType: 'text/plain',
-                body: 'Simulated HTTP is only available for ESP32 mode',
-            };
-        }
-        if (!this.micropythonRunner) {
-            return {
-                id: -1,
-                path,
-                status: 503,
-                contentType: 'text/plain',
-                body: 'MicroPython runtime is not running',
-            };
-        }
-        return this.micropythonRunner.httpGet(path);
+        return {
+            id: -1,
+            path,
+            status: 501,
+            contentType: 'text/plain',
+            body: 'Simulated HTTP is not available in Clang-only mode',
+        };
     }
 
     async compileAndLoadCode(code: string): Promise<CompileResult> {
-        if (this.boardType === 'esp32') {
-            // For ESP32, we don't compile - we run MicroPython directly
-            console.log('[EmulatorManager] Loading MicroPython code for ESP32');
-            return { hex: '', stdout: '', stderr: '' };
-        } else {
-            const data = await compileToHex(code);
-            console.log(data)
-            this.loadCode(data.hex);
-            return data;
-        }
+        const data = await compileToHex(code);
+        console.log(data)
+        this.loadCode(data.hex);
+        return data;
     }
 
     loadCode(hexCode: string) {
@@ -85,82 +70,22 @@ export class EmulatorManager {
         this.hackcable.deactivateAllActuators();
 
         if (this.boardType === 'esp32') {
-            try {
-                // Run MicroPython for ESP32
-                if (!this.micropythonRunner) {
-                    this.micropythonRunner = new MicroPythonRunner();
-                    this.bindESP32RuntimeCallbacks();
-                    await this.micropythonRunner.initialize();
-                }
-                this.bindESP32RuntimeCallbacks();
-
-                if (code) {
-                    console.log('[EmulatorManager] Running MicroPython code...');
-                    this.setupESP32Hardware();
-
-                    // Convert Arduino-style code to MicroPython if needed
-                    const pythonCode = this.convertToPython(code);
-                    console.log('[EmulatorManager] Converted code:', pythonCode);
-                    // Helpful debug: print with line numbers so SyntaxError line N is immediately actionable
-                    const pythonLines = pythonCode.split('\n');
-                    try {
-                        const numbered = pythonCode
-                            .split('\n')
-                            .map((l, i) => `${String(i + 1).padStart(4, ' ')}|${l}`)
-                            .join('\n');
-                        console.log('[EmulatorManager] Converted code (numbered):\n' + numbered);
-                    } catch { }
-
-                    if (this.lastConversionValidationIssues.length > 0) {
-                        const details = this.lastConversionValidationIssues
-                            .map((issue) => `[MicroPython Conversion Error] ${issue}`)
-                            .join('\n');
-                        this.hackcable.serialDataReceived(`${details}\n`);
-                        throw new Error('Generated MicroPython contains unresolved Arduino tokens');
-                    }
-
-                    try {
-                        await this.micropythonRunner.runCode(pythonCode);
-                    } catch (error) {
-                        const raw = error instanceof Error ? error.message : String(error);
-                        const m = raw.match(/File "<stdin>", line (\d+)/) || raw.match(/\bline (\d+)\b/);
-                        if (m) {
-                            const lineNo = parseInt(m[1], 10);
-                            const lineText = pythonLines[lineNo - 1] ?? '';
-                            const ctx0 = pythonLines[lineNo - 2] ?? '';
-                            const ctx1 = pythonLines[lineNo - 1] ?? '';
-                            const ctx2 = pythonLines[lineNo] ?? '';
-                            const context = [
-                                `${String(lineNo - 1).padStart(4, ' ')}|${ctx0}`,
-                                `${String(lineNo).padStart(4, ' ')}|${ctx1}`,
-                                `${String(lineNo + 1).padStart(4, ' ')}|${ctx2}`,
-                            ].join('\n');
-                            this.hackcable.serialDataReceived(
-                                `[MicroPython SyntaxError] line ${lineNo}: ${lineText}\n` +
-                                `[MicroPython SyntaxError] context:\n${context}\n`
-                            );
-                        } else {
-                            this.hackcable.serialDataReceived(`[MicroPython Error] ${raw}\n`);
-                        }
-                        throw error;
-                    }
-                    console.log('[EmulatorManager] MicroPython execution started');
-                }
-            } catch (error) {
-                console.error('[EmulatorManager] MicroPython error:', error);
-                const message = error instanceof Error ? error.message : String(error);
-                this.hackcable.serialDataReceived(`[MicroPython Error] ${message}\n`);
+            if (code) {
+                void this.convertToPython(code);
             }
-        } else {
-            // Run AVR for Arduino
-            this.stop();
-            this.runner = this.loadingRunner;
-            console.log('[EmulatorManager] Runner loaded:', this.runner ? 'YES' : 'NO');
-            this.setupHardware();
-            // Callback called every 500 000 cpu cycles
-            this.runner?.execute(() => { });
-            console.log('[EmulatorManager] Execution started');
+            void this.setupESP32Hardware;
+            void this.bindESP32RuntimeCallbacks;
+            return;
         }
+
+        // Run AVR for Arduino
+        this.stop();
+        this.runner = this.loadingRunner;
+        console.log('[EmulatorManager] Runner loaded:', this.runner ? 'YES' : 'NO');
+        this.setupHardware();
+        // Callback called every 500 000 cpu cycles
+        this.runner?.execute(() => { });
+        console.log('[EmulatorManager] Execution started');
     }
 
     private findMatchingBrace(source: string, openBraceIndex: number): number {
@@ -284,7 +209,6 @@ export class EmulatorManager {
 
         // Check if it's already Python code
         if (code.includes('from machine import') || code.includes('import machine')) {
-            this.lastConversionValidationIssues = [];
             return code;
         }
 
@@ -1088,7 +1012,6 @@ export class EmulatorManager {
         }
 
         const finalized = this.finalizeConvertedPythonCode(pythonCode);
-        this.lastConversionValidationIssues = finalized.validationIssues;
         return finalized.pythonCode;
     }
 
@@ -1713,64 +1636,22 @@ export class EmulatorManager {
     }
 
     private setupESP32Hardware() {
-        if (!this.micropythonRunner) return;
-
-        console.log('[EmulatorManager] Setting up ESP32 hardware listeners...');
-        this.bindESP32RuntimeCallbacks();
-
-        const supportedPins = this.hackcable.getSupportedBoardPins();
-        this.micropythonRunner.setSupportedPins(supportedPins);
-        const warnedMismatchPins = new Set<number>();
-
-        // Follow the runtime's supported GPIO map to keep UI updates in sync
-        // with whatever pins the MicroPython layer can drive (e.g. IO32/IO33).
-        const pinsToListen = new Set<number>([
-            ...Array.from(this.micropythonRunner.pins.keys()),
-            ...supportedPins,
-        ]);
-        pinsToListen.forEach(pin => {
-            this.micropythonRunner!.setPinListener(pin, (value: boolean) => {
-                console.log(`[EmulatorManager] ESP32 Pin ${pin} changed to: ${value}`);
-                this.hackcable.esp32PinUpdate(pin, value);
-
-                const actuatorPins = this.hackcable.getConnectedActuatorControlPins();
-                if (actuatorPins.length > 0 && !actuatorPins.includes(pin) && !warnedMismatchPins.has(pin)) {
-                    warnedMismatchPins.add(pin);
-                    const msg = `[Wiring Warning] GPIO${pin} changed, but no actuator control pin is wired to GPIO${pin}.`;
-                    console.warn(`[EmulatorManager] ${msg}`);
-                    this.hackcable.serialDataReceived(msg + '\n');
-                }
-            });
-        });
-
-        console.log('[EmulatorManager] ESP32 hardware listeners configured');
+        return;
     }
 
     private bindESP32RuntimeCallbacks() {
-        if (!this.micropythonRunner) return;
-
-        // Bind per-run to avoid stale handlers if UI wiring changes during runtime lifecycle.
-        this.micropythonRunner.onSerialData = (data: string) => {
-            this.hackcable.serialDataReceived(data);
-        };
-
-        this.micropythonRunner.onSensorActivate = (busType: string, pin1: number, pin2: number) => {
-            this.hackcable.activateSensorComponent(busType, pin1, pin2);
-        };
+        return;
     }
 
 
     setPaused(pause: boolean) {
-        if (this.boardType === 'esp32') {
-            if (this.micropythonRunner) this.micropythonRunner.pause = pause;
-        } else {
+        if (this.boardType !== 'esp32') {
             if (this.runner) this.runner.pause = pause;
         }
     }
 
     isPosed() {
         if (this.boardType === 'esp32') {
-            if (this.micropythonRunner) return this.micropythonRunner.pause;
             return true;
         } else {
             if (this.runner) return this.runner.pause;
@@ -1780,14 +1661,13 @@ export class EmulatorManager {
 
     stop() {
         if (this.runner) this.runner.stop();
-        if (this.micropythonRunner) this.micropythonRunner.stop();
         this.hackcable.deactivateAllSensors();
         this.hackcable.deactivateAllActuators();
     }
 
     setInputPin(pin: number, value: boolean) {
-        if (this.boardType !== 'esp32' || !this.micropythonRunner) return;
-        this.micropythonRunner.setInputPin(pin, value);
+        void pin;
+        void value;
     }
 
 

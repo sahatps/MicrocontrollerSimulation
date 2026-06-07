@@ -14,10 +14,6 @@ module.exports = {
         asyncWebAssembly: true,
         topLevelAwait: true
     },
-    externals: {
-        // Exclude MicroPython from bundling - load it dynamically instead
-        '@micropython/micropython-webassembly-pyscript': 'micropythonModule'
-    },
     devServer: {
         host: '0.0.0.0',
         client: {
@@ -27,10 +23,6 @@ module.exports = {
         compress: true,
         port: 3000,
         static: [
-            {
-                directory: path.join(__dirname, 'node_modules/@micropython/micropython-webassembly-pyscript'),
-                publicPath: '/hackcable'
-            },
             {
                 directory: path.join(__dirname, 'blocks-app/dist'),
                 publicPath: '/blocks'
@@ -143,14 +135,6 @@ module.exports = {
                 {
                     from: './web/assets',
                     to: 'assets'
-                },
-                {
-                    from: './node_modules/@micropython/micropython-webassembly-pyscript/micropython.wasm',
-                    to: 'micropython.wasm'
-                },
-                {
-                    from: './node_modules/@micropython/micropython-webassembly-pyscript/micropython.mjs',
-                    to: 'micropython.mjs'
                 },
                 {
                     from: './web/shell.html',

@@ -53,7 +53,6 @@
   "ui.serial.title": "Serial Monitor",
   "ui.serial.clear": "Clear",
   "ui.serialPlotter.title": "Serial Plotter",
-  "ui.status.emscriptenFallback": "Emscripten not available — using MicroPython fallback",
   "ui.status.clangDownloading": "Downloading Clang compiler (first use ~35MB)...",
   "ui.status.clangCompiling": "Compiling with Clang/LLVM...",
   "ui.status.clangReady": "Clang compiler ready (cached)",

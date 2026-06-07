@@ -53,7 +53,6 @@
   "ui.serial.title": "Serial Monitor",
   "ui.serial.clear": "ล้าง",
   "ui.serialPlotter.title": "กราฟ Serial",
-  "ui.status.emscriptenFallback": "Emscripten ไม่พร้อมใช้งาน — ใช้ MicroPython แทน",
   "ui.status.clangDownloading": "กำลังดาวน์โหลด Clang compiler (~35MB ครั้งแรก)...",
   "ui.status.clangCompiling": "กำลังคอมไพล์ด้วย Clang/LLVM...",
   "ui.status.clangReady": "Clang compiler พร้อมใช้งาน (แคชแล้ว)",

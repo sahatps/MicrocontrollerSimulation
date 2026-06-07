@@ -14,8 +14,7 @@
 | UI / Wiring canvas | [Draw2D](http://www.draw2d.org) |
 | Component visuals | [Wokwi Elements](https://github.com/wokwi/wokwi-elements) |
 | Arduino emulation | [AVR8JS](https://github.com/wokwi/avr8js) |
-| MicroPython emulation | `@micropython/micropython-webassembly-pyscript` |
-| C++ compilation | Godbolt public API (Emscripten) via `/api` proxy → `server.js` (port 3001) |
+| ESP32 C++ compilation | Browser-side `clang-llvm` via `/wasm-clang` proxy |
 | Frontend build | Webpack 5 + Babel + TypeScript |
 | Internationalization | i18next (`src/ui/i18n/`) |
 
@@ -24,13 +23,13 @@
 | Server | Port | Start command |
 |--------|------|---------------|
 | Webpack dev server (web app) | 3000 | `npm run serve:web` |
-| Emscripten backend | 3001 | `npm run serve:backend` |
+| Lightweight backend/proxy | 3001 | `npm run serve:backend` |
 | Both together | — | `npm run dev` |
 
 Access the app at **http://localhost:3000**
 
 The webpack dev server proxies:
-- `/api` → `http://localhost:3001` (local Emscripten backend)
+- `/api` → `http://localhost:3001`
 - `/wasm-clang` → `https://binji.github.io` (external WASM toolchain)
 
 ## Key npm Scripts
@@ -50,7 +49,7 @@ npm run type-check      # TypeScript type checking (no emit)
 ```
 src/
   components/       # Custom component element definitions (TypeScript)
-  emulator/         # AVR8JS + MicroPython runner / manager
+  emulator/         # AVR8JS compiler / manager
   panels/           # Catalog and component panels
   ui/               # i18n, stylus styles, UI utilities
   main.ts           # Library entry point
@@ -63,7 +62,7 @@ web/
   arduino-wasm-shim.ts
   clang-runner.ts
 
-server.js           # Express backend for Emscripten compilation (port 3001)
+server.js           # Express backend for health/static/proxy routes (port 3001)
 webpack.config.js           # Library bundle config
 webpack.config.web.js       # Web app bundle config
 ```
@@ -71,8 +70,7 @@ webpack.config.web.js       # Web app bundle config
 ## Important Notes
 
 - **Class name preservation**: TerserPlugin is configured with `keep_classnames: true` and `keep_fnames: true` — do not remove this; component detection uses `instanceof` checks that rely on stable class names.
-- **Cross-Origin headers**: The dev server sets `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: credentialless` to enable `SharedArrayBuffer` (required by MicroPython WASM).
-- **MicroPython is excluded from the bundle** and loaded dynamically via the `micropythonModule` global.
+- **Cross-Origin headers**: The dev server sets `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: credentialless` so browser-side `wasm-clang` can use `SharedArrayBuffer`.
 - The `bfarm/` subdirectory has its own `package.json` and build step (`npm run build:bfarm`).
 
 ## Branch Convention
