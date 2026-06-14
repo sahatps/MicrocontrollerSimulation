@@ -6,6 +6,7 @@ import "codemirror/mode/clike/clike";
 import {CompileResult, EmulatorManager, HackCable} from "../src/main";
 import {wokwiComponentById, wokwiComponentByClass, ComponentType} from "../src/panels/component";
 import {ComponentFigure} from "../src/editor/component-figure";
+import type {EditorSaveData} from "../src/editor/editor";
 import * as draw2d from "draw2d";
 import {DisconnectableConnectionPolicy} from "../src/editor/connections-policies";
 import { ClangWasmRunner, isClangCancellation } from './clang-runner';
@@ -75,6 +76,40 @@ function startFixedStepSimulationLoop(
     }, SIM_FIXED_STEP_MS);
 }
 
+const DEFAULT_STARTUP_BOARD_POSITION = { x: 900, y: 600 };
+
+function getInitialViewportBoardPosition(
+    _figure: ComponentFigure,
+    fallback: { x: number; y: number } = DEFAULT_STARTUP_BOARD_POSITION
+): { x: number; y: number } {
+    return fallback;
+}
+
+function positionBoardForInitialViewport(
+    boardFigure: ComponentFigure,
+    onPositioned?: (position: { x: number; y: number }) => void
+) {
+    setTimeout(() => {
+        const position = getInitialViewportBoardPosition(boardFigure);
+        boardFigure.setX(position.x).setY(position.y);
+        onPositioned?.(position);
+    }, 60);
+}
+
+function isSingleBoardCircuitData(data: EditorSaveData | null | undefined): boolean {
+    if (!data) return false;
+    const standaloneLines = data.standaloneLines ?? [];
+    return data.figures.length === 1
+        && data.connections.length === 0
+        && standaloneLines.length === 0;
+}
+
+function repositionRestoredSingleBoardIfNeeded() {
+    const figures = hackCable.editor.canvas.getAllFigures();
+    if (figures.length !== 1) return;
+    positionBoardForInitialViewport(figures[0]);
+}
+
 // Auto-setup: Create Arduino board with LED on pin 13
 function autoSetupBasicCircuit(forceSetup = false) {
     // Check if there's already saved data, if so, don't auto-setup (unless forced)
@@ -98,11 +133,15 @@ function autoSetupBasicCircuit(forceSetup = false) {
 
     // Create Arduino Uno (component id: 0)
     const arduinoFigure = new ComponentFigure(wokwiComponentById[0]);
-    hackCable.editor.canvas.add(arduinoFigure.setX(200).setY(100));
+    hackCable.editor.canvas.add(arduinoFigure.setX(900).setY(600));
 
     // Create LED (component id: 1)
     const ledFigure = new ComponentFigure(wokwiComponentById[1]);
     hackCable.editor.canvas.add(ledFigure.setX(500).setY(200));
+
+    positionBoardForInitialViewport(arduinoFigure, ({ x, y }) => {
+        ledFigure.setX(x + 300).setY(y + 100);
+    });
 
     // Wait for components to be fully rendered before wiring
     setTimeout(() => {
@@ -140,6 +179,30 @@ function autoSetupBasicCircuit(forceSetup = false) {
     }, 500);
 }
 
+function scheduleInitialViewportCenter(delayMs = 700) {
+    const attemptDelays = [delayMs, delayMs + 350, delayMs + 900];
+    attemptDelays.forEach((attemptDelay) => {
+        setTimeout(() => {
+            hackCable.editor.canvas.centerViewportOnPrimaryBoardOrContent();
+        }, attemptDelay);
+    });
+}
+
+function setupBoardForNewCircuit(
+    selectedBoard: ReturnType<typeof normalizeBoardSelection>,
+    forceDefaultSetup = false
+) {
+    if (selectedBoard === 'esp32') {
+        setupESP32Circuit();
+    } else if (selectedBoard === 'custom-esp32') {
+        setupCustomESP32Circuit();
+    } else if (isHandysenseBoard(selectedBoard)) {
+        setupHandysenseCircuit(selectedBoard);
+    } else {
+        autoSetupBasicCircuit(forceDefaultSetup);
+    }
+}
+
 // Call auto-setup after a short delay to ensure everything is loaded
 setTimeout(() => {
     // Check which board should be loaded
@@ -148,12 +211,14 @@ setTimeout(() => {
 
     // Auto-restore saved circuit if it has figures, otherwise run default setup
     let hasRestoredData = false;
+    let restoredSingleBoardCircuit = false;
     if (savedCircuit) {
         try {
-            const parsedData = JSON.parse(savedCircuit);
+            const parsedData = JSON.parse(savedCircuit) as EditorSaveData;
             if (parsedData.figures && parsedData.figures.length > 0) {
                 hackCable.editor.loadEditorSaveData(parsedData);
                 hasRestoredData = true;
+                restoredSingleBoardCircuit = isSingleBoardCircuitData(parsedData);
             }
         } catch (e) {
             console.log("Error parsing saved circuit data:", e);
@@ -161,15 +226,11 @@ setTimeout(() => {
     }
 
     if (!hasRestoredData) {
-        if (selectedBoard === 'esp32') {
-            setupESP32Circuit();
-        } else if (selectedBoard === 'custom-esp32') {
-            setupCustomESP32Circuit();
-        } else if (isHandysenseBoard(selectedBoard)) {
-            setupHandysenseCircuit(selectedBoard);
-        } else {
-            autoSetupBasicCircuit();
-        }
+        setupBoardForNewCircuit(selectedBoard);
+        scheduleInitialViewportCenter();
+    } else if (restoredSingleBoardCircuit) {
+        repositionRestoredSingleBoardIfNeeded();
+        scheduleInitialViewportCenter();
     }
 
     // Setup automatic code generation when circuit changes
@@ -244,6 +305,39 @@ type MockTimelineConfig = { durationSec: number; tracks: Record<SensorKey, MockS
 type GraphPoint = { tSec: number; value: number };
 type MockEditorMode = 'graph' | 'timeline';
 type SensorRange = { min: number; max: number };
+type MockGraphUiPrefs = {
+    selectedSensor: SensorKey;
+    editorMode: MockEditorMode;
+    yRanges: Partial<Record<SensorKey, SensorRange>>;
+};
+type CircuitSessionMockState = {
+    source: MockSource;
+    text: string;
+    timelineConfig: MockTimelineConfig;
+    graphUiPrefs: MockGraphUiPrefs;
+};
+type CircuitSessionFile = {
+    version: 1;
+    app: 'hackcable-circuit-session';
+    savedAt: string;
+    board: ReturnType<typeof normalizeBoardSelection>;
+    code: string;
+    circuit: EditorSaveData;
+    mock: CircuitSessionMockState;
+};
+type SaveFilePickerOptions = {
+    suggestedName?: string;
+    types?: Array<{
+        description?: string;
+        accept: Record<string, string[]>;
+    }>;
+};
+type SaveFileHandle = {
+    createWritable: () => Promise<{
+        write: (data: Blob | string) => Promise<void>;
+        close: () => Promise<void>;
+    }>;
+};
 
 const SENSOR_KEYS: SensorKey[] = ['humidity', 'temperature', 'ph', 'lux', 'soil', 'co2', 'pressure'];
 const SENSOR_KEY_SET = new Set<SensorKey>(SENSOR_KEYS);
@@ -268,6 +362,7 @@ const SENSOR_LABEL_KEYS: Record<SensorKey, string> = {
 const MOCK_SOURCE_STORAGE_KEY = 'hackCable-mock-source';
 const MOCK_TIMELINE_STORAGE_KEY = 'hackCable-mock-timeline';
 const MOCK_GRAPH_UI_STORAGE_KEY = 'hackCable-mock-graph-ui';
+const MOCK_TEXT_STORAGE_KEY = 'hackCable-mock-text';
 const DEFAULT_MOCK_TIMELINE_DURATION_SEC = 20;
 const GRAPH_TIME_SNAP_SEC = 0.5;
 const GRAPH_AXIS_PADDING_LEFT = 46;
@@ -289,6 +384,10 @@ const mockDeletePointBtn = document.getElementById('mock-delete-point-btn') as H
 const mockGraphCanvas = document.getElementById('mock-graph-canvas') as HTMLCanvasElement | null;
 const mockTimelineTracksContainer = document.getElementById('mock-timeline-tracks') as HTMLDivElement | null;
 const mockTimelineError = document.getElementById('mock-timeline-error') as HTMLDivElement | null;
+const mockTextInput = document.getElementById('sensor-mock-input') as HTMLTextAreaElement | null;
+const downloadSessionButton = document.getElementById('download-session') as HTMLButtonElement | null;
+const uploadSessionButton = document.getElementById('upload-session') as HTMLButtonElement | null;
+const uploadSessionInput = document.getElementById('upload-session-input') as HTMLInputElement | null;
 
 let activeMockSource: MockSource = 'text';
 let mockRunStartMs = Date.now();
@@ -300,6 +399,15 @@ let graphRangeOverrides: Partial<Record<SensorKey, SensorRange>> = {};
 let selectedGraphPointIndex: number | null = null;
 let graphDragPointIndex: number | null = null;
 let graphDidDrag = false;
+
+function postCanvasViewState(): void {
+    window.parent.postMessage({
+        source: 'hackcable',
+        type: 'canvas-view-state',
+        darkMode: hackCable.editor.canvas.isDarkMode(),
+        gridVisible: hackCable.editor.canvas.isGridVisible(),
+    }, '*');
+}
 
 type RunControlState = 'needs-compile' | 'compiling' | 'compiled' | 'executing';
 let runControlState: RunControlState = 'needs-compile';
@@ -831,41 +939,50 @@ function graphPointsToSegments(sensorKey: SensorKey, rawPoints: GraphPoint[]): M
 }
 
 function saveMockGraphUiPrefs() {
-    const payload = {
+    const payload = getMockGraphUiPrefs();
+    localStorage.setItem(MOCK_GRAPH_UI_STORAGE_KEY, JSON.stringify(payload));
+}
+
+function getMockGraphUiPrefs(): MockGraphUiPrefs {
+    return {
         selectedSensor: activeGraphSensor,
         editorMode: activeMockEditorMode,
         yRanges: graphRangeOverrides,
     };
-    localStorage.setItem(MOCK_GRAPH_UI_STORAGE_KEY, JSON.stringify(payload));
+}
+
+function applyMockGraphUiPrefs(raw: unknown) {
+    if (!raw || typeof raw !== 'object') return;
+    const parsed = raw as {
+        selectedSensor?: string;
+        editorMode?: string;
+        yRanges?: Record<string, { min?: unknown; max?: unknown }>;
+    };
+    if (parsed.selectedSensor && isSensorKey(parsed.selectedSensor)) {
+        activeGraphSensor = parsed.selectedSensor;
+    }
+    if (parsed.editorMode === 'graph' || parsed.editorMode === 'timeline') {
+        activeMockEditorMode = parsed.editorMode;
+    }
+    if (parsed.yRanges && typeof parsed.yRanges === 'object') {
+        const nextRanges: Partial<Record<SensorKey, SensorRange>> = {};
+        SENSOR_KEYS.forEach((sensorKey) => {
+            const candidate = parsed.yRanges?.[sensorKey];
+            if (!candidate) return;
+            const min = asFiniteNumber(candidate.min);
+            const max = asFiniteNumber(candidate.max);
+            if (min === null || max === null || min >= max) return;
+            nextRanges[sensorKey] = { min, max };
+        });
+        graphRangeOverrides = nextRanges;
+    }
 }
 
 function loadMockGraphUiPrefs() {
     const raw = localStorage.getItem(MOCK_GRAPH_UI_STORAGE_KEY);
     if (!raw) return;
     try {
-        const parsed = JSON.parse(raw) as {
-            selectedSensor?: string;
-            editorMode?: string;
-            yRanges?: Record<string, { min?: unknown; max?: unknown }>;
-        };
-        if (parsed.selectedSensor && isSensorKey(parsed.selectedSensor)) {
-            activeGraphSensor = parsed.selectedSensor;
-        }
-        if (parsed.editorMode === 'graph' || parsed.editorMode === 'timeline') {
-            activeMockEditorMode = parsed.editorMode;
-        }
-        if (parsed.yRanges && typeof parsed.yRanges === 'object') {
-            const nextRanges: Partial<Record<SensorKey, SensorRange>> = {};
-            SENSOR_KEYS.forEach((sensorKey) => {
-                const candidate = parsed.yRanges?.[sensorKey];
-                if (!candidate) return;
-                const min = asFiniteNumber(candidate.min);
-                const max = asFiniteNumber(candidate.max);
-                if (min === null || max === null || min >= max) return;
-                nextRanges[sensorKey] = { min, max };
-            });
-            graphRangeOverrides = nextRanges;
-        }
+        applyMockGraphUiPrefs(JSON.parse(raw));
     } catch {
         // Ignore corrupt storage payload.
     }
@@ -967,6 +1084,157 @@ function asFiniteNumber(value: unknown): number | null {
 
 function roundSeconds(value: number): number {
     return Math.round(value * 1000) / 1000;
+}
+
+function getMockTextValue(): string {
+    return mockTextInput?.value ?? '';
+}
+
+function setMockTextValue(nextText: string): void {
+    if (!mockTextInput) return;
+    mockTextInput.value = nextText;
+}
+
+function saveMockTextValue(): void {
+    localStorage.setItem(MOCK_TEXT_STORAGE_KEY, getMockTextValue());
+}
+
+function getCircuitSessionSnapshot(): CircuitSessionFile {
+    return {
+        version: 1,
+        app: 'hackcable-circuit-session',
+        savedAt: new Date().toISOString(),
+        board: normalizeBoardSelection(boardSelect?.value ?? localStorage.getItem('hackCable-selectedBoard')),
+        code: getCodeEditorValue(),
+        circuit: hackCable.editor.getEditorSaveData(),
+        mock: {
+            source: activeMockSource,
+            text: getMockTextValue(),
+            timelineConfig: normalizeMockTimelineConfig(mockTimelineConfig),
+            graphUiPrefs: getMockGraphUiPrefs(),
+        },
+    };
+}
+
+function isEditorSaveData(value: unknown): value is EditorSaveData {
+    if (!value || typeof value !== 'object') return false;
+    const candidate = value as Partial<EditorSaveData>;
+    return Array.isArray(candidate.figures) && Array.isArray(candidate.connections)
+        && (candidate.standaloneLines === undefined || Array.isArray(candidate.standaloneLines));
+}
+
+function isCircuitSessionFile(value: unknown): value is CircuitSessionFile {
+    if (!value || typeof value !== 'object') return false;
+    const candidate = value as Partial<CircuitSessionFile>;
+    return candidate.version === 1
+        && candidate.app === 'hackcable-circuit-session'
+        && typeof candidate.savedAt === 'string'
+        && typeof candidate.board === 'string'
+        && typeof candidate.code === 'string'
+        && isEditorSaveData(candidate.circuit)
+        && !!candidate.mock
+        && typeof candidate.mock === 'object';
+}
+
+function applyImportedMockState(rawMock: unknown): void {
+    const mock = rawMock && typeof rawMock === 'object'
+        ? rawMock as Partial<CircuitSessionMockState>
+        : {};
+
+    activeMockSource = mock.source === 'timeline' ? 'timeline' : 'text';
+    mockTimelineConfig = normalizeMockTimelineConfig(mock.timelineConfig);
+    graphRangeOverrides = {};
+    activeGraphSensor = 'ph';
+    activeMockEditorMode = 'graph';
+    applyMockGraphUiPrefs(mock.graphUiPrefs);
+    setMockTextValue(typeof mock.text === 'string' ? mock.text : '');
+    saveMockTextValue();
+    saveMockTimelineConfig();
+    saveMockSource();
+    saveMockGraphUiPrefs();
+    setActiveMockSource(activeMockSource, false);
+    setActiveGraphSensor(activeGraphSensor, false);
+    setActiveMockEditorMode(activeMockEditorMode, false);
+    renderMockEditors();
+    setSelectedGraphPoint(null);
+    setMockTimelineError(null);
+}
+
+function applyImportedCircuitSession(session: CircuitSessionFile): void {
+    const normalizedBoard = normalizeBoardSelection(session.board);
+    selectBoardForExample(normalizedBoard);
+    hackCable.editor.loadEditorSaveData(session.circuit);
+    localStorage.setItem('savedEditor', JSON.stringify(session.circuit));
+
+    setCodeEditorValue(session.code);
+    localStorage.setItem('hackCable-webExample-inputCode', session.code);
+    markCompileStale();
+
+    applyImportedMockState(session.mock);
+}
+
+function downloadCircuitSession(): void {
+    const snapshot = getCircuitSessionSnapshot();
+    const stamp = snapshot.savedAt.replace(/[:.]/g, '-');
+    const fileName = `hackcable-circuit-session-${stamp}.json`;
+    const fileText = JSON.stringify(snapshot, null, 2);
+    const pickerWindow = window as Window & {
+        showSaveFilePicker?: (options?: SaveFilePickerOptions) => Promise<SaveFileHandle>;
+    };
+
+    const fallbackDownload = () => {
+        const blob = new Blob([fileText], { type: 'application/json' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = fileName;
+        link.click();
+        URL.revokeObjectURL(link.href);
+        showPlainStatus('Circuit session downloaded.', 'success', 2500);
+    };
+
+    const saveFilePicker = pickerWindow.showSaveFilePicker;
+    if (!saveFilePicker) {
+        fallbackDownload();
+        return;
+    }
+
+    void (async () => {
+        try {
+            const handle = await saveFilePicker({
+                suggestedName: fileName,
+                types: [
+                    {
+                        description: 'HackCable circuit session',
+                        accept: {
+                            'application/json': ['.json'],
+                        },
+                    },
+                ],
+            });
+            const writable = await handle.createWritable();
+            await writable.write(fileText);
+            await writable.close();
+            showPlainStatus('Circuit session saved.', 'success', 2500);
+        } catch (error) {
+            if (error instanceof DOMException && error.name === 'AbortError') {
+                showPlainStatus('Save cancelled.', 'info', 2000);
+                return;
+            }
+            fallbackDownload();
+        }
+    })();
+}
+
+function importCircuitSessionFromText(rawText: string): void {
+    if (!rawText.trim()) {
+        throw new Error('The selected file is empty.');
+    }
+    const parsed = JSON.parse(rawText);
+    if (!isCircuitSessionFile(parsed)) {
+        throw new Error('Invalid session file format.');
+    }
+    applyImportedCircuitSession(parsed);
+    showPlainStatus('Circuit session restored successfully.', 'success', 3500);
 }
 
 function normalizeMockTimelineConfig(raw: unknown): MockTimelineConfig {
@@ -1481,6 +1749,13 @@ function initializeMockControls() {
         activeMockSource = savedSource;
     }
 
+    const savedText = localStorage.getItem(MOCK_TEXT_STORAGE_KEY);
+    if (savedText !== null) {
+        setMockTextValue(savedText);
+    } else {
+        saveMockTextValue();
+    }
+
     const rawTimeline = localStorage.getItem(MOCK_TIMELINE_STORAGE_KEY);
     if (rawTimeline) {
         try {
@@ -1498,6 +1773,10 @@ function initializeMockControls() {
     setSelectedGraphPoint(null);
     setMockTimelineError(null);
 }
+
+mockTextInput?.addEventListener('input', () => {
+    saveMockTextValue();
+});
 
 mockSourceButtons.forEach((button) => {
     button.addEventListener('click', () => {
@@ -2461,6 +2740,10 @@ if(save && restore && clearAll){
         const data = JSON.parse(<string>localStorage.getItem('savedEditor'));
         console.log('Loading data:', data)
         hackCable.editor.loadEditorSaveData(data)
+        if (isSingleBoardCircuitData(data)) {
+            repositionRestoredSingleBoardIfNeeded();
+            scheduleInitialViewportCenter();
+        }
     });
     clearAll.addEventListener("click", () => {
         if(confirm('Êtes-vous sûr de vouloir effacer tous les composants et câblages ?')) {
@@ -2469,10 +2752,42 @@ if(save && restore && clearAll){
             localStorage.removeItem('savedEditor');
             console.log('Canvas cleared!');
             // Re-run auto-setup with force flag to bypass saved data check
-            setTimeout(() => autoSetupBasicCircuit(true), 100);
+            setTimeout(() => {
+                autoSetupBasicCircuit(true);
+                scheduleInitialViewportCenter();
+            }, 100);
         }
     });
 }
+
+downloadSessionButton?.addEventListener('click', () => {
+    downloadCircuitSession();
+});
+
+uploadSessionButton?.addEventListener('click', () => {
+    uploadSessionInput?.click();
+});
+
+uploadSessionInput?.addEventListener('change', () => {
+    const file = uploadSessionInput.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        try {
+            importCircuitSessionFromText(String(reader.result ?? ''));
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unable to import the selected file.';
+            showPlainStatus(message, 'error', 4500);
+        } finally {
+            uploadSessionInput.value = '';
+        }
+    };
+    reader.onerror = () => {
+        showPlainStatus('Unable to read the selected file.', 'error', 4500);
+        uploadSessionInput.value = '';
+    };
+    reader.readAsText(file);
+});
 
 // Function to update UI translations
 function syncRunButtonA11yLabels() {
@@ -5059,15 +5374,8 @@ if (boardSelect) {
 
             // Setup new board
             setTimeout(() => {
-                if (selectedBoard === 'esp32') {
-                    setupESP32Circuit();
-                } else if (selectedBoard === 'custom-esp32') {
-                    setupCustomESP32Circuit();
-                } else if (isHandysenseBoard(selectedBoard)) {
-                    setupHandysenseCircuit(selectedBoard);
-                } else {
-                    autoSetupBasicCircuit(true);
-                }
+                setupBoardForNewCircuit(selectedBoard, true);
+                scheduleInitialViewportCenter();
             }, 100);
         } else {
             // Revert dropdown to previous value
@@ -5083,11 +5391,15 @@ function setupESP32Circuit() {
 
     // Create ESP32 (component id: 26)
     const esp32Figure = new ComponentFigure(wokwiComponentById[26]);
-    hackCable.editor.canvas.add(esp32Figure.setX(200).setY(100));
+    hackCable.editor.canvas.add(esp32Figure.setX(900).setY(600));
 
     // Create LED (component id: 1)
     const ledFigure = new ComponentFigure(wokwiComponentById[1]);
     hackCable.editor.canvas.add(ledFigure.setX(500).setY(200));
+
+    positionBoardForInitialViewport(esp32Figure, ({ x, y }) => {
+        ledFigure.setX(x + 300).setY(y + 100);
+    });
 
     // Wait for components to be fully rendered before wiring
     setTimeout(() => {
@@ -5141,11 +5453,15 @@ function setupCustomESP32Circuit() {
 
     // Create Custom ESP32 (component id: 27)
     const customESP32Figure = new ComponentFigure(wokwiComponentById[27]);
-    hackCable.editor.canvas.add(customESP32Figure.setX(200).setY(100));
+    hackCable.editor.canvas.add(customESP32Figure.setX(900).setY(600));
 
     // Create LED (component id: 1)
     const ledFigure = new ComponentFigure(wokwiComponentById[1]);
     hackCable.editor.canvas.add(ledFigure.setX(500).setY(200));
+
+    positionBoardForInitialViewport(customESP32Figure, ({ x, y }) => {
+        ledFigure.setX(x + 300).setY(y + 100);
+    });
 
     // Wait for components to be fully rendered before wiring
     setTimeout(() => {
@@ -5204,7 +5520,8 @@ function setupHandysenseCircuit(board: 'handysense' | 'handysense-real' | 'handy
     console.log(`Setting up ${boardLabel} board...`);
 
     const handysenseFigure = new ComponentFigure(wokwiComponentById[componentId]);
-    hackCable.editor.canvas.add(handysenseFigure.setX(200).setY(100));
+    hackCable.editor.canvas.add(handysenseFigure.setX(900).setY(600));
+    positionBoardForInitialViewport(handysenseFigure);
 
     console.log(`${boardLabel} board added to circuit.`);
 }
@@ -5901,7 +6218,7 @@ function setupHandysenseRealBfarmPhMistingCircuit() {
     hackCable.editor.canvas.clear();
 
     const boardFigure = new ComponentFigure(wokwiComponentById[51]);
-    hackCable.editor.canvas.add(boardFigure.setX(180).setY(40));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
 
     const phSensorFigure = new ComponentFigure(wokwiComponentById[35]);
     hackCable.editor.canvas.add(phSensorFigure.setX(500).setY(60));
@@ -5933,7 +6250,7 @@ function setupHandysenseRealBfarmSoilWateringCircuit() {
     hackCable.editor.canvas.clear();
 
     const boardFigure = new ComponentFigure(wokwiComponentById[51]);
-    hackCable.editor.canvas.add(boardFigure.setX(180).setY(40));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
 
     const soilSensorFigure = new ComponentFigure(wokwiComponentById[44]);
     hackCable.editor.canvas.add(soilSensorFigure.setX(40).setY(60));
@@ -5964,7 +6281,7 @@ function setupHandysenseRealBfarmSht31FanCircuit() {
     hackCable.editor.canvas.clear();
 
     const boardFigure = new ComponentFigure(wokwiComponentById[51]);
-    hackCable.editor.canvas.add(boardFigure.setX(180).setY(40));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
 
     const sht31Figure = new ComponentFigure(wokwiComponentById[41]);
     hackCable.editor.canvas.add(sht31Figure.setX(500).setY(60));
@@ -5997,7 +6314,7 @@ function setupPhMistingCircuit() {
 
     // Create Handysense Pro board (component id: 28)
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(200).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
 
     // Create pH Sensor (component id: 29)
     const phSensorFigure = new ComponentFigure(wokwiComponentById[29]);
@@ -6032,7 +6349,7 @@ function setupHumidityFanCircuit() {
     hackCable.editor.canvas.clear();
 
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(200).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
 
     const humiditySensorFigure = new ComponentFigure(wokwiComponentById[30]);
     hackCable.editor.canvas.add(humiditySensorFigure.setX(50).setY(120));
@@ -6065,7 +6382,7 @@ function setupPhFullControlCircuit() {
     hackCable.editor.canvas.clear();
 
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(250).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
 
     const phSensorFigure = new ComponentFigure(wokwiComponentById[29]);
     hackCable.editor.canvas.add(phSensorFigure.setX(50).setY(100));
@@ -6106,7 +6423,7 @@ function setupHumidityClimateControlCircuit() {
     hackCable.editor.canvas.clear();
 
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(250).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
 
     const humiditySensorFigure = new ComponentFigure(wokwiComponentById[30]);
     hackCable.editor.canvas.add(humiditySensorFigure.setX(50).setY(100));
@@ -6147,7 +6464,7 @@ function setupDualSensorMistingCircuit() {
     hackCable.editor.canvas.clear();
 
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(280).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
 
     const phSensorFigure = new ComponentFigure(wokwiComponentById[29]);
     hackCable.editor.canvas.add(phSensorFigure.setX(50).setY(80));
@@ -6188,7 +6505,7 @@ function setupDualSensorFanCircuit() {
     hackCable.editor.canvas.clear();
 
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(280).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
 
     const phSensorFigure = new ComponentFigure(wokwiComponentById[29]);
     hackCable.editor.canvas.add(phSensorFigure.setX(50).setY(80));
@@ -6230,7 +6547,7 @@ function setupRelayBlinkCircuit() {
 
     // HandySense Pro board (id: 28)
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(250).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
 
     // 4 Relay elements (id: 34) positioned around the board
     const relay1Figure = new ComponentFigure(wokwiComponentById[34]);
@@ -6279,7 +6596,7 @@ function setupHandySenseRelayLoadTestCircuit(useNormallyClosed: boolean) {
     hackCable.editor.canvas.clear();
 
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(180).setY(40));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
 
     const led1Figure = new ComponentFigure(wokwiComponentById[1]);
     hackCable.editor.canvas.add(led1Figure.setX(35).setY(235));
@@ -6324,7 +6641,7 @@ function setupMcpSmartControlCircuit() {
 
     // HandySense Pro board (id: 28)
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(250).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
 
     // LED on IO25 (MCP pin 0)
     const ledFigure = new ComponentFigure(wokwiComponentById[1]);
@@ -6350,7 +6667,7 @@ function setupMcpSmartControlCircuit() {
 function setupBfarmRs485Sensor(sensorId: number, label: string) {
     hackCable.editor.canvas.clear();
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(150).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
     const sensorFigure = new ComponentFigure(wokwiComponentById[sensorId]);
     hackCable.editor.canvas.add(sensorFigure.setX(470).setY(90));
     setTimeout(() => {
@@ -6401,7 +6718,7 @@ function setupBfarmSht31Circuit() {
     console.log("Setting up SHT31 I2C circuit...");
     hackCable.editor.canvas.clear();
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(150).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
     const sensorFigure = new ComponentFigure(wokwiComponentById[41]);
     hackCable.editor.canvas.add(sensorFigure.setX(470).setY(90));
     setTimeout(() => {
@@ -6422,7 +6739,7 @@ function setupBfarmBh1750Circuit() {
     console.log("Setting up BH1750 I2C circuit...");
     hackCable.editor.canvas.clear();
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(150).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
     const sensorFigure = new ComponentFigure(wokwiComponentById[42]);
     hackCable.editor.canvas.add(sensorFigure.setX(470).setY(90));
     setTimeout(() => {
@@ -6443,7 +6760,7 @@ function setupBfarmCurrent420maCircuit() {
     console.log("Setting up 4-20mA Current Loop circuit...");
     hackCable.editor.canvas.clear();
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(150).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
     const sensorFigure = new ComponentFigure(wokwiComponentById[43]);
     hackCable.editor.canvas.add(sensorFigure.setX(470).setY(90));
     setTimeout(() => {
@@ -6464,7 +6781,7 @@ function setupBfarmSoilMoistureCircuit() {
     console.log("Setting up Soil Moisture Sensor circuit...");
     hackCable.editor.canvas.clear();
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(200).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
     const sensorFigure = new ComponentFigure(wokwiComponentById[44]);
     hackCable.editor.canvas.add(sensorFigure.setX(50).setY(80));
     setTimeout(() => {
@@ -6484,7 +6801,7 @@ function setupBfarmRelayCircuit() {
     console.log("Setting up 4-Channel Relay circuit...");
     hackCable.editor.canvas.clear();
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(200).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
     const relayFigure = new ComponentFigure(wokwiComponentById[45]);
     hackCable.editor.canvas.add(relayFigure.setX(500).setY(80));
     setTimeout(() => {
@@ -6523,7 +6840,7 @@ function setupBfarmButtonCircuit() {
     console.log("Setting up 4-Channel Button circuit...");
     hackCable.editor.canvas.clear();
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(200).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
     const buttonFigure = new ComponentFigure(wokwiComponentById[49]);
     hackCable.editor.canvas.add(buttonFigure.setX(50).setY(80));
     setTimeout(() => {
@@ -6546,7 +6863,7 @@ function setupTestBfarmGreenhouseCircuit() {
     console.log("Setting up TEST BFARM Greenhouse circuit...");
     hackCable.editor.canvas.clear();
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(200).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
     const sht31Figure = new ComponentFigure(wokwiComponentById[41]);
     hackCable.editor.canvas.add(sht31Figure.setX(500).setY(50));
     const fanFigure = new ComponentFigure(wokwiComponentById[33]);
@@ -6572,7 +6889,7 @@ function setupTestBfarmPhMistAutoCircuit() {
     console.log("Setting up TEST BFARM pH Auto-Mist circuit...");
     hackCable.editor.canvas.clear();
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(200).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
     const phSensorFigure = new ComponentFigure(wokwiComponentById[35]);
     hackCable.editor.canvas.add(phSensorFigure.setX(500).setY(50));
     const mistPumpFigure = new ComponentFigure(wokwiComponentById[31]);
@@ -6598,7 +6915,7 @@ function setupTestBfarmSoilIrrigationCircuit() {
     console.log("Setting up TEST BFARM Soil Irrigation circuit...");
     hackCable.editor.canvas.clear();
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(200).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
     const soilFigure = new ComponentFigure(wokwiComponentById[44]);
     hackCable.editor.canvas.add(soilFigure.setX(50).setY(80));
     const pumpFigure = new ComponentFigure(wokwiComponentById[32]);
@@ -6623,7 +6940,7 @@ function setupTestBfarmLightNeopixelCircuit() {
     console.log("Setting up TEST BFARM Light NeoPixel circuit...");
     hackCable.editor.canvas.clear();
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(200).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
     const bh1750Figure = new ComponentFigure(wokwiComponentById[42]);
     hackCable.editor.canvas.add(bh1750Figure.setX(500).setY(50));
     const neopixelFigure = new ComponentFigure(wokwiComponentById[4]);
@@ -6649,7 +6966,7 @@ function setupTestBfarmWeatherWifiCircuit() {
     console.log("Setting up TEST BFARM Weather WiFi circuit...");
     hackCable.editor.canvas.clear();
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(150).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
     const weatherFigure = new ComponentFigure(wokwiComponentById[40]);
     hackCable.editor.canvas.add(weatherFigure.setX(470).setY(90));
     setTimeout(() => {
@@ -6674,7 +6991,7 @@ function setupNewBfarmSmartGreenhouseCircuit() {
     hackCable.editor.canvas.clear();
 
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(180).setY(40));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
     const sht31Figure = new ComponentFigure(wokwiComponentById[41]);
     hackCable.editor.canvas.add(sht31Figure.setX(480).setY(40));
     const bh1750Figure = new ComponentFigure(wokwiComponentById[42]);
@@ -6721,7 +7038,7 @@ function setupNewBfarmAwdAutomationCircuit() {
     hackCable.editor.canvas.clear();
 
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(200).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
     const soilFigure = new ComponentFigure(wokwiComponentById[44]);
     hackCable.editor.canvas.add(soilFigure.setX(40).setY(90));
     const pumpFigure = new ComponentFigure(wokwiComponentById[32]);
@@ -6759,7 +7076,7 @@ function setupNewBfarmFertigationLabCircuit() {
     hackCable.editor.canvas.clear();
 
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(160).setY(40));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
     const fertPhFigure = new ComponentFigure(wokwiComponentById[46]);
     hackCable.editor.canvas.add(fertPhFigure.setX(500).setY(40));
     const ecFigure = new ComponentFigure(wokwiComponentById[47]);
@@ -6798,7 +7115,7 @@ function setupNewBfarmWeatherStationSimCircuit() {
     hackCable.editor.canvas.clear();
 
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(150).setY(50));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
     const weatherFigure = new ComponentFigure(wokwiComponentById[40]);
     hackCable.editor.canvas.add(weatherFigure.setX(470).setY(90));
     const ledFigure = new ComponentFigure(wokwiComponentById[1]);
@@ -6826,7 +7143,7 @@ function setupNewBfarmHybridConnectivityCircuit() {
     hackCable.editor.canvas.clear();
 
     const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(180).setY(40));
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
     const buttonFigure = new ComponentFigure(wokwiComponentById[49]);
     hackCable.editor.canvas.add(buttonFigure.setX(20).setY(70));
     const relayFigure = new ComponentFigure(wokwiComponentById[45]);
@@ -6891,6 +7208,17 @@ window.addEventListener('message', (e: MessageEvent) => {
             const isHidden = controlBarElement.classList.contains('hidden');
             window.parent.postMessage({ source: 'hackcable', type: 'controlbar-state', hidden: isHidden }, '*');
         }
+    }
+    if (e.data.source === 'shell' && e.data.type === 'get-canvas-view-state') {
+        postCanvasViewState();
+    }
+    if (e.data.source === 'shell' && e.data.type === 'toggle-canvas-dark-mode') {
+        hackCable.editor.canvas.setDarkMode(!hackCable.editor.canvas.isDarkMode());
+        postCanvasViewState();
+    }
+    if (e.data.source === 'shell' && e.data.type === 'toggle-canvas-grid-visible') {
+        hackCable.editor.canvas.setGridVisible(!hackCable.editor.canvas.isGridVisible());
+        postCanvasViewState();
     }
 });
 

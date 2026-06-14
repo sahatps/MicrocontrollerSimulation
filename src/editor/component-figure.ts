@@ -97,12 +97,16 @@ export class ComponentFigure extends draw2d.shape.basic.Rectangle{
             event.canvas.overlayContainer.append(this.overlay)
 
             setTimeout(() => {
-                let svg = this.overlay.shadowRoot?.querySelector("svg")
-                this.overlayBaseWidth = unitToPx(svg.getAttribute('width'));
-                this.overlayBaseHeight = unitToPx(svg.getAttribute('height'));
-                this.setWidth(this.overlayBaseWidth)
-                this.setHeight(this.overlayBaseHeight)
-                css(this.overlay, {top: this.getY(), left: this.getX()});
+                const size = this.resolveOverlaySize();
+                this.overlayBaseWidth = size.width;
+                this.overlayBaseHeight = size.height;
+                this.setDimension(this.overlayBaseWidth, this.overlayBaseHeight)
+                css(this.overlay, {
+                    top: this.getY(),
+                    left: this.getX(),
+                    width: this.overlayBaseWidth,
+                    height: this.overlayBaseHeight
+                });
                 this.syncOverlayTransform();
                 this.refreshPortsAndConnections();
             })
@@ -145,9 +149,51 @@ export class ComponentFigure extends draw2d.shape.basic.Rectangle{
 
     public setDimension(w: any, h: any): any {
         const result = super.setDimension(w, h);
+        const width = Number(w);
+        const height = Number(h);
+        if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+            (this as any).width = width;
+            (this as any).height = height;
+            this.repaint?.();
+        }
         this.syncOverlayTransform();
         this.refreshPortsAndConnections();
         return result;
+    }
+
+    private resolveOverlaySize(): { width: number; height: number } {
+        const svg = this.overlay.shadowRoot?.querySelector("svg") as SVGSVGElement | null;
+        const renderedRect = svg?.getBoundingClientRect();
+        const overlayScale = this.getOverlayContainerScale();
+        const renderedWidth = renderedRect?.width && overlayScale.x > 0 ? renderedRect.width / overlayScale.x : 0;
+        const renderedHeight = renderedRect?.height && overlayScale.y > 0 ? renderedRect.height / overlayScale.y : 0;
+        const attrWidth = svg ? unitToPx(svg.getAttribute('width') || '0') : 0;
+        const attrHeight = svg ? unitToPx(svg.getAttribute('height') || '0') : 0;
+        const currentWidth = Number(this.getWidth?.() ?? 0);
+        const currentHeight = Number(this.getHeight?.() ?? 0);
+
+        return {
+            width: renderedWidth > 0 ? renderedWidth : attrWidth || currentWidth,
+            height: renderedHeight > 0 ? renderedHeight : attrHeight || currentHeight
+        };
+    }
+
+    private getOverlayContainerScale(): { x: number; y: number } {
+        const overlayContainer = this.overlay.parentElement;
+        if (!overlayContainer) {
+            return { x: 1, y: 1 };
+        }
+
+        const transform = getComputedStyle(overlayContainer).transform;
+        if (!transform || transform === "none") {
+            return { x: 1, y: 1 };
+        }
+
+        const matrix = new DOMMatrixReadOnly(transform);
+        return {
+            x: Math.hypot(matrix.a, matrix.b) || 1,
+            y: Math.hypot(matrix.c, matrix.d) || 1
+        };
     }
 
     private syncOverlayTransform(): void {

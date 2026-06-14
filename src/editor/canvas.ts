@@ -9,6 +9,12 @@ import {CustomESP32BoardElement} from "../components/custom-esp32-board";
 import {HandysenseProBoardElement} from "../components/handysense-pro-board";
 
 const DEFAULT_ZOOM = .6;
+const DARK_MODE_STORAGE_KEY = 'hackCable-canvas-dark-mode';
+const GRID_VISIBLE_STORAGE_KEY = 'hackCable-canvas-grid-visible';
+const MIN_CANVAS_WIDTH = 1800;
+const MIN_CANVAS_HEIGHT = 1200;
+const CANVAS_ORIGIN_OFFSET_X = 600;
+const CANVAS_ORIGIN_OFFSET_Y = 420;
 
 export class Canvas extends draw2d.Canvas{
 
@@ -18,9 +24,14 @@ export class Canvas extends draw2d.Canvas{
     private editorElement: HTMLElement | null = null;
     private canvasElement: HTMLElement | null = null;
     private isPanningPointerDown = false;
+    private darkMode = false;
+    private gridVisible = true;
 
     constructor(divId: string){
         super(divId);
+
+        this.editorElement = document.querySelector('.hackCable-editor') as HTMLElement | null;
+        this.canvasElement = document.getElementById(divId);
 
         // Overlay
         this.overlayContainer = document.querySelector('.hackCable-canvas-overlay-container');
@@ -28,9 +39,12 @@ export class Canvas extends draw2d.Canvas{
 
         // Use the editor container as scroll area so drag-panning works on the visible viewport.
         this.setScrollArea(
-            document.querySelector('.hackCable-editor') ||
+            this.editorElement ||
+            this.canvasElement ||
             document.querySelector('.hackCable-canvas')
         )
+
+        this.initializeViewPreferences();
 
         // Edit policies
         this.installEditPolicy(new draw2d.policy.canvas.PanningSelectionPolicy())
@@ -82,9 +96,57 @@ export class Canvas extends draw2d.Canvas{
 
 
     }
+    private getEditorElement(): HTMLElement | null {
+        if (!this.editorElement) {
+            this.editorElement = document.querySelector('.hackCable-editor') as HTMLElement | null;
+        }
+        return this.editorElement;
+    }
+
+    private safeReadPreference(key: string): string | null {
+        try {
+            return localStorage.getItem(key);
+        } catch (_error) {
+            return null;
+        }
+    }
+
+    private safeWritePreference(key: string, value: string): void {
+        try {
+            localStorage.setItem(key, value);
+        } catch (_error) {
+            // Ignore storage failures so canvas controls still work for this session.
+        }
+    }
+
+    private initializeViewPreferences(): void {
+        this.setDarkMode(this.safeReadPreference(DARK_MODE_STORAGE_KEY) === 'true', false);
+        this.setGridVisible(this.safeReadPreference(GRID_VISIBLE_STORAGE_KEY) !== 'false', false);
+    }
+
+    public setDarkMode(enabled: boolean, persist = true): void {
+        this.darkMode = enabled;
+        this.getEditorElement()?.classList.toggle('canvas-dark-mode', enabled);
+        if (persist) this.safeWritePreference(DARK_MODE_STORAGE_KEY, String(enabled));
+    }
+
+    public isDarkMode(): boolean {
+        return this.darkMode;
+    }
+
+    public setGridVisible(visible: boolean, persist = true): void {
+        this.gridVisible = visible;
+        this.getEditorElement()?.classList.toggle('canvas-grid-hidden', !visible);
+        if (persist) this.safeWritePreference(GRID_VISIBLE_STORAGE_KEY, String(visible));
+    }
+
+    public isGridVisible(): boolean {
+        return this.gridVisible;
+    }
+
     private setupPanInteraction(){
-        this.editorElement = document.querySelector('.hackCable-editor') as HTMLElement | null;
-        this.canvasElement = document.getElementById('hackCable-canvas');
+        this.getEditorElement();
+        this.canvasElement = this.canvasElement || document.getElementById('hackCable-canvas');
         if (!this.canvasElement) return;
 
         this.canvasElement.addEventListener('mousedown', (event: MouseEvent) => {
@@ -141,14 +203,16 @@ export class Canvas extends draw2d.Canvas{
         const updateCanvasDimensions = () => {
             const container = document.querySelector('.hackCable-editor') as HTMLElement;
             if (container) {
-                const width = Math.max(container.clientWidth, 800);
-                const height = Math.max(container.clientHeight, 600);
+                const width = Math.max(container.clientWidth, MIN_CANVAS_WIDTH);
+                const height = Math.max(container.clientHeight, MIN_CANVAS_HEIGHT);
 
                 // Update canvas element dimensions
                 const canvasElement = document.getElementById('hackCable-canvas');
                 if (canvasElement) {
                     canvasElement.style.width = width + 'px';
                     canvasElement.style.height = height + 'px';
+                    canvasElement.style.paddingLeft = CANVAS_ORIGIN_OFFSET_X + 'px';
+                    canvasElement.style.paddingTop = CANVAS_ORIGIN_OFFSET_Y + 'px';
                 }
             }
         };
@@ -168,19 +232,127 @@ export class Canvas extends draw2d.Canvas{
         css(this.overlayContainer, {transform: 'scale(' + 1/this.getZoom() + ')'})
     }
 
+    private getScrollHost(): HTMLElement | null {
+        const scrollArea: any = this.getScrollArea?.();
+        return scrollArea?.get ? scrollArea.get(0) as HTMLElement : null;
+    }
+
+    private getContentBounds(): { x: number; y: number; width: number; height: number } | null {
+        let minX = Number.POSITIVE_INFINITY;
+        let minY = Number.POSITIVE_INFINITY;
+        let maxX = Number.NEGATIVE_INFINITY;
+        let maxY = Number.NEGATIVE_INFINITY;
+        let hasBounds = false;
+
+        const includeBox = (item: any) => {
+            const box = item?.getBoundingBox?.();
+            if (!box) return;
+
+            const x = Number(box.x);
+            const y = Number(box.y);
+            const width = Number(box.w ?? box.width ?? 0);
+            const height = Number(box.h ?? box.height ?? 0);
+            if (![x, y, width, height].every(Number.isFinite)) return;
+
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x + width);
+            maxY = Math.max(maxY, y + height);
+            hasBounds = true;
+        };
+
+        this.getAllFigures().forEach((figure) => includeBox(figure));
+        this.getLines().each((_index: number, line: any) => includeBox(line));
+
+        if (!hasBounds) return null;
+        return {
+            x: minX,
+            y: minY,
+            width: Math.max(0, maxX - minX),
+            height: Math.max(0, maxY - minY),
+        };
+    }
+
+    private getPrimaryBoardCenter(): { x: number; y: number } | null {
+        const figures = this.getAllFigures();
+        for (const figure of figures) {
+            const el = figure.componentElement;
+            if (!el) continue;
+
+            const isBoard = el instanceof ArduinoUnoElement
+                || el instanceof ArduinoMegaElement
+                || el instanceof ArduinoNanoElement
+                || el instanceof ESP32DevkitV1Element
+                || el instanceof CustomESP32BoardElement
+                || el instanceof HandysenseProBoardElement;
+            if (!isBoard) continue;
+
+            const box = figure.getBoundingBox?.();
+            if (!box) continue;
+
+            const x = Number(box.x);
+            const y = Number(box.y);
+            const width = Number(box.w ?? box.width ?? 0);
+            const height = Number(box.h ?? box.height ?? 0);
+            if (![x, y, width, height].every(Number.isFinite)) continue;
+
+            return {
+                x: x + (width / 2),
+                y: y + (height / 2),
+            };
+        }
+        return null;
+    }
+
+    public centerViewportOnPoint(x: number, y: number) {
+        const host = this.getScrollHost();
+        if (!host) return;
+
+        const zoomFactor = 1 / this.getZoom();
+        const targetLeft = CANVAS_ORIGIN_OFFSET_X + (x * zoomFactor) - (host.clientWidth / 2);
+        const targetTop = CANVAS_ORIGIN_OFFSET_Y + (y * zoomFactor) - (host.clientHeight / 2);
+        const maxLeft = Math.max(0, host.scrollWidth - host.clientWidth);
+        const maxTop = Math.max(0, host.scrollHeight - host.clientHeight);
+
+        host.scrollLeft = Math.max(0, Math.min(maxLeft, targetLeft));
+        host.scrollTop = Math.max(0, Math.min(maxTop, targetTop));
+    }
+
+    public centerViewportOnContent(fallbackPoint: {x: number; y: number} = {x: 400, y: 250}) {
+        const bounds = this.getContentBounds();
+        if (!bounds) {
+            this.centerViewportOnPoint(fallbackPoint.x, fallbackPoint.y);
+            return;
+        }
+
+        this.centerViewportOnPoint(
+            bounds.x + (bounds.width / 2),
+            bounds.y + (bounds.height / 2)
+        );
+    }
+
+    public centerViewportOnPrimaryBoardOrContent(fallbackPoint: {x: number; y: number} = {x: 400, y: 250}) {
+        const boardCenter = this.getPrimaryBoardCenter();
+        if (boardCenter) {
+            this.centerViewportOnPoint(boardCenter.x, boardCenter.y);
+            return;
+        }
+
+        this.centerViewportOnContent(fallbackPoint);
+    }
+
     /**
      * Convert pointer coordinates to canvas coordinates using the active scroll host.
      * This keeps hit-testing accurate when the scroll area is the outer editor container.
      */
     public fromDocumentToCanvasCoordinate(x: any, y: any): any {
-        const scrollArea: any = this.getScrollArea?.();
-        const host = scrollArea?.get ? scrollArea.get(0) as HTMLElement : null;
+        const host = this.getScrollHost();
         if (!host) return super.fromDocumentToCanvasCoordinate(x, y);
 
         const rect = host.getBoundingClientRect();
         return new (draw2d as any).geo.Point(
-            (x - rect.left + host.scrollLeft) * this.getZoom(),
-            (y - rect.top + host.scrollTop) * this.getZoom()
+            (x - rect.left + host.scrollLeft - CANVAS_ORIGIN_OFFSET_X) * this.getZoom(),
+            (y - rect.top + host.scrollTop - CANVAS_ORIGIN_OFFSET_Y) * this.getZoom()
         );
     }
 
@@ -189,14 +361,13 @@ export class Canvas extends draw2d.Canvas{
      * This is used by wheel-zoom center calculations and must mirror the method above.
      */
     public fromCanvasToDocumentCoordinate(x: any, y: any): any {
-        const scrollArea: any = this.getScrollArea?.();
-        const host = scrollArea?.get ? scrollArea.get(0) as HTMLElement : null;
+        const host = this.getScrollHost();
         if (!host) return super.fromCanvasToDocumentCoordinate(x, y);
 
         const rect = host.getBoundingClientRect();
         return new (draw2d as any).geo.Point(
-            x * (1 / this.getZoom()) + rect.left - host.scrollLeft,
-            y * (1 / this.getZoom()) + rect.top - host.scrollTop
+            x * (1 / this.getZoom()) + rect.left - host.scrollLeft + CANVAS_ORIGIN_OFFSET_X,
+            y * (1 / this.getZoom()) + rect.top - host.scrollTop + CANVAS_ORIGIN_OFFSET_Y
         );
     }
 

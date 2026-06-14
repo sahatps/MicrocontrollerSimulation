@@ -1,7 +1,6 @@
 import { html, svg } from 'lit';
 import type { ElementPin } from '@wokwi/elements';
 import { HandysenseProBoardElement } from './handysense-pro-board';
-import { unitToPx } from '../utils/dom';
 
 const VCC_SIGNAL = [{ type: 'power', signal: 'VCC' }];
 const GND_SIGNAL = [{ type: 'power', signal: 'GND' }];
@@ -87,10 +86,10 @@ const HANDYSENSE_REAL_PIN_INFO: ElementPin[] = [
   ...terminalGroupHorizontal(['I2C2_SCL', 'I2C2_SDA', 'I2C2_GND', 'I2C2_VCC'], 90, 10.5),
   ...terminalGroupHorizontal(['I2C3_SCL', 'I2C3_SDA', 'I2C3_GND', 'I2C3_VCC'], 90, 43.9),
 
-  ...terminalGroupVertical(['A05_1_VCC', 'A05_1_SIG', 'A05_1_GND'], 9.8, 30.5),
-  ...terminalGroupVertical(['A05_2_VCC', 'A05_2_SIG', 'A05_2_GND'], 9.8, 59.2),
-  ...terminalGroupVertical(['A420_1_VCC', 'A420_1_SIG', 'A420_1_GND'], 9.8, 85.8),
-  ...terminalGroupVertical(['A420_2_VCC', 'A420_2_SIG', 'A420_2_GND'], 9.8, 113.8),
+  ...terminalGroupVertical(['A05_1_VCC', 'A05_1_GND', 'A05_1_SIG'], 9.8, 30.5),
+  ...terminalGroupVertical(['A05_2_VCC', 'A05_2_GND', 'A05_2_SIG'], 9.8, 59.2),
+  ...terminalGroupVertical(['A420_1_VCC', 'A420_1_GND', 'A420_1_SIG'], 9.8, 85.8),
+  ...terminalGroupVertical(['A420_2_VCC', 'A420_2_GND', 'A420_2_SIG'], 9.8, 113.8),
 
   ...terminalGroupHorizontal(['LEDS_0', 'LEDS_1', 'LEDS_2', 'LEDS_3', 'LED_VCC_A'], 132, 149.5),
   ...terminalGroupHorizontal(['LEDS_4', 'LEDS_5', 'LEDS_6', 'LEDS_7', 'LED_VCC_B'], 174, 149.5),
@@ -107,6 +106,46 @@ const HANDYSENSE_REAL_PIN_INFO: ElementPin[] = [
   ...terminalGroupHorizontal(['R3_COM', 'R3_NC', 'R3_NO'], 161.5, 270),
   ...terminalGroupHorizontal(['R4_COM', 'R4_NC', 'R4_NO'], 198.5, 270),
 ];
+
+const HANDYSENSE_REAL_PIN_LABELS: Partial<Record<string, string>> = {
+  // Display labels only. Pin names above stay unchanged for wiring and signals.
+  A05_1_VCC: '+5V',
+  A05_1_GND: 'GND',
+  A05_1_SIG: 'ANN',
+  A05_2_VCC: '+5V',
+  A05_2_GND: 'GND',
+  A05_2_SIG: 'ANN',
+  A420_1_VCC: 'VIN',
+  A420_1_GND: 'GND',
+  A420_1_SIG: 'ANN',
+  A420_2_VCC: 'VIN',
+  A420_2_GND: 'GND',
+  A420_2_SIG: 'ANN',
+  RS485_B: 'B    A',
+  RS485_A: 'A',
+  RS485_GND: 'GND',
+  RS485_24V: 'VIN',
+  I2C1_SCL: 'SDC',
+  I2C1_SDA: 'SDA',
+  I2C1_GND: 'GND',
+  I2C1_VCC: '+5V',
+  I2C2_SCL: 'SDC',
+  I2C2_SDA: 'SDA',
+  I2C2_GND: 'GND',
+  I2C2_VCC: '+5V',
+  I2C3_SCL: 'SDC',
+  I2C3_SDA: 'SDA',
+  I2C3_GND: 'GND',
+  I2C3_VCC: '+5V',
+  // RS485_B: 'B',
+  // RS485_A: 'A',
+  // RS485_GND: 'GND',
+  // RS485_24V: '+24V',
+};
+
+function pinDisplayLabel(name: string): string {
+  return HANDYSENSE_REAL_PIN_LABELS[name] ?? name;
+}
 
 type BoardFaceMode = 'photo' | 'svg';
 
@@ -165,10 +204,10 @@ function labelPos(pin: ElementPin): { anchor: PinLabelAnchor; x: number; y: numb
     rotation = -90;
   }
   if (pin.y < 18) {
-    y = pin.y + 10;
+    y = pin.y + 7.5;
     x = pin.x + (anchor === 'end' ? -0.8 : 0.8);
     orientation = 'vertical';
-    rotation = -90;
+    rotation = 90;
   } else if (pin.y > 262) {
     y = pin.y - 8;
     x = pin.x + (anchor === 'end' ? -1 : 1);
@@ -198,6 +237,43 @@ function pinLabelGroupKey(name: string): string {
     return `${parts[0]}_${parts[1]}`;
   }
   return parts[0];
+}
+
+function standaloneOverlayLabelBoxes() {
+  const boxes = [
+    { y: 28.2, label: 'ANN3' },
+    { y: 56.9, label: 'ANN2' },
+    { y: 83.5, label: 'ANN1' },
+    { y: 111.5, label: 'ANN0' },
+  ];
+  return boxes.map(({ y, label }) => {
+    const textX = 34.7;
+    const textY = y + 11.3;
+    return svg`
+      <g pointer-events="none" aria-hidden="true">
+        <rect
+          x="31.3"
+          y="${y}"
+          width="6.8"
+          height="22.6"
+          rx="1.4"
+          ry="1.4"
+          fill="#000"
+        />
+        <text
+          x="${textX}"
+          y="${textY}"
+          text-anchor="middle"
+          dominant-baseline="middle"
+          font-size="2.8"
+          font-family="Arial, sans-serif"
+          font-weight="700"
+          fill="#fff"
+          transform="rotate(90 ${textX} ${textY})"
+        >${label}</text>
+      </g>
+    `;
+  });
 }
 
 export class HandysenseRealBoardElement extends HandysenseProBoardElement {
@@ -493,11 +569,9 @@ export class HandysenseRealBoardElement extends HandysenseProBoardElement {
       return;
     }
 
-    const svgElement = this.shadowRoot?.querySelector('svg');
     const rect = this.getBoundingClientRect();
-    const boardWidth = svgElement ? unitToPx(svgElement.getAttribute('width') || '0') : rect.width;
     const top = rect.top - 28;
-    const left = rect.left + Math.max(boardWidth - this.faceToggleElement.offsetWidth, 0);
+    const left = rect.left + Math.max(rect.width - this.faceToggleElement.offsetWidth, 0);
 
     this.faceToggleElement.style.top = `${top}px`;
     this.faceToggleElement.style.left = `${left}px`;
@@ -579,8 +653,9 @@ export class HandysenseRealBoardElement extends HandysenseProBoardElement {
         })}
         ${(() => {
           const labels = HANDYSENSE_REAL_PIN_INFO.map((pin) => {
+          const displayLabel = pinDisplayLabel(pin.name);
           const placement = labelPos(pin);
-          const horizontalWidth = pinLabelWidth(pin.name);
+          const horizontalWidth = pinLabelWidth(displayLabel);
           const isVertical = placement.orientation === 'vertical';
           const rectWidth = isVertical ? PIN_LABEL_VERTICAL_WIDTH : horizontalWidth;
           const rectHeight = isVertical ? horizontalWidth : PIN_LABEL_HEIGHT;
@@ -598,7 +673,7 @@ export class HandysenseRealBoardElement extends HandysenseProBoardElement {
           const textTransform = isVertical
             ? `rotate(${placement.rotation} ${placement.x} ${placement.y})`
             : undefined;
-          return { pin, placement, rectX, rectY, rectWidth, rectHeight, textAnchor, textTransform };
+          return { pin, displayLabel, placement, rectX, rectY, rectWidth, rectHeight, textAnchor, textTransform };
           });
 
           const groupBounds = new Map<string, { minX: number; minY: number; maxX: number; maxY: number }>();
@@ -645,13 +720,14 @@ export class HandysenseRealBoardElement extends HandysenseProBoardElement {
               font-weight="700"
               fill="#fff"
               transform="${label.textTransform || ''}"
-            >${label.pin.name}</text>
+            >${label.displayLabel}</text>
           `);
 
           return svg`
             <g pointer-events="none" aria-hidden="true">
               ${groupBoxes}
               ${texts}
+              ${standaloneOverlayLabelBoxes()}
             </g>
           `;
         })()}

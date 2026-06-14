@@ -255,6 +255,7 @@
     scrollbar-width none
     -ms-overflow-style none
     position relative
+    transition background-color 0.2s ease
 
     &::-webkit-scrollbar
       width 0
@@ -264,12 +265,52 @@
       cursor grabbing
       user-select none
 
+    &.canvas-grid-hidden
+      #hackCable-canvas
+        .hackCable-canvas-overlay-container
+          background-image none
+
+    &.canvas-dark-mode
+      background-color #101722
+
+      #hackCable-canvas
+        background-color #101722
+
+        .hackCable-canvas-overlay-container
+          background-color #101722
+          background-image linear-gradient(to right, rgba(140, 166, 205, 0.18) 1px, transparent 1px), linear-gradient(rgba(140, 166, 205, 0.18) 1px, transparent 1px)
+
+      .hackCable-canvas-toolbar
+        .hackCable-toolbar-btn
+          background-color rgba(19, 28, 42, 0.92)
+          border-color rgba(149, 167, 196, 0.38)
+
+          svg
+            color #d9e5f7
+
+          &:hover:not(:disabled)
+            background-color rgba(36, 50, 72, 0.96)
+            border-color rgba(184, 204, 238, 0.55)
+
+        .hackCable-toolbar-bin
+          background-color rgba(32, 44, 63, 0.86)
+
+          svg
+            color #d9e5f7
+
+    &.canvas-dark-mode.canvas-grid-hidden
+      #hackCable-canvas
+        .hackCable-canvas-overlay-container
+          background-image none
+
     #hackCable-canvas
       width 100%
       min-width 800px
       height 100%
       min-height 600px
       position relative
+      background-color #ffffff
+      transition background-color 0.2s ease
 
       .hackCable-canvas-overlay-container
         height 100%
@@ -278,17 +319,76 @@
         overflow hidden
         transform-origin left top
 
-        background-color rgba(0, 0, 0, 0)
+        background-color #ffffff
         background-position 0 0, 0 0
         background-repeat repeat, repeat
         background-attachment scroll, scroll
-        background-image linear-gradient(to right, rgb(240, 240, 240) 1px, transparent 1px), linear-gradient(rgb(240, 240, 240) 1px, rgb(255, 255, 255) 1px)
+        background-image linear-gradient(to right, rgb(240, 240, 240) 1px, transparent 1px), linear-gradient(rgb(240, 240, 240) 1px, transparent 1px)
         background-clip border-box, border-box
         background-size 20px 20px
+        transition background-color 0.2s ease, background-image 0.2s ease
 
         *
           position absolute
           transform-origin left top
+
+    .hackCable-canvas-view-controls
+      position sticky
+      top 10px
+      left calc(100% - 94px)
+      z-index 1305
+      display flex
+      flex-direction row
+      gap 8px
+      width max-content
+      height 0
+      pointer-events none
+
+      .hackCable-canvas-view-btn
+        width 38px
+        height 38px
+        border 1px solid rgba(148, 163, 184, 0.45)
+        border-radius 12px
+        background-color rgba(255, 255, 255, 0.9)
+        color #334155
+        box-shadow 0 8px 24px rgba(15, 23, 42, 0.14)
+        display flex
+        align-items center
+        justify-content center
+        cursor pointer
+        pointer-events auto
+        transition background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease
+
+        &:hover
+          background-color #ffffff
+          border-color rgba(71, 85, 105, 0.55)
+          transform translateY(-1px)
+          box-shadow 0 10px 28px rgba(15, 23, 42, 0.18)
+
+        &:active
+          transform translateY(0)
+
+        &.active
+          background-color #1f6feb
+          border-color #1f6feb
+          color #ffffff
+
+    &.canvas-dark-mode
+      .hackCable-canvas-view-controls
+        .hackCable-canvas-view-btn
+          background-color rgba(15, 23, 42, 0.92)
+          border-color rgba(148, 163, 184, 0.32)
+          color #dbeafe
+          box-shadow 0 10px 28px rgba(0, 0, 0, 0.32)
+
+          &:hover
+            background-color rgba(30, 41, 59, 0.98)
+            border-color rgba(191, 219, 254, 0.52)
+
+          &.active
+            background-color #38bdf8
+            border-color #7dd3fc
+            color #082f49
 
     // Canvas Toolbar styles
     .hackCable-canvas-toolbar
