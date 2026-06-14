@@ -5314,7 +5314,7 @@ function normalizeBoardSelection(board: string | null | undefined): 'arduino' | 
         case 'handysense-pro':
             return board;
         default:
-            return 'handysense-pro';
+            return 'handysense-real';
     }
 }
 
@@ -5355,9 +5355,9 @@ if (boardSelect) {
         boardSelect.value = savedBoard;
         localStorage.setItem('hackCable-selectedBoard', savedBoard);
     } else {
-        // Set default to Handysense pro
-        boardSelect.value = 'handysense-pro';
-        localStorage.setItem('hackCable-selectedBoard', 'handysense-pro');
+        // Set default to Handysense real
+        boardSelect.value = 'handysense-real';
+        localStorage.setItem('hackCable-selectedBoard', 'handysense-real');
     }
 
     boardSelect.addEventListener('change', () => {

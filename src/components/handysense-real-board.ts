@@ -121,7 +121,7 @@ const HANDYSENSE_REAL_PIN_LABELS: Partial<Record<string, string>> = {
   A420_2_VCC: 'VIN',
   A420_2_GND: 'GND',
   A420_2_SIG: 'ANN',
-  RS485_B: 'B    A',
+  RS485_B: 'B',
   RS485_A: 'A',
   RS485_GND: 'GND',
   RS485_24V: 'VIN',
@@ -204,7 +204,7 @@ function labelPos(pin: ElementPin): { anchor: PinLabelAnchor; x: number; y: numb
     rotation = -90;
   }
   if (pin.y < 18) {
-    y = pin.y + 7.5;
+    y = pin.y + 10;
     x = pin.x + (anchor === 'end' ? -0.8 : 0.8);
     orientation = 'vertical';
     rotation = 90;
@@ -218,7 +218,10 @@ function labelPos(pin: ElementPin): { anchor: PinLabelAnchor; x: number; y: numb
   return { anchor, x, y, orientation, rotation };
 }
 
-function pinLabelWidth(name: string): number {
+function pinLabelWidth(name: string, isVertical = false): number {
+  if (isVertical) {
+    return Math.max(6.5, (name.length * 1.55) + 2);
+  }
   return Math.max(16, (name.length * 1.75) + (PIN_LABEL_PADDING_X * 2));
 }
 
@@ -274,6 +277,40 @@ function standaloneOverlayLabelBoxes() {
       </g>
     `;
   });
+}
+
+function standaloneConnectorNameBoxes() {
+  const boxes = [
+    { x: 20.1, y: 24.2, width: 31.2, label: 'RS485' },
+    { x: 52.5, y: 24.2, width: 31.2, label: 'I2C' },
+    { x: 87.4, y: 24.2, width: 31.2, label: 'I2C' },
+    { x: 87.4, y: 57.7, width: 31.2, label: 'I2C' },
+  ];
+  return boxes.map(({ x, y, width, label }) => svg`
+    <g pointer-events="none" aria-hidden="true">
+      <rect
+        x="${x}"
+        y="${y}"
+        width="${width}"
+        height="7"
+        rx="1.1"
+        ry="1.1"
+        fill="#fff2df"
+        stroke="#e0c39f"
+        stroke-width="0.35"
+      />
+      <text
+        x="${x + (width / 2)}"
+        y="${y + 3.65}"
+        text-anchor="middle"
+        dominant-baseline="middle"
+        font-size="3.3"
+        font-family="Arial, sans-serif"
+        font-weight="700"
+        fill="#0b5f9f"
+      >${label}</text>
+    </g>
+  `);
 }
 
 export class HandysenseRealBoardElement extends HandysenseProBoardElement {
@@ -655,8 +692,8 @@ export class HandysenseRealBoardElement extends HandysenseProBoardElement {
           const labels = HANDYSENSE_REAL_PIN_INFO.map((pin) => {
           const displayLabel = pinDisplayLabel(pin.name);
           const placement = labelPos(pin);
-          const horizontalWidth = pinLabelWidth(displayLabel);
           const isVertical = placement.orientation === 'vertical';
+          const horizontalWidth = pinLabelWidth(displayLabel, isVertical);
           const rectWidth = isVertical ? PIN_LABEL_VERTICAL_WIDTH : horizontalWidth;
           const rectHeight = isVertical ? horizontalWidth : PIN_LABEL_HEIGHT;
           const rectX = isVertical
@@ -695,7 +732,7 @@ export class HandysenseRealBoardElement extends HandysenseProBoardElement {
           }
 
           const groupBoxes = Array.from(groupBounds.values()).map((bounds) => {
-            const padding = 1.1;
+            const padding = 0.45;
             return svg`
               <rect
                 x="${bounds.minX - padding}"
@@ -728,6 +765,7 @@ export class HandysenseRealBoardElement extends HandysenseProBoardElement {
               ${groupBoxes}
               ${texts}
               ${standaloneOverlayLabelBoxes()}
+              ${standaloneConnectorNameBoxes()}
             </g>
           `;
         })()}
