@@ -65,12 +65,12 @@
     top 0
     left 0
     height 0
-    z-index 1202
+    z-index 800
     pointer-events none
 
   .hackCable-toggle-catalog-floating
     position absolute
-    top 0
+    top 8px
     left 8px
     width 36px
     height 36px
@@ -82,7 +82,7 @@
     display flex
     align-items center
     justify-content center
-    z-index 1200
+    z-index 810
     box-shadow 0 2px 8px rgba(0, 0, 0, 0.18)
     transition box-shadow 0.2s ease
     pointer-events auto
@@ -99,83 +99,169 @@
       color #f6fff1
 
     &.active
-      top 0
+      top 8px
       left 8px
-      z-index 1201
+      z-index 811
 
   .hackCable-catalog-bar
     position absolute
     top 0
     left 8px
-    right 8px
-    width auto
+    right auto
+    width 168px
     background-color rgba(255, 255, 255, 0.96)
     border 1px solid #d4dbe6
     border-radius 8px
     box-shadow 0 4px 14px rgba(0, 0, 0, 0.1)
     flex-shrink 0
     overflow hidden
-    max-height 126px
-    transition max-height 0.3s ease
-    z-index 900
+    max-height calc(100vh - 16px)
+    transition max-height 0.3s ease, opacity 0.2s ease
+    z-index 800
     pointer-events auto
 
     &.hidden
       max-height 0
       border none
+      opacity 0
+      pointer-events none
 
     .hackCable-catalog-bar-inner
       display flex
-      flex-direction row
-      align-items flex-start
-      height 126px
-      padding 4px 8px
+      flex-direction column
+      align-items stretch
+      height calc(100vh - 16px)
+      padding 52px 8px 8px
       gap 8px
       box-sizing border-box
 
   .hackCable-toggle-catalog-floating.active + .hackCable-catalog-bar
-    max-height 136px
+    max-height calc(100vh - 16px)
 
     .hackCable-catalog-bar-inner
-      height 136px
-      padding 10 8px 4px
+      height calc(100vh - 16px)
+      padding 52px 8px 8px
 
     .hackCable-catalog-actions
       display flex
-      align-items flex-start
+      flex-direction column
+      align-items stretch
       flex-shrink 0
-      padding-right 8px
-      border-right 1px solid #d6dbe3
+      gap 6px
+      padding-bottom 8px
+      border-bottom 1px solid #d6dbe3
 
-      select
-        padding 4px 6px
+      select,
+      .hackCable-catalog-search-wrap
+        padding 4px 24px 4px 6px
         background-color #ffffff
         border-radius 3px
         border 1px solid #c8cfda
+        box-sizing border-box
         color black
         font-size 12px
+        width 100%
+
+      select
         cursor pointer
-        width 120px
+        text-align right
+        text-align-last right
 
         option
           color black
           background-color white
+          text-align right
+
+      input
+        box-sizing border-box
+        border 0
+        color black
+        font-size 12px
+        outline none
+        padding 0 0 0 20px
+        width 100%
+
+      .hackCable-catalog-search-wrap
+        box-sizing border-box
+        padding 4px 6px
+        position relative
+
+      .hackCable-catalog-search-icon
+        border 2px solid #6b7280
+        border-radius 50%
+        box-sizing border-box
+        height 10px
+        left 8px
+        position absolute
+        top 7px
+        width 10px
+
+        &:after
+          background #6b7280
+          content ""
+          height 2px
+          left 7px
+          position absolute
+          top 7px
+          transform rotate(45deg)
+          transform-origin left center
+          width 6px
 
     .hackCable-catalog-list
       display flex
-      flex-direction row
-      align-items flex-start
+      flex-direction column
+      align-items stretch
       gap 8px
-      overflow-x auto
-      overflow-y hidden
+      overflow-x hidden
+      overflow-y auto
       flex 1
+      min-width 0
+      min-height 0
       scrollbar-width thin
-      padding-bottom 4px
+      padding-right 2px
 
+    .hackCable-catalog-scroll
+      align-self stretch
+      background #ffffff
+      border 1px solid #c8cfda
+      border-radius 5px
+      cursor pointer
+      flex 0 0 28px
+      position relative
+      transition background 0.18s ease, border-color 0.18s ease, opacity 0.18s ease
+
+      &:hover:not(:disabled)
+        background #f6f8fc
+        border-color #9aa7ba
+
+      &:disabled
+        cursor default
+        opacity 0.36
+
+      span
+        border-color #334155
+        border-style solid
+        border-width 0 2px 2px 0
+        display block
+        height 8px
+        left 50%
+        position absolute
+        top 50%
+        width 8px
+
+    .hackCable-catalog-scroll-left
+      span
+        transform translate(-50%, -35%) rotate(-135deg)
+
+    .hackCable-catalog-scroll-right
+      span
+        transform translate(-50%, -65%) rotate(45deg)
+
+    .hackCable-catalog-list
       .hackCable-catalog-section
         display flex
-        flex-direction row
-        align-items flex-start
+        flex-direction column
+        align-items stretch
         gap 8px
         flex-shrink 0
 
@@ -208,7 +294,7 @@
 
         .hackCable-catalog-section-content
           display flex
-          flex-direction row
+          flex-direction column
           gap 8px
 
       .hackCable-catalog-element
@@ -223,8 +309,9 @@
         cursor pointer
         transition background 0.2s ease, border-color 0.2s ease
         flex-shrink 0
-        width 80px
-        height 110px
+        width 100%
+        height 104px
+        box-sizing border-box
         overflow hidden
 
         &:hover
@@ -331,6 +418,11 @@
         *
           position absolute
           transform-origin left top
+
+        .hackCable-component-placement-preview
+          opacity .72
+          pointer-events none
+          filter drop-shadow(0 10px 18px rgba(15, 23, 42, 0.24))
 
     .hackCable-canvas-view-controls
       position sticky
@@ -491,14 +583,14 @@
 @media screen and (max-width: 768px)
   .hackCable-root
     .hackCable-catalog-bar
-      max-height 120px
+      width 150px
+      max-height calc(100vh - 16px)
 
       .hackCable-catalog-bar-inner
-        height 120px
+        height calc(100vh - 16px)
 
       .hackCable-catalog-list
         .hackCable-catalog-element
-          width 70px
           height 90px
 
     .hackCable-editor
@@ -513,10 +605,11 @@
 @media screen and (max-width: 480px)
   .hackCable-root
     .hackCable-catalog-bar
-      max-height 110px
+      width 140px
+      max-height calc(100vh - 16px)
 
       .hackCable-catalog-bar-inner
-        height 110px
+        height calc(100vh - 16px)
 
     .hackCable-editor
       height 65vh
@@ -568,3 +661,9 @@
       &.pressed
         background-color #f06d59
         border-color #ff8c7a
+
+.hackCable-is-placing-component
+  .hackCable-editor,
+  #hackCable-canvas,
+  .hackCable-canvas-overlay-container
+    cursor crosshair
