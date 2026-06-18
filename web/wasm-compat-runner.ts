@@ -435,6 +435,7 @@ export async function runWasmCompatibilityCorpus(
                     () => 25,
                     () => 60,
                     () => 500,
+                    () => 0,
                 );
                 shim.setAnalogPin(34, 1900);
                 shim.setAnalogPin(36, 2100);

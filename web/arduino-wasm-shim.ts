@@ -11,6 +11,7 @@ export type PinChangeCallback = (pin: number, value: boolean) => void;
 export type SerialCallback = (text: string) => void;
 export type ModbusReadCallback = (slaveId: number, regAddr: number) => number;
 export type SensorCallback = () => number;
+export type IndexedSensorCallback = (index: number) => number;
 
 type ScheduledPinEvent = {
     atMs: number;
@@ -37,6 +38,7 @@ export class ArduinoWasmShim {
         private onSht31Temp:   SensorCallback,
         private onSht31Hum:    SensorCallback,
         private onBh1750Lux:   SensorCallback,
+        private onSen55Value:  IndexedSensorCallback,
     ) {}
 
     /** Must be called after WebAssembly.instantiate() to enable string reads */
@@ -223,6 +225,7 @@ export class ArduinoWasmShim {
                 hackcable_sht31_temp():     number { return self.onSht31Temp(); },
                 hackcable_sht31_humidity(): number { return self.onSht31Hum(); },
                 hackcable_bh1750_lux():     number { return self.onBh1750Lux(); },
+                hackcable_sen55_value(index: number): number { return self.onSen55Value(index); },
                 hackcable_modbus_read(slaveId: number, regAddr: number): number {
                     return self.onModbusRead(slaveId, regAddr);
                 },

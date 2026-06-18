@@ -71,7 +71,17 @@ def relay_terminal(x: float, index: int) -> str:
         f"relay_terminal_{index + 1}",
         terminal_body(x, 254, 24, 16),
         relay_contact(x),
-        silk(x + 12, 251, "NO COM NC", 2.2, "middle"),
+        silk(x + 12, 251, "NC COM NO", 2.2, "middle"),
+    )
+
+
+def relay_name_box(x: float, label: str, width: float = 26, font_size: float = 3.1) -> str:
+    y = 251.7
+    group_id = f"relay_name_{label.lower().replace(' ', '_').replace('+', 'plus')}"
+    return group(
+        group_id,
+        f'<rect x="{x}" y="{y}" width="{width}" height="7" rx="1.1" ry="1.1" fill="#fff2df" stroke="#e0c39f" stroke-width="0.35" />',
+        silk(x + (width / 2), y + 3.65, label, font_size, "middle", "#0b5f9f", "bold"),
     )
 
 
@@ -248,21 +258,21 @@ def build_svg(variant: str = "handysense") -> str:
         ),
         group(
             "spi_block",
-            terminal_body(224, spi_block_y, 12, 40),
+            terminal_body(224, spi_block_y, 12, 48 if is_real else 40),
             silk(208, spi_label_y, "SPI", 3.6, "end", "#f3fbf3", "bold"),
-            silk(208, spi_text_y, "MOSI MISO CLK CS GND", 2.3, "end"),
+            silk(208, spi_text_y, "CLK MISO MOSI CS1 GND +3.3V" if is_real else "MOSI MISO CLK CS GND", 2.3, "end"),
         ),
         group(
             "button_block",
             terminal_body(224, button_block_y, 12, 40),
             silk(208, button_block_label_y, "Button", 3.6, "end", "#f3fbf3", "bold"),
-            silk(208, button_block_text_y, "B0 B1 B2 B3 GND", 2.3, "end"),
+            silk(208, button_block_text_y, "GND BUTTON3 BUTTON2 BUTTON1 BUTTON0", 2.3, "end"),
         ),
         group(
             "led_relay_block",
             terminal_body(224, led_relay_block_y, 12, 40),
             silk(208, led_relay_label_y, "LED Relay", 3.6, "end", "#f3fbf3", "bold"),
-            silk(208, led_relay_text_y, "R1 R2 R3 R4 +5V", 2.3, "end"),
+            silk(208, led_relay_text_y, "RELAY3 RELAY2 RELAY1 RELAY0 +5V RELAY", 2.3, "end"),
         ),
         group(
             "power_area",
@@ -288,6 +298,11 @@ def build_svg(variant: str = "handysense") -> str:
 
     for relay_index, relay_x in enumerate([98, 130, 162, 194]):
         parts.append(relay_block(relay_x, relay_index))
+
+    if is_real:
+        parts.append(relay_name_box(52.2, "VIN RELAY +5V"))
+        for relay_index, relay_x in enumerate([88.2, 123.2, 159.2, 196.2]):
+            parts.append(relay_name_box(relay_x, f"RELAY{relay_index}"))
 
     for relay_index, relay_x in enumerate([98, 130, 162, 194]):
         parts.append(relay_terminal(relay_x, relay_index))

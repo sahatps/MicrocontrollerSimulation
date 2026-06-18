@@ -30,7 +30,16 @@ type HandysenseRealMomentaryControlName = Exclude<HandysenseRealBoardControlName
 
 function connectorSignals(names: string[]): any[][] {
   return names.map((name) => {
-    if (name.endsWith('_VCC') || name.endsWith('_24V') || name === 'PWR24_VIN' || name === 'RELAY5V_VIN' || name === 'LEDR_VCC' || name === 'LED_VCC_A' || name === 'LED_VCC_B') {
+    if (
+      name.endsWith('_VCC')
+      || name.endsWith('_24V')
+      || name === 'PWR24_VIN'
+      || name === 'RELAY5V_VIN'
+      || name === 'LEDR_VCC'
+      || name === 'LED_VCC_A'
+      || name === 'LED_VCC_B'
+      || name === 'SPI_3V3'
+    ) {
       return VCC_SIGNAL;
     }
     if (name.endsWith('_GND') || name === 'PWR24_GND' || name === 'RELAY5V_GND') {
@@ -91,20 +100,20 @@ const HANDYSENSE_REAL_PIN_INFO: ElementPin[] = [
   ...terminalGroupVertical(['A420_1_VCC', 'A420_1_GND', 'A420_1_SIG'], 9.8, 85.8),
   ...terminalGroupVertical(['A420_2_VCC', 'A420_2_GND', 'A420_2_SIG'], 9.8, 113.8),
 
-  ...terminalGroupHorizontal(['LEDS_0', 'LEDS_1', 'LEDS_2', 'LEDS_3', 'LED_VCC_A'], 132, 149.5),
-  ...terminalGroupHorizontal(['LEDS_4', 'LEDS_5', 'LEDS_6', 'LEDS_7', 'LED_VCC_B'], 174, 149.5),
+  ...terminalGroupHorizontal(['LED_VCC_A', 'LEDS_0', 'LEDS_1', 'LEDS_2', 'LEDS_3'], 132, 149.5),
+  ...terminalGroupHorizontal(['LED_VCC_B', 'LEDS_4', 'LEDS_5', 'LEDS_6', 'LEDS_7'], 174, 149.5),
 
-  ...terminalGroupVertical(['SPI_MOSI', 'SPI_MISO', 'SPI_CLK', 'SPI_CS', 'SPI_GND'], 229.2, 91.5),
-  ...terminalGroupVertical(['BTN_0', 'BTN_1', 'BTN_2', 'BTN_3', 'BTN_GND'], 229.2, 136),
-  ...terminalGroupVertical(['LEDR_0', 'LEDR_1', 'LEDR_2', 'LEDR_3', 'LEDR_VCC'], 229.2, 177),
+  ...terminalGroupVertical(['SPI_CLK', 'SPI_MISO', 'SPI_MOSI', 'SPI_CS', 'SPI_GND', 'SPI_3V3'], 229.2, 91.5),
+  ...terminalGroupVertical(['BTN_GND', 'BTN_3', 'BTN_2', 'BTN_1', 'BTN_0'], 229.2, 136),
+  ...terminalGroupVertical(['LEDR_3', 'LEDR_2', 'LEDR_1', 'LEDR_0', 'LEDR_VCC'], 229.2, 177),
 
   ...terminalGroupVertical(['PWR24_VIN', 'PWR24_GND'], 9.6, 252),
   ...terminalGroupHorizontal(['RELAY5V_VIN', 'RELAY5V_GND'], 63.5, 270),
 
-  ...terminalGroupHorizontal(['R1_COM', 'R1_NC', 'R1_NO'], 90.5, 270),
-  ...terminalGroupHorizontal(['R2_COM', 'R2_NC', 'R2_NO'], 125.5, 270),
-  ...terminalGroupHorizontal(['R3_COM', 'R3_NC', 'R3_NO'], 161.5, 270),
-  ...terminalGroupHorizontal(['R4_COM', 'R4_NC', 'R4_NO'], 198.5, 270),
+  ...terminalGroupHorizontal(['R1_NC', 'R1_COM', 'R1_NO'], 90.5, 270),
+  ...terminalGroupHorizontal(['R2_NC', 'R2_COM', 'R2_NO'], 125.5, 270),
+  ...terminalGroupHorizontal(['R3_NC', 'R3_COM', 'R3_NO'], 161.5, 270),
+  ...terminalGroupHorizontal(['R4_NC', 'R4_COM', 'R4_NO'], 198.5, 270),
 ];
 
 const HANDYSENSE_REAL_PIN_LABELS: Partial<Record<string, string>> = {
@@ -137,6 +146,46 @@ const HANDYSENSE_REAL_PIN_LABELS: Partial<Record<string, string>> = {
   I2C3_SDA: 'SDA',
   I2C3_GND: 'GND',
   I2C3_VCC: '+5V',
+  LED_VCC_A: '+5V',
+  LEDS_0: 'LED0',
+  LEDS_1: 'LED1',
+  LEDS_2: 'LED2',
+  LEDS_3: 'LED3',
+  LED_VCC_B: '+5V',
+  LEDS_4: 'LED4',
+  LEDS_5: 'LED5',
+  LEDS_6: 'LED6',
+  LEDS_7: 'LED7',
+  SPI_CLK: 'CLK',
+  SPI_MISO: 'MISO',
+  SPI_MOSI: 'MOSI',
+  SPI_CS: 'CS1',
+  SPI_GND: 'GND',
+  SPI_3V3: '+3.3V',
+  BTN_GND: 'GND',
+  BTN_3: 'BUTTON3',
+  BTN_2: 'BUTTON2',
+  BTN_1: 'BUTTON1',
+  BTN_0: 'BUTTON0',
+  LEDR_3: 'RELAY3',
+  LEDR_2: 'RELAY2',
+  LEDR_1: 'RELAY1',
+  LEDR_0: 'RELAY0',
+  LEDR_VCC: '+5V RELAY',
+  RELAY5V_VIN: '+5V',
+  RELAY5V_GND: 'GND',
+  R1_NC: 'NC0',
+  R1_COM: 'COM0',
+  R1_NO: 'NO0',
+  R2_NC: 'NC1',
+  R2_COM: 'COM1',
+  R2_NO: 'NO1',
+  R3_NC: 'NC2',
+  R3_COM: 'COM2',
+  R3_NO: 'NO2',
+  R4_NC: 'NC3',
+  R4_COM: 'COM3',
+  R4_NO: 'NO3',
   // RS485_B: 'B',
   // RS485_A: 'A',
   // RS485_GND: 'GND',
@@ -305,6 +354,41 @@ function standaloneConnectorNameBoxes() {
         text-anchor="middle"
         dominant-baseline="middle"
         font-size="3.3"
+        font-family="Arial, sans-serif"
+        font-weight="700"
+        fill="#0b5f9f"
+      >${label}</text>
+    </g>
+  `);
+}
+
+function standaloneRelayNameBoxes() {
+  const boxes: Array<{ x: number; y: number; width: number; label: string; fontSize?: number }> = [
+    { x: 52.2, y: 251.7, width: 26, label: 'VIN RELAY +5V' },
+    { x: 88.2, y: 251.7, width: 26, label: 'RELAY0' },
+    { x: 123.2, y: 251.7, width: 26, label: 'RELAY1' },
+    { x: 159.2, y: 251.7, width: 26, label: 'RELAY2' },
+    { x: 196.2, y: 251.7, width: 26, label: 'RELAY3' },
+  ];
+  return boxes.map(({ x, y, width, label, fontSize = 3.1 }) => svg`
+    <g pointer-events="none" aria-hidden="true">
+      <rect
+        x="${x}"
+        y="${y}"
+        width="${width}"
+        height="7"
+        rx="1.1"
+        ry="1.1"
+        fill="#fff2df"
+        stroke="#e0c39f"
+        stroke-width="0.35"
+      />
+      <text
+        x="${x + (width / 2)}"
+        y="${y + 3.65}"
+        text-anchor="middle"
+        dominant-baseline="middle"
+        font-size="${fontSize}"
         font-family="Arial, sans-serif"
         font-weight="700"
         fill="#0b5f9f"
@@ -766,6 +850,7 @@ export class HandysenseRealBoardElement extends HandysenseProBoardElement {
               ${texts}
               ${standaloneOverlayLabelBoxes()}
               ${standaloneConnectorNameBoxes()}
+              ${standaloneRelayNameBoxes()}
             </g>
           `;
         })()}

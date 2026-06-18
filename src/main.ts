@@ -27,6 +27,13 @@ import {FertilizerPhSensorElement} from "./components/fertilizer-ph-sensor-eleme
 import {EcSensorElement} from "./components/ec-sensor-element";
 import {FertilizerTempSensorElement} from "./components/fertilizer-temp-sensor-element";
 import {FourChannelButtonElement} from "./components/four-channel-button-element";
+import {Bfarm7in1SoilMultireadElement} from "./components/bfarm-7in1-soil-multiread-element";
+import {BfarmAmmoniaRs485Element} from "./components/bfarm-ammonia-rs485-element";
+import {BfarmSoilTempMultireadRs485Element} from "./components/bfarm-soil-temp-multiread-rs485-element";
+import {BfarmSen55AirI2cElement} from "./components/bfarm-sen55-air-i2c-element";
+import {BfarmUltrasonicRs485Element} from "./components/bfarm-ultrasonic-rs485-element";
+import {BfarmTurbidityXm3318bRs485Element} from "./components/bfarm-turbidity-xm3318b-rs485-element";
+import {BfarmTurbidityXm8518Rs485Element} from "./components/bfarm-turbidity-xm8518-rs485-element";
 
 export {AVRRunner} from "./emulator/avr-runner";
 export {EmulatorManager} from './emulator/emulator-manager';
@@ -593,6 +600,13 @@ export class HackCable {
         WeatherSensorHtco2plxElement, CurrentLoop420mAElement,
         FertilizerPhSensorElement, EcSensorElement,
         FertilizerTempSensorElement, FourChannelButtonElement,
+        Bfarm7in1SoilMultireadElement,
+        BfarmAmmoniaRs485Element,
+        BfarmSoilTempMultireadRs485Element,
+        BfarmSen55AirI2cElement,
+        BfarmUltrasonicRs485Element,
+        BfarmTurbidityXm3318bRs485Element,
+        BfarmTurbidityXm8518Rs485Element,
     ];
 
     public activateSensorComponent(busType: string, pin1: number, pin2: number) {

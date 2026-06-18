@@ -6,6 +6,7 @@ const catalogFilterOptions = [
     { type: -1, label: "All", visible: true },
     { type: ComponentType.CUSTOM, label: "Actuator", visible: true },
     { type: ComponentType.BFARM, label: "Sensor", visible: true },
+    { type: ComponentType.BFARM_SENSOR, label: "BFarm Sensors", visible: true },
     { type: ComponentType.LED, label: "LED", visible: false },
     { type: ComponentType.MOTOR, label: "Moteur", visible: false },
     { type: ComponentType.TRANSMITTER, label: "Emmeteur", visible: false },
@@ -76,8 +77,14 @@ export class Catalog {
         return component.type == ComponentType.BFARM;
     }
 
+    private isBfarmPluginSensorComponent(component: ComponentElement) {
+        return component.type == ComponentType.BFARM_SENSOR;
+    }
+
     private isAllCatalogComponent(component: ComponentElement) {
-        return this.isActuatorComponent(component) || this.isSensorComponent(component);
+        return this.isActuatorComponent(component)
+            || this.isSensorComponent(component)
+            || this.isBfarmPluginSensorComponent(component);
     }
 
     build(){
@@ -265,6 +272,9 @@ export class Catalog {
             }
             if (filterType == ComponentType.BFARM) {
                 return this.isSensorComponent(e) && matchesSearch;
+            }
+            if (filterType == ComponentType.BFARM_SENSOR) {
+                return this.isBfarmPluginSensorComponent(e) && matchesSearch;
             }
             return false;
         });

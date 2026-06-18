@@ -150,6 +150,7 @@ extern "C" {
     float hackcable_sht31_temp();
     float hackcable_sht31_humidity();
     float hackcable_bh1750_lux();
+    float hackcable_sen55_value(int index);
     int   hackcable_modbus_read(int slaveId, int regAddr);
 }
 
@@ -302,6 +303,38 @@ public:
     void clearTransmitBuffer() {}
     uint8_t writeSingleRegister(uint16_t /*addr*/, uint16_t /*val*/) { return ModbusMaster::ku8MBSuccess; }
     uint8_t writeMultipleRegisters(uint16_t /*addr*/, uint16_t /*qty*/) { return ModbusMaster::ku8MBSuccess; }
+};
+`;
+
+export const SENSIRION_I2C_SEN5X_H = `
+#pragma once
+#include <Arduino.h>
+#include <Wire.h>
+
+class SensirionI2CSen5x {
+public:
+    void begin(_WireClass& /*wire*/) {}
+    uint16_t startMeasurement() { return 0; }
+    uint16_t readMeasuredValues(
+        float& pm1p0,
+        float& pm2p5,
+        float& pm4p0,
+        float& pm10p0,
+        float& ambientHumidity,
+        float& ambientTemperature,
+        float& vocIndex,
+        float& noxIndex
+    ) {
+        pm1p0 = hackcable_sen55_value(0);
+        pm2p5 = hackcable_sen55_value(1);
+        pm4p0 = hackcable_sen55_value(2);
+        pm10p0 = hackcable_sen55_value(3);
+        ambientHumidity = hackcable_sen55_value(4);
+        ambientTemperature = hackcable_sen55_value(5);
+        vocIndex = hackcable_sen55_value(6);
+        noxIndex = hackcable_sen55_value(7);
+        return 0;
+    }
 };
 `;
 
@@ -842,6 +875,7 @@ export function getArduinoHeaders(): Record<string, string> {
         'Wire.h':          WIRE_H,
         'SHT31.h':         SHT31_H,
         'BH1750.h':        BH1750_H,
+        'SensirionI2CSen5x.h': SENSIRION_I2C_SEN5X_H,
         'ModbusMaster.h':  MODBUS_MASTER_H,
         'Preferences.h':   PREFERENCES_H,
         'HandySense.h':    HANDYSENSE_H,

@@ -299,7 +299,7 @@ const HANDYSENSE_REAL_RUNTIME_INPUT_PINS: Record<Exclude<HandysenseRealBoardCont
 };
 
 type MockSource = 'text' | 'timeline';
-type SensorKey = 'humidity' | 'temperature' | 'ph' | 'lux' | 'soil' | 'co2' | 'pressure';
+type SensorKey = 'humidity' | 'temperature' | 'ph' | 'lux' | 'soil' | 'co2' | 'pressure' | 'ec' | 'nitrogen' | 'phosphorus' | 'potassium' | 'ammonia' | 'pm1' | 'pm25' | 'pm4' | 'pm10' | 'voc' | 'nox' | 'distance' | 'turbidity';
 type MockSegment = { startSec: number; endSec: number; value: number };
 type MockTimelineConfig = { durationSec: number; tracks: Record<SensorKey, MockSegment[]> };
 type GraphPoint = { tSec: number; value: number };
@@ -339,7 +339,7 @@ type SaveFileHandle = {
     }>;
 };
 
-const SENSOR_KEYS: SensorKey[] = ['humidity', 'temperature', 'ph', 'lux', 'soil', 'co2', 'pressure'];
+const SENSOR_KEYS: SensorKey[] = ['humidity', 'temperature', 'ph', 'lux', 'soil', 'co2', 'pressure', 'ec', 'nitrogen', 'phosphorus', 'potassium', 'ammonia', 'pm1', 'pm25', 'pm4', 'pm10', 'voc', 'nox', 'distance', 'turbidity'];
 const SENSOR_KEY_SET = new Set<SensorKey>(SENSOR_KEYS);
 const SENSOR_DEFAULT_RANGES: Record<SensorKey, SensorRange> = {
     humidity: { min: 0, max: 100 },
@@ -349,6 +349,19 @@ const SENSOR_DEFAULT_RANGES: Record<SensorKey, SensorRange> = {
     soil: { min: 0, max: 100 },
     co2: { min: 300, max: 2000 },
     pressure: { min: 900, max: 1100 },
+    ec: { min: 0, max: 5000 },
+    nitrogen: { min: 0, max: 2000 },
+    phosphorus: { min: 0, max: 2000 },
+    potassium: { min: 0, max: 2000 },
+    ammonia: { min: 0, max: 100 },
+    pm1: { min: 0, max: 500 },
+    pm25: { min: 0, max: 500 },
+    pm4: { min: 0, max: 500 },
+    pm10: { min: 0, max: 500 },
+    voc: { min: 0, max: 500 },
+    nox: { min: 0, max: 500 },
+    distance: { min: 0, max: 1000 },
+    turbidity: { min: 0, max: 4000 },
 };
 const SENSOR_LABEL_KEYS: Record<SensorKey, string> = {
     humidity: 'ui.mock.sensor.humidity',
@@ -358,6 +371,19 @@ const SENSOR_LABEL_KEYS: Record<SensorKey, string> = {
     soil: 'ui.mock.sensor.soil',
     co2: 'ui.mock.sensor.co2',
     pressure: 'ui.mock.sensor.pressure',
+    ec: 'ui.mock.sensor.ec',
+    nitrogen: 'ui.mock.sensor.nitrogen',
+    phosphorus: 'ui.mock.sensor.phosphorus',
+    potassium: 'ui.mock.sensor.potassium',
+    ammonia: 'ui.mock.sensor.ammonia',
+    pm1: 'ui.mock.sensor.pm1',
+    pm25: 'ui.mock.sensor.pm25',
+    pm4: 'ui.mock.sensor.pm4',
+    pm10: 'ui.mock.sensor.pm10',
+    voc: 'ui.mock.sensor.voc',
+    nox: 'ui.mock.sensor.nox',
+    distance: 'ui.mock.sensor.distance',
+    turbidity: 'ui.mock.sensor.turbidity',
 };
 const MOCK_SOURCE_STORAGE_KEY = 'hackCable-mock-source';
 const MOCK_TIMELINE_STORAGE_KEY = 'hackCable-mock-timeline';
@@ -748,6 +774,7 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                 () => readBridgeNumber('hackcable_sht31_temp', [], 25),
                 () => readBridgeNumber('hackcable_sht31_humidity', [], 60),
                 () => readBridgeNumber('hackcable_bh1750_lux', [], 500),
+                (index) => readBridgeNumber('hackcable_sen55_value', [index], 0),
             );
             activeClangShim = shim;
             WebAssembly.instantiate(lastClangResult, shim.buildImports())
@@ -2198,8 +2225,8 @@ function autoActivateSensorsFromCode(code: string) {
         const tx = txDef ? parseInt(txDef[1]) : 17;
         hackCable.activateSensorComponent('uart', tx, rx);
     }
-    // I2C sensors (SHT31, BH1750) on default ESP32 I2C pins (SDA=21, SCL=22)
-    if (/SHT31|BH1750/.test(code)) {
+    // I2C sensors on default ESP32 I2C pins (SDA=21, SCL=22)
+    if (/SHT31|BH1750|SensirionI2CSen5x|sen5x/.test(code)) {
         hackCable.activateSensorComponent('i2c', 21, 22);
     }
 }
@@ -2553,17 +2580,139 @@ function getMock(key: string, defaultVal: number): number {
     return value !== undefined ? value : defaultVal;
 }
 
+function getSelectedExampleKey(): string | null {
+    const examplesSelect = document.getElementById('code-examples') as HTMLSelectElement | null;
+    return examplesSelect?.value || localStorage.getItem(EXAMPLE_SELECTION_STORAGE_KEY);
+}
+
+function circuitHasComponent(componentId: number): boolean {
+    const figures = hackCable?.editor?.canvas?.getFigures?.();
+    if (!figures || typeof figures.each !== 'function') return false;
+
+    let found = false;
+    figures.each((_index: number, figure: any) => {
+        if (figure?.component?.id === componentId || figure?.componentId === componentId) {
+            found = true;
+        }
+    });
+    return found;
+}
+
+function getActiveModbusMockProfile(): 'bfarm-7in1-soil' | 'bfarm-ammonia-rs485' | 'bfarm-soil-temp-multiread-rs485' | 'bfarm-ultrasonic-rs485' | 'bfarm-turbidity-xm3318b-rs485' | 'bfarm-turbidity-xm8518-rs485' | 'default-weather' {
+    const selectedExample = getSelectedExampleKey();
+    if (selectedExample === 'handysense_real_bfarm_7in1_soil_multiread_test' || circuitHasComponent(52)) {
+        return 'bfarm-7in1-soil';
+    }
+    if (selectedExample === 'handysense_real_bfarm_ammonia_rs485_test' || circuitHasComponent(53)) {
+        return 'bfarm-ammonia-rs485';
+    }
+    if (selectedExample === 'handysense_real_bfarm_soil_temp_multiread_rs485_test' || circuitHasComponent(54)) {
+        return 'bfarm-soil-temp-multiread-rs485';
+    }
+    if (selectedExample === 'handysense_real_bfarm_ultrasonic_rs485_test' || circuitHasComponent(56)) {
+        return 'bfarm-ultrasonic-rs485';
+    }
+    if (selectedExample === 'handysense_real_bfarm_turbidity_xm8518_rs485_test' || circuitHasComponent(58)) {
+        return 'bfarm-turbidity-xm8518-rs485';
+    }
+    if (selectedExample === 'handysense_real_bfarm_turbidity_xm3318b_rs485_test' || circuitHasComponent(57)) {
+        return 'bfarm-turbidity-xm3318b-rs485';
+    }
+    return 'default-weather';
+}
+
+function getScaledMockRegisterValue(key: string, defaultVal: number, scale = 1): number {
+    return Math.round(getMock(key, defaultVal) * scale);
+}
+
+function getScaledMockRegisterValueFromAliases(keys: string[], defaultVal: number, scale = 1): number {
+    if (activeMockSource === 'timeline') {
+        return getScaledMockRegisterValue(keys[keys.length - 1], defaultVal, scale);
+    }
+
+    const values = parseMockValues();
+    for (const key of keys) {
+        const value = values[key];
+        if (value !== undefined) return Math.round(value * scale);
+    }
+    return Math.round(defaultVal * scale);
+}
+
 // Sensor data bridges for Clang/LLVM ESP32 examples
 (window as any).hackcable_modbus_read = (_slaveId: number, regAddr: number): number => {
-    const weatherKeys: Record<number, [string, number]> = {
-        0: ['temperature', 25.0], 1: ['humidity', 60.0], 2: ['co2', 400.0], 3: ['pressure', 1013.0]
+    if (getActiveModbusMockProfile() === 'bfarm-7in1-soil') {
+        const soil7in1Registers: Record<number, number> = {
+            0: getScaledMockRegisterValue('soil', 50.0, 10),
+            1: getScaledMockRegisterValue('temperature', 25.0, 10),
+            2: getScaledMockRegisterValue('ec', 1200.0),
+            3: getScaledMockRegisterValue('ph', 7.0, 10),
+            4: getScaledMockRegisterValue('nitrogen', 120.0),
+            5: getScaledMockRegisterValue('phosphorus', 60.0),
+            6: getScaledMockRegisterValue('potassium', 180.0),
+        };
+        if (regAddr in soil7in1Registers) return soil7in1Registers[regAddr];
+        return 0;
+    }
+
+    if (getActiveModbusMockProfile() === 'bfarm-ammonia-rs485') {
+        const ammoniaRegisters: Record<number, number> = {
+            0: getScaledMockRegisterValue('ammonia', 2.5, 100),
+            1: getScaledMockRegisterValue('ph', 7.0, 100),
+            2: getScaledMockRegisterValue('temperature', 25.0, 10),
+        };
+        if (regAddr in ammoniaRegisters) return ammoniaRegisters[regAddr];
+        return 0;
+    }
+
+    if (getActiveModbusMockProfile() === 'bfarm-soil-temp-multiread-rs485') {
+        const soilTempRegisters: Record<number, number> = {
+            0: getScaledMockRegisterValueFromAliases(['soil_moisture', 'soil'], 50.0, 10),
+            1: getScaledMockRegisterValueFromAliases(['soil_temp', 'temperature'], 25.0, 10),
+        };
+        if (regAddr in soilTempRegisters) return soilTempRegisters[regAddr];
+        return 0;
+    }
+
+    if (getActiveModbusMockProfile() === 'bfarm-ultrasonic-rs485') {
+        if (regAddr === 256) return getScaledMockRegisterValue('distance', 150.0, 10);
+        return 0;
+    }
+
+    if (getActiveModbusMockProfile() === 'bfarm-turbidity-xm3318b-rs485') {
+        if (regAddr === 0) return getScaledMockRegisterValue('turbidity', 250.0);
+        return 0;
+    }
+
+    if (getActiveModbusMockProfile() === 'bfarm-turbidity-xm8518-rs485') {
+        if (regAddr === 0) return getScaledMockRegisterValue('turbidity', 250.0);
+        return 0;
+    }
+
+    const weatherRegisters: Record<number, number> = {
+        0: getScaledMockRegisterValue('temperature', 25.0),
+        1: getScaledMockRegisterValue('humidity', 60.0),
+        2: getScaledMockRegisterValue('co2', 400.0),
+        3: getScaledMockRegisterValue('pressure', 1013.0),
     };
-    if (weatherKeys[regAddr]) return getMock(weatherKeys[regAddr][0], weatherKeys[regAddr][1]);
+    if (regAddr in weatherRegisters) return weatherRegisters[regAddr];
     return getMock('ph', 7.0);
 };
 (window as any).hackcable_sht31_temp = (): number => getMock('temperature', 25.0);
 (window as any).hackcable_sht31_humidity = (): number => getMock('humidity', 60.0);
 (window as any).hackcable_bh1750_lux = (): number => getMock('lux', 500.0);
+(window as any).hackcable_sen55_value = (index: number): number => {
+    const values = [
+        getMock('pm1', 8.0),
+        getMock('pm25', 12.0),
+        getMock('pm4', 15.0),
+        getMock('pm10', 20.0),
+        getMock('humidity', 60.0),
+        getMock('temperature', 25.0),
+        getMock('voc', 100.0),
+        getMock('nox', 10.0),
+    ];
+    return values[index] ?? 0;
+};
 
 async function cleanupWasmInstance() {
     delete (window as any).HackCableModule;
@@ -3809,6 +3958,342 @@ void loop() {
   Serial.print(humidityRh, 1);
   Serial.print(",fan=");
   Serial.println(fanOn ? 1 : 0);
+  delay(1000);
+}`,
+
+    handysense_real_bfarm_7in1_soil_multiread_test: `// Handysense real - 7in1Soil MultiRead Test
+// Sensor wiring:
+// VCC -> RS485_24V, GND -> RS485_GND, A+ -> RS485_A (TX2/GPIO17), B- -> RS485_B (RX2/GPIO16)
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+
+const int RXD = 16;
+const int TXD = 17;
+
+ModbusMaster rs485_npk;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  rs485_npk.begin(1, Serial2);
+
+  Serial.println("Handysense real 7in1Soil MultiRead test ready");
+}
+
+void loop() {
+  uint8_t result = rs485_npk.readHoldingRegisters(0, 10);
+
+  float moisture = 0.0f;
+  float temperature = 0.0f;
+  float ec = 0.0f;
+  float ph = 0.0f;
+  float nitrogen = 0.0f;
+  float phosphorus = 0.0f;
+  float potassium = 0.0f;
+
+  if (result == ModbusMaster::ku8MBSuccess) {
+    moisture = rs485_npk.getResponseBuffer(0) / 10.0f;
+    temperature = rs485_npk.getResponseBuffer(1) / 10.0f;
+    ec = rs485_npk.getResponseBuffer(2);
+    ph = rs485_npk.getResponseBuffer(3) / 10.0f;
+    nitrogen = rs485_npk.getResponseBuffer(4);
+    phosphorus = rs485_npk.getResponseBuffer(5);
+    potassium = rs485_npk.getResponseBuffer(6);
+  }
+
+  Serial.print("moisture=");
+  Serial.print(moisture, 1);
+  Serial.print(",temp=");
+  Serial.print(temperature, 1);
+  Serial.print(",ec=");
+  Serial.print(ec, 0);
+  Serial.print(",ph=");
+  Serial.print(ph, 1);
+  Serial.print(",n=");
+  Serial.print(nitrogen, 0);
+  Serial.print(",p=");
+  Serial.print(phosphorus, 0);
+  Serial.print(",k=");
+  Serial.println(potassium, 0);
+  delay(1000);
+}`,
+
+    handysense_real_bfarm_ammonia_rs485_test: `// Handysense real - Ammonia Sensor (RS485) Test
+// Sensor wiring:
+// VCC -> RS485_24V, GND -> RS485_GND, A+ -> RS485_A (TX2/GPIO17), B- -> RS485_B (RX2/GPIO16)
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+
+const int RXD = 16;
+const int TXD = 17;
+
+ModbusMaster ANS_rs485;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  ANS_rs485.begin(1, Serial2);
+
+  Serial.println("Handysense real Ammonia RS485 test ready");
+}
+
+void loop() {
+  uint8_t result_ANSrs485 = ANS_rs485.readHoldingRegisters(0, 3);
+
+  float ammonia = 0.0f;
+  float ph = 0.0f;
+  float temperature = 0.0f;
+
+  if (result_ANSrs485 == ModbusMaster::ku8MBSuccess) {
+    ammonia = ANS_rs485.getResponseBuffer(0) / 100.0f;
+    ph = ANS_rs485.getResponseBuffer(1) / 100.0f;
+    temperature = ANS_rs485.getResponseBuffer(2) / 10.0f;
+  }
+
+  Serial.print("ammonia=");
+  Serial.print(ammonia, 2);
+  Serial.print(",ph=");
+  Serial.print(ph, 2);
+  Serial.print(",temp=");
+  Serial.println(temperature, 1);
+  delay(1000);
+}`,
+
+    handysense_real_bfarm_soil_temp_multiread_rs485_test: `// Handysense real - Soil Temp/Moisture Sensor (RS485) Test
+// Sensor wiring:
+// VCC -> RS485_24V, GND -> RS485_GND, A+ -> RS485_A (TX2/GPIO17), B- -> RS485_B (RX2/GPIO16)
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+
+const int RXD = 16;
+const int TXD = 17;
+
+ModbusMaster soilt_rs485;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  soilt_rs485.begin(1, Serial2);
+
+  Serial.println("Handysense real SoilTemp MultiRead RS485 test ready");
+}
+
+void loop() {
+  uint8_t result = soilt_rs485.readHoldingRegisters(0, 2);
+
+  float soilMoisture = 0.0f;
+  float soilTemperature = 0.0f;
+
+  if (result == ModbusMaster::ku8MBSuccess) {
+    soilMoisture = soilt_rs485.getResponseBuffer(0) / 10.0f;
+    soilTemperature = soilt_rs485.getResponseBuffer(1) / 10.0f;
+  }
+
+  Serial.print("soil_moisture=");
+  Serial.print(soilMoisture, 1);
+  Serial.print(",soil_temp=");
+  Serial.println(soilTemperature, 1);
+  delay(1000);
+}`,
+
+    handysense_real_bfarm_sen55_air_i2c_test: `// Handysense real - SEN55 Air Sensor (I2C) Test
+// Sensor wiring:
+// VCC -> I2C1_VCC, GND -> I2C1_GND, SDA -> I2C1_SDA (GPIO21), SCL -> I2C1_SCL (GPIO22)
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <SensirionI2CSen5x.h>
+
+SensirionI2CSen5x sen5x;
+float pm1p0, pm2p5, pm4p0, pm10p0;
+float ambientHumidity, ambientTemperature, vocIndex, noxIndex;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  sen5x.begin(Wire);
+  sen5x.startMeasurement();
+  Serial.println("Handysense real SEN55 I2C test ready");
+}
+
+void loop() {
+  uint16_t sen55 = sen5x.readMeasuredValues(
+    pm1p0, pm2p5, pm4p0, pm10p0,
+    ambientHumidity, ambientTemperature, vocIndex, noxIndex
+  );
+
+  Serial.print("status=");
+  Serial.print((int)sen55);
+  Serial.print(",pm1=");
+  Serial.print(pm1p0, 1);
+  Serial.print(",pm25=");
+  Serial.print(pm2p5, 1);
+  Serial.print(",pm4=");
+  Serial.print(pm4p0, 1);
+  Serial.print(",pm10=");
+  Serial.print(pm10p0, 1);
+  Serial.print(",humidity=");
+  Serial.print(ambientHumidity, 1);
+  Serial.print(",temp=");
+  Serial.print(ambientTemperature, 1);
+  Serial.print(",voc=");
+  Serial.print(vocIndex, 1);
+  Serial.print(",nox=");
+  Serial.println(noxIndex, 1);
+  delay(1000);
+}`,
+
+    handysense_real_bfarm_ultrasonic_rs485_test: `// Handysense real - Ultrasonic Sensor (RS485) Test
+// Sensor wiring:
+// VCC -> RS485_24V, GND -> RS485_GND, A+ -> RS485_A (TX2/GPIO17), B- -> RS485_B (RX2/GPIO16)
+// The plugin generator passes register 256 to getResponseBuffer(), but that API
+// expects a response-buffer index. Index 0 contains Modbus register 256 here.
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+
+const int RXD = 16;
+const int TXD = 17;
+
+ModbusMaster Ultrars485;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  Ultrars485.begin(1, Serial2);
+
+  Serial.println("Handysense real Ultrasonic RS485 test ready");
+}
+
+void loop() {
+  uint8_t result = Ultrars485.readHoldingRegisters(256, 2);
+  float distance = 0.0f;
+
+  if (result == ModbusMaster::ku8MBSuccess) {
+    distance = Ultrars485.getResponseBuffer(0) / 10.0f;
+  }
+
+  Serial.print("distance=");
+  Serial.print(distance, 1);
+  Serial.println(" cm");
+  delay(1000);
+}`,
+
+    handysense_real_bfarm_turbidity_xm3318b_rs485_test: `// Handysense real - Turbidity Sensor XM3318B (RS485) Test
+// Sensor wiring:
+// VCC -> RS485_24V, GND -> RS485_GND, A+ -> RS485_A (TX2/GPIO17), B- -> RS485_B (RX2/GPIO16)
+// The plugin returns the raw value from holding register 0 without a scale conversion.
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+
+const int RXD = 16;
+const int TXD = 17;
+
+ModbusMaster Turbidity_XM3318B_Rs485;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  Turbidity_XM3318B_Rs485.begin(1, Serial2);
+
+  Serial.println("Handysense real Turbidity XM3318B RS485 test ready");
+}
+
+void loop() {
+  uint8_t result = Turbidity_XM3318B_Rs485.readHoldingRegisters(0, 1);
+  uint16_t turbidityRaw = 0;
+
+  if (result == ModbusMaster::ku8MBSuccess) {
+    turbidityRaw = Turbidity_XM3318B_Rs485.getResponseBuffer(0);
+  }
+
+  Serial.print("turbidity_raw=");
+  Serial.println((int)turbidityRaw);
+  delay(1000);
+}`,
+
+    handysense_real_bfarm_turbidity_xm8518_rs485_test: `// Handysense real - Turbidity Sensor XM8518 (RS485) Test
+// Sensor wiring:
+// VCC -> RS485_24V, GND -> RS485_GND, A+ -> RS485_A (TX2/GPIO17), B- -> RS485_B (RX2/GPIO16)
+// The plugin returns the raw value from holding register 0 without a scale conversion.
+// The plugin generator has an XM3318 object-name typo; this corrected example uses XM8518 consistently.
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+
+const int RXD = 16;
+const int TXD = 17;
+
+ModbusMaster Turbidity_XM8518_Rs485;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  Turbidity_XM8518_Rs485.begin(1, Serial2);
+
+  Serial.println("Handysense real Turbidity XM8518 RS485 test ready");
+}
+
+void loop() {
+  uint8_t result = Turbidity_XM8518_Rs485.readHoldingRegisters(0, 1);
+  uint16_t turbidityRaw = 0;
+
+  if (result == ModbusMaster::ku8MBSuccess) {
+    turbidityRaw = Turbidity_XM8518_Rs485.getResponseBuffer(0);
+  }
+
+  Serial.print("turbidity_raw=");
+  Serial.println((int)turbidityRaw);
   delay(1000);
 }`,
 
@@ -5208,6 +5693,27 @@ if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
                 case 'handysense_real_bfarm_sht31_fan':
                     setupHandysenseRealBfarmSht31FanCircuit();
                     break;
+                case 'handysense_real_bfarm_7in1_soil_multiread_test':
+                    setupHandysenseRealBfarm7in1SoilMultireadTestCircuit();
+                    break;
+                case 'handysense_real_bfarm_ammonia_rs485_test':
+                    setupHandysenseRealBfarmAmmoniaRs485TestCircuit();
+                    break;
+                case 'handysense_real_bfarm_soil_temp_multiread_rs485_test':
+                    setupHandysenseRealBfarmSoilTempMultireadRs485TestCircuit();
+                    break;
+                case 'handysense_real_bfarm_sen55_air_i2c_test':
+                    setupHandysenseRealBfarmSen55AirI2cTestCircuit();
+                    break;
+                case 'handysense_real_bfarm_ultrasonic_rs485_test':
+                    setupHandysenseRealBfarmUltrasonicRs485TestCircuit();
+                    break;
+                case 'handysense_real_bfarm_turbidity_xm3318b_rs485_test':
+                    setupHandysenseRealBfarmTurbidityXm3318bRs485TestCircuit();
+                    break;
+                case 'handysense_real_bfarm_turbidity_xm8518_rs485_test':
+                    setupHandysenseRealBfarmTurbidityXm8518Rs485TestCircuit();
+                    break;
                 case 'mcpSmartControl':
                     setupMcpSmartControlCircuit();
                     break;
@@ -6303,6 +6809,181 @@ function setupHandysenseRealBfarmSht31FanCircuit() {
             console.log("Handysense real BFARM SHT31 + Fan setup complete!");
         } catch (error) {
             console.error("Error during Handysense real BFARM SHT31 + Fan wiring:", error);
+        }
+    }, 500);
+}
+
+function setupHandysenseRealBfarm7in1SoilMultireadTestCircuit() {
+    console.log("Setting up Handysense real 7in1Soil MultiRead test circuit...");
+    selectBoardForExample('handysense-real');
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[51]);
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
+
+    const soil7in1Figure = new ComponentFigure(wokwiComponentById[52]);
+    hackCable.editor.canvas.add(soil7in1Figure.setX(500).setY(60));
+
+    setTimeout(() => {
+        try {
+            connectPorts(soil7in1Figure, 'VCC', boardFigure, 'RS485_24V');
+            connectPorts(soil7in1Figure, 'GND', boardFigure, 'RS485_GND');
+            connectPorts(soil7in1Figure, 'A+', boardFigure, 'RS485_A');
+            connectPorts(soil7in1Figure, 'B-', boardFigure, 'RS485_B');
+
+            console.log("Handysense real 7in1Soil MultiRead test setup complete!");
+        } catch (error) {
+            console.error("Error during Handysense real 7in1Soil MultiRead test wiring:", error);
+        }
+    }, 500);
+}
+
+function setupHandysenseRealBfarmAmmoniaRs485TestCircuit() {
+    console.log("Setting up Handysense real Ammonia RS485 test circuit...");
+    selectBoardForExample('handysense-real');
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[51]);
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
+
+    const ammoniaFigure = new ComponentFigure(wokwiComponentById[53]);
+    hackCable.editor.canvas.add(ammoniaFigure.setX(500).setY(60));
+
+    setTimeout(() => {
+        try {
+            connectPorts(ammoniaFigure, 'VCC', boardFigure, 'RS485_24V');
+            connectPorts(ammoniaFigure, 'GND', boardFigure, 'RS485_GND');
+            connectPorts(ammoniaFigure, 'A+', boardFigure, 'RS485_A');
+            connectPorts(ammoniaFigure, 'B-', boardFigure, 'RS485_B');
+
+            console.log("Handysense real Ammonia RS485 test setup complete!");
+        } catch (error) {
+            console.error("Error during Handysense real Ammonia RS485 test wiring:", error);
+        }
+    }, 500);
+}
+
+function setupHandysenseRealBfarmSoilTempMultireadRs485TestCircuit() {
+    console.log("Setting up Handysense real SoilTemp MultiRead RS485 test circuit...");
+    selectBoardForExample('handysense-real');
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[51]);
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
+
+    const soilTempFigure = new ComponentFigure(wokwiComponentById[54]);
+    hackCable.editor.canvas.add(soilTempFigure.setX(500).setY(60));
+
+    setTimeout(() => {
+        try {
+            connectPorts(soilTempFigure, 'VCC', boardFigure, 'RS485_24V');
+            connectPorts(soilTempFigure, 'GND', boardFigure, 'RS485_GND');
+            connectPorts(soilTempFigure, 'A+', boardFigure, 'RS485_A');
+            connectPorts(soilTempFigure, 'B-', boardFigure, 'RS485_B');
+
+            console.log("Handysense real SoilTemp MultiRead RS485 test setup complete!");
+        } catch (error) {
+            console.error("Error during Handysense real SoilTemp MultiRead RS485 test wiring:", error);
+        }
+    }, 500);
+}
+
+function setupHandysenseRealBfarmSen55AirI2cTestCircuit() {
+    console.log("Setting up Handysense real SEN55 I2C test circuit...");
+    selectBoardForExample('handysense-real');
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[51]);
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
+
+    const sen55Figure = new ComponentFigure(wokwiComponentById[55]);
+    hackCable.editor.canvas.add(sen55Figure.setX(500).setY(60));
+
+    setTimeout(() => {
+        try {
+            connectPorts(sen55Figure, 'VCC', boardFigure, 'I2C1_VCC');
+            connectPorts(sen55Figure, 'GND', boardFigure, 'I2C1_GND');
+            connectPorts(sen55Figure, 'SDA', boardFigure, 'I2C1_SDA');
+            connectPorts(sen55Figure, 'SCL', boardFigure, 'I2C1_SCL');
+
+            console.log("Handysense real SEN55 I2C test setup complete!");
+        } catch (error) {
+            console.error("Error during Handysense real SEN55 I2C test wiring:", error);
+        }
+    }, 500);
+}
+
+function setupHandysenseRealBfarmUltrasonicRs485TestCircuit() {
+    console.log("Setting up Handysense real Ultrasonic RS485 test circuit...");
+    selectBoardForExample('handysense-real');
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[51]);
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
+
+    const ultrasonicFigure = new ComponentFigure(wokwiComponentById[56]);
+    hackCable.editor.canvas.add(ultrasonicFigure.setX(500).setY(60));
+
+    setTimeout(() => {
+        try {
+            connectPorts(ultrasonicFigure, 'VCC', boardFigure, 'RS485_24V');
+            connectPorts(ultrasonicFigure, 'GND', boardFigure, 'RS485_GND');
+            connectPorts(ultrasonicFigure, 'A+', boardFigure, 'RS485_A');
+            connectPorts(ultrasonicFigure, 'B-', boardFigure, 'RS485_B');
+
+            console.log("Handysense real Ultrasonic RS485 test setup complete!");
+        } catch (error) {
+            console.error("Error during Handysense real Ultrasonic RS485 test wiring:", error);
+        }
+    }, 500);
+}
+
+function setupHandysenseRealBfarmTurbidityXm3318bRs485TestCircuit() {
+    console.log("Setting up Handysense real Turbidity XM3318B RS485 test circuit...");
+    selectBoardForExample('handysense-real');
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[51]);
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
+
+    const turbidityFigure = new ComponentFigure(wokwiComponentById[57]);
+    hackCable.editor.canvas.add(turbidityFigure.setX(500).setY(60));
+
+    setTimeout(() => {
+        try {
+            connectPorts(turbidityFigure, 'VCC', boardFigure, 'RS485_24V');
+            connectPorts(turbidityFigure, 'GND', boardFigure, 'RS485_GND');
+            connectPorts(turbidityFigure, 'A+', boardFigure, 'RS485_A');
+            connectPorts(turbidityFigure, 'B-', boardFigure, 'RS485_B');
+
+            console.log("Handysense real Turbidity XM3318B RS485 test setup complete!");
+        } catch (error) {
+            console.error("Error during Handysense real Turbidity XM3318B RS485 test wiring:", error);
+        }
+    }, 500);
+}
+
+function setupHandysenseRealBfarmTurbidityXm8518Rs485TestCircuit() {
+    console.log("Setting up Handysense real Turbidity XM8518 RS485 test circuit...");
+    selectBoardForExample('handysense-real');
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[51]);
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
+
+    const turbidityFigure = new ComponentFigure(wokwiComponentById[58]);
+    hackCable.editor.canvas.add(turbidityFigure.setX(500).setY(60));
+
+    setTimeout(() => {
+        try {
+            connectPorts(turbidityFigure, 'VCC', boardFigure, 'RS485_24V');
+            connectPorts(turbidityFigure, 'GND', boardFigure, 'RS485_GND');
+            connectPorts(turbidityFigure, 'A+', boardFigure, 'RS485_A');
+            connectPorts(turbidityFigure, 'B-', boardFigure, 'RS485_B');
+
+            console.log("Handysense real Turbidity XM8518 RS485 test setup complete!");
+        } catch (error) {
+            console.error("Error during Handysense real Turbidity XM8518 RS485 test wiring:", error);
         }
     }, 500);
 }

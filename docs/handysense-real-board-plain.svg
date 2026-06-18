@@ -140,22 +140,22 @@
 <rect x="173" y="188" width="12" height="10" rx="1.2" ry="1.2" fill="#1f2430" stroke="#0f151d" stroke-width="0.45" />
 </g>
 <g id="spi_block">
-<rect x="224" y="86" width="12" height="40" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
-<rect x="225.5" y="87.4" width="9" height="37.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
+<rect x="224" y="86" width="12" height="48" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
+<rect x="225.5" y="87.4" width="9" height="45.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
 <text x="208" y="83" fill="#f3fbf3" font-family="Arial" font-size="3.6" text-anchor="end" font-weight="bold">SPI</text>
-<text x="208" y="88" fill="#eef7ee" font-family="Arial" font-size="2.3" text-anchor="end" font-weight="normal">MOSI MISO CLK CS GND</text>
+<text x="208" y="88" fill="#eef7ee" font-family="Arial" font-size="2.3" text-anchor="end" font-weight="normal">CLK MISO MOSI CS1 GND +3.3V</text>
 </g>
 <g id="button_block">
 <rect x="224" y="135" width="12" height="40" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
 <rect x="225.5" y="136.4" width="9" height="37.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
 <text x="208" y="155" fill="#f3fbf3" font-family="Arial" font-size="3.6" text-anchor="end" font-weight="bold">Button</text>
-<text x="208" y="160" fill="#eef7ee" font-family="Arial" font-size="2.3" text-anchor="end" font-weight="normal">B0 B1 B2 B3 GND</text>
+<text x="208" y="160" fill="#eef7ee" font-family="Arial" font-size="2.3" text-anchor="end" font-weight="normal">GND BUTTON3 BUTTON2 BUTTON1 BUTTON0</text>
 </g>
 <g id="led_relay_block">
 <rect x="224" y="184" width="12" height="40" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
 <rect x="225.5" y="185.4" width="9" height="37.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
 <text x="208" y="204" fill="#f3fbf3" font-family="Arial" font-size="3.6" text-anchor="end" font-weight="bold">LED Relay</text>
-<text x="208" y="209" fill="#eef7ee" font-family="Arial" font-size="2.3" text-anchor="end" font-weight="normal">R1 R2 R3 R4 +5V</text>
+<text x="208" y="209" fill="#eef7ee" font-family="Arial" font-size="2.3" text-anchor="end" font-weight="normal">RELAY3 RELAY2 RELAY1 RELAY0 +5V RELAY</text>
 </g>
 <g id="power_area">
 <rect x="18" y="225" width="16" height="16" rx="1.2" ry="1.2" fill="#1f2430" stroke="#0f151d" stroke-width="0.45" />
@@ -204,28 +204,48 @@
 <text x="207" y="220" fill="#e6e9ed" font-family="Arial" font-size="4.6" text-anchor="middle" font-weight="bold">K4</text>
 </g>
 </g>
+<g id="relay_name_vin_relay_plus5v">
+<rect x="52.2" y="251.7" width="26" height="7" rx="1.1" ry="1.1" fill="#fff2df" stroke="#e0c39f" stroke-width="0.35" />
+<text x="65.2" y="255.35" fill="#0b5f9f" font-family="Arial" font-size="3.1" text-anchor="middle" font-weight="bold">VIN RELAY +5V</text>
+</g>
+<g id="relay_name_relay0">
+<rect x="88.2" y="251.7" width="26" height="7" rx="1.1" ry="1.1" fill="#fff2df" stroke="#e0c39f" stroke-width="0.35" />
+<text x="101.2" y="255.35" fill="#0b5f9f" font-family="Arial" font-size="3.1" text-anchor="middle" font-weight="bold">RELAY0</text>
+</g>
+<g id="relay_name_relay1">
+<rect x="123.2" y="251.7" width="26" height="7" rx="1.1" ry="1.1" fill="#fff2df" stroke="#e0c39f" stroke-width="0.35" />
+<text x="136.2" y="255.35" fill="#0b5f9f" font-family="Arial" font-size="3.1" text-anchor="middle" font-weight="bold">RELAY1</text>
+</g>
+<g id="relay_name_relay2">
+<rect x="159.2" y="251.7" width="26" height="7" rx="1.1" ry="1.1" fill="#fff2df" stroke="#e0c39f" stroke-width="0.35" />
+<text x="172.2" y="255.35" fill="#0b5f9f" font-family="Arial" font-size="3.1" text-anchor="middle" font-weight="bold">RELAY2</text>
+</g>
+<g id="relay_name_relay3">
+<rect x="196.2" y="251.7" width="26" height="7" rx="1.1" ry="1.1" fill="#fff2df" stroke="#e0c39f" stroke-width="0.35" />
+<text x="209.2" y="255.35" fill="#0b5f9f" font-family="Arial" font-size="3.1" text-anchor="middle" font-weight="bold">RELAY3</text>
+</g>
 <g id="relay_terminal_1">
 <rect x="98" y="254" width="24" height="16" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
 <rect x="99.5" y="255.4" width="21" height="13.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
 <line x1="103" y1="264" x2="110" y2="264" stroke="#f0f1f2" stroke-width="1.2" stroke-linecap="round" />
-<text x="110" y="251" fill="#eef7ee" font-family="Arial" font-size="2.2" text-anchor="middle" font-weight="normal">NO COM NC</text>
+<text x="110" y="251" fill="#eef7ee" font-family="Arial" font-size="2.2" text-anchor="middle" font-weight="normal">NC COM NO</text>
 </g>
 <g id="relay_terminal_2">
 <rect x="130" y="254" width="24" height="16" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
 <rect x="131.5" y="255.4" width="21" height="13.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
 <line x1="135" y1="264" x2="142" y2="264" stroke="#f0f1f2" stroke-width="1.2" stroke-linecap="round" />
-<text x="142" y="251" fill="#eef7ee" font-family="Arial" font-size="2.2" text-anchor="middle" font-weight="normal">NO COM NC</text>
+<text x="142" y="251" fill="#eef7ee" font-family="Arial" font-size="2.2" text-anchor="middle" font-weight="normal">NC COM NO</text>
 </g>
 <g id="relay_terminal_3">
 <rect x="162" y="254" width="24" height="16" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
 <rect x="163.5" y="255.4" width="21" height="13.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
 <line x1="167" y1="264" x2="174" y2="264" stroke="#f0f1f2" stroke-width="1.2" stroke-linecap="round" />
-<text x="174" y="251" fill="#eef7ee" font-family="Arial" font-size="2.2" text-anchor="middle" font-weight="normal">NO COM NC</text>
+<text x="174" y="251" fill="#eef7ee" font-family="Arial" font-size="2.2" text-anchor="middle" font-weight="normal">NC COM NO</text>
 </g>
 <g id="relay_terminal_4">
 <rect x="194" y="254" width="24" height="16" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
 <rect x="195.5" y="255.4" width="21" height="13.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
 <line x1="199" y1="264" x2="206" y2="264" stroke="#f0f1f2" stroke-width="1.2" stroke-linecap="round" />
-<text x="206" y="251" fill="#eef7ee" font-family="Arial" font-size="2.2" text-anchor="middle" font-weight="normal">NO COM NC</text>
+<text x="206" y="251" fill="#eef7ee" font-family="Arial" font-size="2.2" text-anchor="middle" font-weight="normal">NC COM NO</text>
 </g>
 </svg>

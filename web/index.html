@@ -46,6 +46,15 @@
                         <option value="handysense_real_bfarm_soil_watering">BFARM Soil Moisture + Water Pump</option>
                         <option value="handysense_real_bfarm_sht31_fan">BFARM SHT31 + Fan</option>
                     </optgroup>
+                    <optgroup label="BFarm sensor TEST">
+                        <option value="handysense_real_bfarm_7in1_soil_multiread_test">7in1Soil MultiRead Test</option>
+                        <option value="handysense_real_bfarm_ammonia_rs485_test">Ammonia Sensor (RS485) Test</option>
+                        <option value="handysense_real_bfarm_soil_temp_multiread_rs485_test">Soil Temp/Moisture Sensor (RS485) Test</option>
+                        <option value="handysense_real_bfarm_sen55_air_i2c_test">SEN55 Air Sensor (I2C) Test</option>
+                        <option value="handysense_real_bfarm_ultrasonic_rs485_test">Ultrasonic Sensor (RS485) Test</option>
+                        <option value="handysense_real_bfarm_turbidity_xm3318b_rs485_test">Turbidity Sensor XM3318B (RS485) Test</option>
+                        <option value="handysense_real_bfarm_turbidity_xm8518_rs485_test">Turbidity Sensor XM8518 (RS485) Test</option>
+                    </optgroup>
                     <optgroup label="new Bfarm Test">
                         <option value="new_bfarm_smart_greenhouse" selected>Smart Greenhouse End-to-End</option>
                         <option value="new_bfarm_awd_automation">Paddy Field AWD Automation</option>
@@ -110,11 +119,24 @@
                         <button type="button" class="mock-source-btn" data-mock-source="timeline" data-i18n="ui.mock.source.timeline">Timeline</button>
                     </div>
                     <div class="mock-source-panel" data-mock-source-panel="text">
-                        <textarea id="sensor-mock-input" rows="7">humidity = 60
-temperature = 25
+                          <textarea id="sensor-mock-input" rows="18">humidity = 60
+  temperature = 25
 ph = 7.0
 lux = 500
-soil = 50</textarea>
+soil = 50
+ec = 1200
+nitrogen = 120
+phosphorus = 60
+potassium = 180
+  ammonia = 2.5
+  pm1 = 8
+  pm25 = 12
+  pm4 = 15
+  pm10 = 20
+  voc = 100
+  nox = 10
+  distance = 150
+  turbidity = 250</textarea>
                     </div>
                     <div class="mock-source-panel" data-mock-source-panel="timeline" hidden>
                         <div class="mock-timeline-toolbar">
