@@ -62,12 +62,20 @@ import { BfarmSen55AirI2cElement } from "../components/bfarm-sen55-air-i2c-eleme
 import { BfarmUltrasonicRs485Element } from "../components/bfarm-ultrasonic-rs485-element";
 import { BfarmTurbidityXm3318bRs485Element } from "../components/bfarm-turbidity-xm3318b-rs485-element";
 import { BfarmTurbidityXm8518Rs485Element } from "../components/bfarm-turbidity-xm8518-rs485-element";
+import { BfarmNitrateIsfetRs485Element } from "../components/bfarm-nitrate-isfet-rs485-element";
+import { BfarmTmecTensioRs485Element } from "../components/bfarm-tmec-tensio-rs485-element";
+import { BfarmTmecAnalogElement } from "../components/bfarm-tmec-analog-element";
+import { BfarmWaterQualitySuiteRs485Element } from "../components/bfarm-water-quality-suite-rs485-element";
+import { BfarmTubularSoilProbeRs485Element } from "../components/bfarm-tubular-soil-probe-rs485-element";
+import { BfarmAirVelocitySensorSm3789Element } from "../components/bfarm-air-velocity-sensor-sm3789-element";
+import { BfarmLux120kRs485Element } from "../components/bfarm-lux120k-rs485-element";
+import { BfarmWeatherSensorRs485Element } from "../components/bfarm-weather-sensor-rs485-element";
 
-export declare type WokwiComponent = SevenSegmentElement | ArduinoUnoElement | LCD1602Element | LEDElement | NeoPixelElement | PushbuttonElement | ResistorElement | MembraneKeypadElement | PotentiometerElement | NeopixelMatrixElement | SSD1306Element | BuzzerElement | RotaryDialerElement | ServoElement | Dht22Element | ArduinoMegaElement | ArduinoNanoElement | Ds1307Element | LEDRingElement | SlideSwitchElement | HCSR04Element | LCD2004Element | AnalogJoystickElement | SlidePotentiometerElement | IRReceiverElement | IRRemoteElement | PIRMotionSensorElement | NTCTemperatureSensorElement | HeartBeatSensorElement | TiltSwitchElement | FlameSensorElement | GasSensorElement | FranzininhoElement | NanoRP2040ConnectElement | SmallSoundSensorElement | BigSoundSensorElement | MPU6050Element | ESP32DevkitV1Element | KY040Element | PhotoresistorSensorElement | RGBLedElement | ILI9341Element | LedBarGraphElement | MicrosdCardElement | DipSwitch8Element | CustomESP32BoardElement | HandysenseBoardElement | HandysenseRealBoardElement | HandysenseProBoardElement | PhSensorElement | AirHumiditySensorElement | MistingPumpElement | WaterPumpElement | FanElement | RelayElement | Rs485PhSensorElement | Rs485LightSensorElement | Rs485RainSensorElement | Rs485WindSpeedSensorElement | Rs485ParSensorElement | WeatherSensorHtco2plxElement | Sht31SensorElement | Bh1750SensorElement | CurrentLoop420mAElement | SoilMoistureSensorElement | FourChannelRelayElement | FertilizerPhSensorElement | EcSensorElement | FertilizerTempSensorElement | FourChannelButtonElement | Bfarm7in1SoilMultireadElement | BfarmAmmoniaRs485Element | BfarmSoilTempMultireadRs485Element | BfarmSen55AirI2cElement | BfarmUltrasonicRs485Element | BfarmTurbidityXm3318bRs485Element | BfarmTurbidityXm8518Rs485Element
+export declare type WokwiComponent = SevenSegmentElement | ArduinoUnoElement | LCD1602Element | LEDElement | NeoPixelElement | PushbuttonElement | ResistorElement | MembraneKeypadElement | PotentiometerElement | NeopixelMatrixElement | SSD1306Element | BuzzerElement | RotaryDialerElement | ServoElement | Dht22Element | ArduinoMegaElement | ArduinoNanoElement | Ds1307Element | LEDRingElement | SlideSwitchElement | HCSR04Element | LCD2004Element | AnalogJoystickElement | SlidePotentiometerElement | IRReceiverElement | IRRemoteElement | PIRMotionSensorElement | NTCTemperatureSensorElement | HeartBeatSensorElement | TiltSwitchElement | FlameSensorElement | GasSensorElement | FranzininhoElement | NanoRP2040ConnectElement | SmallSoundSensorElement | BigSoundSensorElement | MPU6050Element | ESP32DevkitV1Element | KY040Element | PhotoresistorSensorElement | RGBLedElement | ILI9341Element | LedBarGraphElement | MicrosdCardElement | DipSwitch8Element | CustomESP32BoardElement | HandysenseBoardElement | HandysenseRealBoardElement | HandysenseProBoardElement | PhSensorElement | AirHumiditySensorElement | MistingPumpElement | WaterPumpElement | FanElement | RelayElement | Rs485PhSensorElement | Rs485LightSensorElement | Rs485RainSensorElement | Rs485WindSpeedSensorElement | Rs485ParSensorElement | WeatherSensorHtco2plxElement | Sht31SensorElement | Bh1750SensorElement | CurrentLoop420mAElement | SoilMoistureSensorElement | FourChannelRelayElement | FertilizerPhSensorElement | EcSensorElement | FertilizerTempSensorElement | FourChannelButtonElement | Bfarm7in1SoilMultireadElement | BfarmAmmoniaRs485Element | BfarmSoilTempMultireadRs485Element | BfarmSen55AirI2cElement | BfarmUltrasonicRs485Element | BfarmTurbidityXm3318bRs485Element | BfarmTurbidityXm8518Rs485Element | BfarmNitrateIsfetRs485Element | BfarmTmecTensioRs485Element | BfarmTmecAnalogElement | BfarmWaterQualitySuiteRs485Element | BfarmTubularSoilProbeRs485Element | BfarmAirVelocitySensorSm3789Element | BfarmLux120kRs485Element | BfarmWeatherSensorRs485Element
 
 export declare type WokwiClass = typeof Dht22Element;
 
-export const wokwiComponentClasses = [SevenSegmentElement, ArduinoUnoElement, LCD1602Element, LEDElement, NeoPixelElement, PushbuttonElement, ResistorElement, MembraneKeypadElement, PotentiometerElement, NeopixelMatrixElement, SSD1306Element, BuzzerElement, RotaryDialerElement, ServoElement, Dht22Element, ArduinoMegaElement, ArduinoNanoElement, Ds1307Element, LEDRingElement, SlideSwitchElement, HCSR04Element, LCD2004Element, AnalogJoystickElement, SlidePotentiometerElement, IRReceiverElement, IRRemoteElement,  PIRMotionSensorElement, NTCTemperatureSensorElement, HeartBeatSensorElement, TiltSwitchElement, FlameSensorElement, GasSensorElement, FranzininhoElement, NanoRP2040ConnectElement, SmallSoundSensorElement, BigSoundSensorElement, MPU6050Element, ESP32DevkitV1Element, KY040Element, PhotoresistorSensorElement, RGBLedElement, ILI9341Element, LedBarGraphElement, MicrosdCardElement, DipSwitch8Element, CustomESP32BoardElement, HandysenseBoardElement, HandysenseRealBoardElement, HandysenseProBoardElement, PhSensorElement, AirHumiditySensorElement, MistingPumpElement, WaterPumpElement, FanElement, RelayElement, Rs485PhSensorElement, Rs485LightSensorElement, Rs485RainSensorElement, Rs485WindSpeedSensorElement, Rs485ParSensorElement, WeatherSensorHtco2plxElement, Sht31SensorElement, Bh1750SensorElement, CurrentLoop420mAElement, SoilMoistureSensorElement, FourChannelRelayElement, FertilizerPhSensorElement, EcSensorElement, FertilizerTempSensorElement, FourChannelButtonElement, Bfarm7in1SoilMultireadElement, BfarmAmmoniaRs485Element, BfarmSoilTempMultireadRs485Element, BfarmSen55AirI2cElement, BfarmUltrasonicRs485Element, BfarmTurbidityXm3318bRs485Element, BfarmTurbidityXm8518Rs485Element]
+export const wokwiComponentClasses = [SevenSegmentElement, ArduinoUnoElement, LCD1602Element, LEDElement, NeoPixelElement, PushbuttonElement, ResistorElement, MembraneKeypadElement, PotentiometerElement, NeopixelMatrixElement, SSD1306Element, BuzzerElement, RotaryDialerElement, ServoElement, Dht22Element, ArduinoMegaElement, ArduinoNanoElement, Ds1307Element, LEDRingElement, SlideSwitchElement, HCSR04Element, LCD2004Element, AnalogJoystickElement, SlidePotentiometerElement, IRReceiverElement, IRRemoteElement,  PIRMotionSensorElement, NTCTemperatureSensorElement, HeartBeatSensorElement, TiltSwitchElement, FlameSensorElement, GasSensorElement, FranzininhoElement, NanoRP2040ConnectElement, SmallSoundSensorElement, BigSoundSensorElement, MPU6050Element, ESP32DevkitV1Element, KY040Element, PhotoresistorSensorElement, RGBLedElement, ILI9341Element, LedBarGraphElement, MicrosdCardElement, DipSwitch8Element, CustomESP32BoardElement, HandysenseBoardElement, HandysenseRealBoardElement, HandysenseProBoardElement, PhSensorElement, AirHumiditySensorElement, MistingPumpElement, WaterPumpElement, FanElement, RelayElement, Rs485PhSensorElement, Rs485LightSensorElement, Rs485RainSensorElement, Rs485WindSpeedSensorElement, Rs485ParSensorElement, WeatherSensorHtco2plxElement, Sht31SensorElement, Bh1750SensorElement, CurrentLoop420mAElement, SoilMoistureSensorElement, FourChannelRelayElement, FertilizerPhSensorElement, EcSensorElement, FertilizerTempSensorElement, FourChannelButtonElement, Bfarm7in1SoilMultireadElement, BfarmAmmoniaRs485Element, BfarmSoilTempMultireadRs485Element, BfarmSen55AirI2cElement, BfarmUltrasonicRs485Element, BfarmTurbidityXm3318bRs485Element, BfarmTurbidityXm8518Rs485Element, BfarmNitrateIsfetRs485Element, BfarmTmecTensioRs485Element, BfarmTmecAnalogElement, BfarmWaterQualitySuiteRs485Element, BfarmTubularSoilProbeRs485Element, BfarmAirVelocitySensorSm3789Element, BfarmLux120kRs485Element, BfarmWeatherSensorRs485Element]
 
 export declare type WokwiComponentInfo = {id: number, clasz: WokwiClass, name: string, description: string, type: ComponentType}
 export declare type WokwiComponents = WokwiComponentInfo[]
@@ -441,6 +449,54 @@ export const wokwiComponents = (): WokwiComponents => [
         clasz: BfarmTurbidityXm8518Rs485Element,
         name: i18next.t("wokwiComponents.bfarmTurbidityXm8518Rs485.name"),
         description: i18next.t("wokwiComponents.bfarmTurbidityXm8518Rs485.description"),
+        type: ComponentType.BFARM_SENSOR
+    },{
+        id: 59,
+        clasz: BfarmNitrateIsfetRs485Element,
+        name: i18next.t("wokwiComponents.bfarmNitrateIsfetRs485.name"),
+        description: i18next.t("wokwiComponents.bfarmNitrateIsfetRs485.description"),
+        type: ComponentType.BFARM_SENSOR
+    },{
+        id: 60,
+        clasz: BfarmTmecTensioRs485Element,
+        name: i18next.t("wokwiComponents.bfarmTmecTensioRs485.name"),
+        description: i18next.t("wokwiComponents.bfarmTmecTensioRs485.description"),
+        type: ComponentType.BFARM_SENSOR
+    },{
+        id: 61,
+        clasz: BfarmTmecAnalogElement,
+        name: i18next.t("wokwiComponents.bfarmTmecAnalog.name"),
+        description: i18next.t("wokwiComponents.bfarmTmecAnalog.description"),
+        type: ComponentType.BFARM_SENSOR
+    },{
+        id: 62,
+        clasz: BfarmWaterQualitySuiteRs485Element,
+        name: i18next.t("wokwiComponents.bfarmWaterQualitySuiteRs485.name"),
+        description: i18next.t("wokwiComponents.bfarmWaterQualitySuiteRs485.description"),
+        type: ComponentType.BFARM_SENSOR
+    },{
+        id: 63,
+        clasz: BfarmTubularSoilProbeRs485Element,
+        name: i18next.t("wokwiComponents.bfarmTubularSoilProbeRs485.name"),
+        description: i18next.t("wokwiComponents.bfarmTubularSoilProbeRs485.description"),
+        type: ComponentType.BFARM_SENSOR
+    },{
+        id: 64,
+        clasz: BfarmAirVelocitySensorSm3789Element,
+        name: i18next.t("wokwiComponents.bfarmAirVelocitySensorSm3789.name"),
+        description: i18next.t("wokwiComponents.bfarmAirVelocitySensorSm3789.description"),
+        type: ComponentType.BFARM_SENSOR
+    },{
+        id: 65,
+        clasz: BfarmLux120kRs485Element,
+        name: i18next.t("wokwiComponents.bfarmLux120kRs485.name"),
+        description: i18next.t("wokwiComponents.bfarmLux120kRs485.description"),
+        type: ComponentType.BFARM_SENSOR
+    },{
+        id: 66,
+        clasz: BfarmWeatherSensorRs485Element,
+        name: i18next.t("wokwiComponents.bfarmWeatherSensorRs485.name"),
+        description: i18next.t("wokwiComponents.bfarmWeatherSensorRs485.description"),
         type: ComponentType.BFARM_SENSOR
     }]
 

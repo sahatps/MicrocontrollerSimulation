@@ -2,7 +2,7 @@
 
 ## Goal
 
-เอกสารนี้สรุปขั้นตอนทั้งหมดที่ใช้สร้าง `7in1Soil MultiRead` ฝั่ง `#circuit` และใช้เป็นแม่แบบสำหรับเพิ่ม sensor ที่เหลืออีก 13 ตัวจาก BFarm zip plugin
+เอกสารนี้สรุปขั้นตอนทั้งหมดที่ใช้สร้าง `7in1Soil MultiRead` ฝั่ง `#circuit` และใช้เป็นแม่แบบสำหรับ sensor ทั้งหมด 15 ตัวจาก BFarm zip plugin
 
 ขอบเขตของคู่มือนี้คือ circuit component, code example, mock sensor และ runtime visualization เท่านั้น ไม่รวมการสร้างหรือแก้ block ในฝั่ง `#blocks`
 

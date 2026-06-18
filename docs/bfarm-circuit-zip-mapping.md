@@ -15,11 +15,11 @@ Source references:
 | `pH Sensor` | None | No direct match | Generic analog pH component exists in Circuit, but no same-named plugin in the zip. |
 | `Air Humidity Sensor` | `Weather sensor`, `SEN55 I2C` | Partial | Zip plugins expose humidity, but as part of multi-sensor modules. |
 | `pH Sensor (RS485)` | None | No direct match | Could be added as a dedicated RS485 pH plugin later. |
-| `Light Sensor (RS485)` | `Lux120k rs485` | Strong | Same measurement domain and same RS485/Modbus style. |
+| `Lux120k rs485` | `Lux120k rs485` | Match | Dedicated BFarm component id 65 with Handysense real example and Modbus register 3 mock profile. |
 | `Rain Sensor (RS485)` | None | No direct match | No rain-specific plugin found in the zip. |
-| `Wind Speed Sensor (RS485)` | `Air Velocity Sensor (SM3789)` | Strong | Same category and RS485 register-read pattern. |
+| `Air Velocity Sensor (SM3789)` | `Air Velocity Sensor (SM3789)` | Match | Dedicated BFarm component id 64 with Handysense real example and Modbus register 0 mock profile. |
 | `PAR Sensor (RS485)` | None | No direct match | No PAR-specific plugin found in the zip. |
-| `Weather Station (HTCO2PLX)` | `Weather sensor` | Strong | Very close: weather plugin exposes humidity, temperature, noise, CO2, pressure, lux. |
+| `Weather sensor` | `Weather sensor` | Match | Dedicated BFarm component id 66 with Handysense real example and registers 500-509 for humidity, temperature, noise, CO2, pressure, and lux. |
 | `SHT31 Sensor (I2C)` | `SEN55 I2C` | Partial | Both are I2C environmental sensors, but different chip families and outputs. |
 | `BH1750 Sensor (I2C)` | `Lux120k rs485` | Partial | Same light/lux domain, but different hardware bus. |
 | `Current Loop 4-20mA` | `TMEC Sensor` | Partial | TMEC plugin uses `ReadAnalog_from_MPC3424(...)`, which is closer to ADC/current-loop style input than RS485 sensors. |
@@ -27,34 +27,26 @@ Source references:
 | `Fertilizer pH Sensor (RS485)` | `Water Quality` | Partial | `Water Quality` plugin includes a pH RS485 path, but it is embedded in a larger suite. |
 | `EC Sensor (RS485)` | `7in1Soil MultiRead`, `Water Quality` | Partial | Both zip plugins expose EC values, but not as dedicated EC-only components. |
 | `Fertilizer Temp Sensor (RS485)` | `SoilTemp MultiRead RS485`, `Water Quality` | Partial | Both expose temperature data, but not fertilizer-specific naming. |
+| `7in1Soil MultiRead` | `7in1Soil MultiRead` | Match | Dedicated BFarm component id 52 with Handysense real example and seven-value Modbus mock profile. |
 | `Ammonia Sensor (RS485)` | `Ammonia RS485` | Match | Dedicated BFarm component id 53 with Handysense real example and Modbus mock profile. |
 | `Soil Temp/Moisture Sensor (RS485)` | `SoilTemp MultiRead RS485` | Match | Dedicated BFarm component id 54 with Handysense real example and two-register Modbus mock profile. |
 | `SEN55 Air Sensor (I2C)` | `SEN55 I2C` | Match | Dedicated BFarm component id 55 with Handysense real I2C example and eight-value mock bridge. |
 | `Ultrasonic Sensor (RS485)` | `Ultrasonic rs485` | Match | Dedicated BFarm component id 56 with Handysense real example and distance mock at Modbus register 256. |
 | `Turbidity Sensor XM3318B (RS485)` | `Turbidity XM3318B RS485` | Match | Dedicated BFarm component id 57 with Handysense real example and raw turbidity mock at Modbus register 0. |
 | `Turbidity Sensor XM8518 (RS485)` | `Turbidity XM8518 RS485` | Match | Dedicated BFarm component id 58 with Handysense real example and raw turbidity mock at Modbus register 0. |
+| `Nitrate ISFET Sensor (RS485)` | `TMEC-NITRATE-ISFET PLATFORM` | Match | Dedicated BFarm component id 59 with Handysense real example and ten-register Modbus mock profile at 115200 baud. |
+| `TMEC Tensio Sensor (RS485)` | `TMEC-Tensio Rs485` | Match | Dedicated BFarm component id 60 with Handysense real example and six-input-register Modbus mock profile at 9600 baud. |
+| `TMEC Analog Sensor` | `TMEC Sensor` | Match | Dedicated BFarm component id 61 with Handysense real A420 channel wiring and MCP3424 raw-input mock bridge. |
+| `Water Quality Suite (RS485)` | `Water Quality` | Match | Dedicated BFarm component id 62 with Handysense real RS485 example and slave-specific mocks for level, pH, DO, EC, and ammonia. |
+| `Tubular Soil Probe (RS485)` | `Tubular Soil Moisture Sensor` | Match | Dedicated BFarm component id 63 with Handysense real example and ten-register depth-specific moisture/temperature mocks. |
 
 ## Zip Plugins Not Yet Represented as Dedicated Circuit Components
 
-These are the clearest candidates if the goal is "cover the zip catalog directly":
-
-| Zip plugin | Suggested Circuit component name | Why add it |
-| --- | --- | --- |
-| `TMEC Sensor` | `TMEC Analog Sensor` | Current Circuit lacks a generic TMEC/MCP3424-style analog mapping component. |
-| `TMEC-NITRATE-ISFET PLATFORM` | `Nitrate ISFET Sensor (RS485)` | Unique nitrate-specific sensor. |
-| `TMEC-Tensio Rs485` | `TMEC Tensio Sensor (RS485)` | Distinct telemetry set and register mode. |
-| `Tubular Soil Moisture Sensor` | `Tubular Soil Probe (RS485)` | Existing soil moisture component is much more generic. |
-| `Water Quality` | `Water Quality Suite (RS485)` | Bundles water level, pH, DO, EC, and ammonia-related reads. |
+All 15 sensor plugins from the zip are now represented as dedicated Circuit components. `WiFi Manager` is not a sensor and is intentionally excluded.
 
 ## Recommended Build Order
 
-If we scaffold in phases, this order gives the best coverage first:
-
-1. `Nitrate ISFET Sensor (RS485)`
-2. `TMEC Tensio Sensor (RS485)`
-3. `TMEC Analog Sensor`
-4. `Water Quality Suite (RS485)`
-5. `Tubular Soil Probe (RS485)`
+The complete 15-sensor zip checklist is represented by component ids `52` through `66`. Future additions can focus on mock refinements, visuals, or plugins outside this zip.
 
 ## Notes on Block Files
 

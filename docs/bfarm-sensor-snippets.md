@@ -179,7 +179,20 @@ float readAirVelocity() {
 
 Suggested Circuit component:
 
-- `Air Velocity Sensor (RS485)`
+- `Air Velocity Sensor (SM3789)`
+
+Implemented Circuit integration:
+
+| Item | Value |
+| --- | --- |
+| Component id | `64` |
+| Class | `BfarmAirVelocitySensorSm3789Element` |
+| Pins | `VCC`, `GND`, `A+`, `B-` |
+| Example key | `handysense_real_bfarm_air_velocity_sensor_sm3789_test` |
+| Mock profile | `bfarm-air-velocity-sm3789` |
+| Slave ID | `1` |
+| Register | Holding register `0` |
+| Mock key | `air_velocity` |
 
 ## Ammonia RS485
 
@@ -312,9 +325,19 @@ int readLux120k() {
 }
 ```
 
-Circuit match today:
+Implemented Circuit integration:
 
-- `Light Sensor (RS485)`
+| Item | Value |
+| --- | --- |
+| Component id | `65` |
+| Class | `BfarmLux120kRs485Element` |
+| Display name | `Lux120k rs485` |
+| Pins | `VCC`, `GND`, `A+`, `B-` |
+| Example key | `handysense_real_bfarm_lux120k_rs485_test` |
+| Mock profile | `bfarm-lux120k-rs485` |
+| Slave ID | `1` |
+| Register | Holding register `3` |
+| Mock key | `lux` |
 
 ## SEN55 I2C
 
@@ -408,6 +431,39 @@ Suggested Circuit component:
 
 - `TMEC Analog Sensor`
 
+Implemented Circuit integration:
+
+- Component id: `61`
+- Class: `BfarmTmecAnalogElement`
+- Pins: `VCC`, `GND`, `SIG`
+- Handysense real wiring:
+  - `VCC` -> `A420_1_VCC`
+  - `GND` -> `A420_1_GND`
+  - `SIG` -> `A420_1_SIG`
+- Example key: `handysense_real_bfarm_tmec_analog_test`
+- Mock key: `tmec_analog_uv`
+
+The plugin supports MCP3424 channels `1` through `4`. The saved test uses channel `1` and maps the raw input from `0..5000 uV` to `0..100`:
+
+```cpp
+int rawUv = ReadAnalog_MPC3424(1);
+float tmecValue = ReadAnalog_from_MPC3424(1, 0, 5000, 0, 100);
+```
+
+Mock/Serial rule:
+
+| MCP3424 channel | Mock key | Default raw value | Code mapping | Expected output |
+| ---: | --- | ---: | --- | ---: |
+| `1` | `tmec_analog_uv` | `2500 uV` | `0..5000` -> `0..100` | `50` |
+
+Default Serial output:
+
+```text
+tmec_analog_uv=2500,tmec_value=50.00
+```
+
+Note: the plugin generator spells the helper `MPC3424`, so Circuit examples keep that exact function name for compatibility.
+
 ## TMEC-NITRATE-ISFET PLATFORM
 
 Fields:
@@ -452,6 +508,39 @@ Suggested Circuit component:
 
 - `Nitrate ISFET Sensor (RS485)`
 
+Implemented Circuit integration:
+
+| Item | Value |
+| --- | --- |
+| Component ID | `59` |
+| Class | `BfarmNitrateIsfetRs485Element` |
+| Protocol | Modbus RS485, `115200` baud |
+| Slave ID | `1` in the saved test example |
+| Read | holding register start `0`, quantity `10` |
+| Example key | `handysense_real_bfarm_nitrate_isfet_rs485_test` |
+| Mock profile | `bfarm-nitrate-isfet-rs485` |
+
+Register and mock map from `generators_NITRATE_ISFET_PLATFORM.js`:
+
+| Register | Field | Mock key | Raw scale | Code conversion | Default |
+| ---: | --- | --- | ---: | --- | ---: |
+| `0` | Vout | `nitrate_vout` | `x10` | `/10.0f` | `315.0` |
+| `1` | Vout temperature | `nitrate_vout_temp` | `x10` | `/10.0f` | `298.0` |
+| `2` | Sample value | `nitrate_sample` | `x10` | `/10.0f` | `125.0` |
+| `3` | Temperature | `temperature` | `x10` | `/10.0f` | `25.0` |
+| `4` | Error | `nitrate_error` | `x100` | `/100.0f` | `1.25` |
+| `5` | R-square | `nitrate_r_square` | `x1000` | `/1000.0f` | `0.998` |
+| `6` | Sensitivity | `nitrate_sensitivity` | `x10` | `/10.0f` | `58.5` |
+| `7` | STD1 50ppm | `nitrate_std1` | `x100` | `/100.0f` | `50.0` |
+| `8` | STD2 100ppm | `nitrate_std2` | `x100` | `/100.0f` | `100.0` |
+| `9` | STD3 300ppm | `nitrate_std3` | `x100` | `/100.0f` | `300.0` |
+
+Default Serial Monitor output:
+
+```text
+vout=315.0,vout_temp=298.0,sample=125.0,temp=25.0,error=1.25,r_square=0.998,sensitivity=58.5,std1=50.00,std2=100.00,std3=300.00
+```
+
 ## TMEC-Tensio RS485
 
 Fields:
@@ -491,6 +580,35 @@ Suggested Circuit component:
 
 - `TMEC Tensio Sensor (RS485)`
 
+Implemented Circuit integration:
+
+| Item | Value |
+| --- | --- |
+| Component ID | `60` |
+| Class | `BfarmTmecTensioRs485Element` |
+| Protocol | Modbus RS485, `9600` baud |
+| Slave ID | `1` in the saved test example |
+| Read | input register start `0`, quantity `6` |
+| Example key | `handysense_real_bfarm_tmec_tensio_rs485_test` |
+| Mock profile | `bfarm-tmec-tensio-rs485` |
+
+Register and mock map from `generators_Tensio_Rs485.js`:
+
+| Register | Field | Mock key | Raw scale | Code conversion | Default |
+| ---: | --- | --- | ---: | --- | ---: |
+| `0` | Unused | - | - | - | `0` |
+| `1` | Temperature | `temperature` | `x10` | `/10.0f` | `25.0` |
+| `2` | Humidity | `humidity` | `x10` | `/10.0f` | `60.0` |
+| `3` | Light | `lux` | `x1` | direct | `500` |
+| `4` | Unused | - | - | - | `0` |
+| `5` | Voltage | `voltage` | `x1000` | `/1000.0f` | `12.0` |
+
+Default Serial Monitor output:
+
+```text
+temperature=25.0,humidity=60.0,light=500,voltage=12.000
+```
+
 ## Tubular Soil Moisture Sensor
 
 Fields:
@@ -526,6 +644,35 @@ void loop() {
 Suggested Circuit component:
 
 - `Tubular Soil Probe (RS485)`
+
+Implemented Circuit integration:
+
+| Item | Value |
+| --- | --- |
+| Component ID | `63` |
+| Class | `BfarmTubularSoilProbeRs485Element` |
+| Protocol | Modbus RS485, `9600` baud |
+| Pins | `VCC`, `GND`, `A+`, `B-` |
+| Example key | `handysense_real_bfarm_tubular_soil_probe_rs485_test` |
+| Mock profile | `bfarm-tubular-soil-probe-rs485` |
+| Test slave ID | `1` |
+
+Mock/register mapping:
+
+| Register | Depth | Field | Mock key | Raw format |
+| ---: | ---: | --- | --- | --- |
+| `0` | 10 cm | moisture | `tubular_moisture_10` | `x10`, then `/10.0f` |
+| `1` | 10 cm | temperature | `tubular_temperature_10` | `x10`, then `/10.0f` |
+| `2` | 20 cm | moisture | `tubular_moisture_20` | `x10`, then `/10.0f` |
+| `3` | 20 cm | temperature | `tubular_temperature_20` | `x10`, then `/10.0f` |
+| `4` | 30 cm | moisture | `tubular_moisture_30` | `x10`, then `/10.0f` |
+| `5` | 30 cm | temperature | `tubular_temperature_30` | `x10`, then `/10.0f` |
+| `6` | 40 cm | moisture | `tubular_moisture_40` | `x10`, then `/10.0f` |
+| `7` | 40 cm | temperature | `tubular_temperature_40` | `x10`, then `/10.0f` |
+| `8` | 50 cm | moisture | `tubular_moisture_50` | `x10`, then `/10.0f` |
+| `9` | 50 cm | temperature | `tubular_temperature_50` | `x10`, then `/10.0f` |
+
+The saved test reads all ten holding registers and prints all five moisture/temperature pairs, so each mock value can be verified independently in Serial Monitor.
 
 ## Turbidity XM3318B RS485
 
@@ -757,6 +904,39 @@ Suggested Circuit component:
 
 - `Water Quality Suite (RS485)`
 
+Implemented Circuit integration:
+
+| Item | Value |
+| --- | --- |
+| Component ID | `62` |
+| Class | `BfarmWaterQualitySuiteRs485Element` |
+| Protocol | Modbus RS485, `9600` baud |
+| Pins | `VCC`, `GND`, `A+`, `B-` |
+| Example key | `handysense_real_bfarm_water_quality_suite_rs485_test` |
+| Mock profile | `bfarm-water-quality-suite-rs485` |
+| Test slave IDs | level `1`, pH `2`, DO `3`, EC `4`, ANS `5` |
+
+Mock/register mapping:
+
+| Slave ID | Register | Field | Mock key | Raw format |
+| ---: | ---: | --- | --- | --- |
+| `1` | `4` | water level | `water_level` | integer, `/1.0f` |
+| `2` | `0` | water temperature | `water_temperature` | `x10`, then `/10.0f` |
+| `2` | `1` | pH | `ph` | `x10`, then `/10.0f` |
+| `3` | `2-3` | dissolved oxygen | `dissolved_oxygen` | IEEE-754 float, big-endian words |
+| `3` | `4-5` | DO temperature | `do_temperature` | IEEE-754 float, big-endian words |
+| `4` | `1` | EC | `ec` | `x10`, then `/10.0f` |
+| `5` | `0` | ammonia | `ammonia` | `x100`, then `/100.0f` |
+| `5` | `1` | ANS pH | `ph` | `x100`, then `/100.0f` |
+| `5` | `2` | ANS temperature | `ammonia_temperature` | `x10`, then `/10.0f` |
+
+Generator compatibility notes:
+
+- The plugin lets every sub-sensor choose an `ID`. The saved test uses IDs `1..5` so overlapping register addresses can be mocked independently on one RS485 bus.
+- The plugin requests `DOrs485.readHoldingRegisters(0, 5)` but later reads response buffer index `5`. The saved Circuit example requests `6` registers to include indexes `0..5`.
+- The component represents the complete suite as one Circuit device with one shared RS485 connection.
+- Default mock output includes water level, pH/water temperature, DO/DO temperature, EC, ammonia/ANS pH/ANS temperature.
+
 ## Weather Sensor
 
 Fields:
@@ -796,9 +976,28 @@ void loop() {
 }
 ```
 
-Circuit match today:
+Implemented Circuit integration:
 
-- `Weather Station (HTCO2PLX)`
+| Item | Value |
+| --- | --- |
+| Component id | `66` |
+| Class | `BfarmWeatherSensorRs485Element` |
+| Display name | `Weather sensor` |
+| Pins | `VCC`, `GND`, `A+`, `B-` |
+| Example key | `handysense_real_bfarm_weather_sensor_test` |
+| Mock profile | `bfarm-weather-sensor-rs485` |
+| Slave ID | `1` |
+
+Weather register map:
+
+| Register | Buffer index | Field | Mock key | Raw scale | Code conversion |
+| ---: | ---: | --- | --- | ---: | --- |
+| `500` | `0` | humidity | `humidity` | `x10` | `/10.0f` |
+| `501` | `1` | temperature | `temperature` | `x10` | `/10.0f` |
+| `502` | `2` | noise | `noise` | `x10` | `/10.0f` |
+| `503` | `3` | CO2 | `co2` | `x1` | none |
+| `505` | `5` | pressure | `pressure` | `x1` | none |
+| `507` | `7` | lux | `lux` | `x1` | none |
 
 ## Notes and Caveats
 

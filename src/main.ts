@@ -34,6 +34,14 @@ import {BfarmSen55AirI2cElement} from "./components/bfarm-sen55-air-i2c-element"
 import {BfarmUltrasonicRs485Element} from "./components/bfarm-ultrasonic-rs485-element";
 import {BfarmTurbidityXm3318bRs485Element} from "./components/bfarm-turbidity-xm3318b-rs485-element";
 import {BfarmTurbidityXm8518Rs485Element} from "./components/bfarm-turbidity-xm8518-rs485-element";
+import {BfarmNitrateIsfetRs485Element} from "./components/bfarm-nitrate-isfet-rs485-element";
+import {BfarmTmecTensioRs485Element} from "./components/bfarm-tmec-tensio-rs485-element";
+import {BfarmTmecAnalogElement} from "./components/bfarm-tmec-analog-element";
+import {BfarmWaterQualitySuiteRs485Element} from "./components/bfarm-water-quality-suite-rs485-element";
+import {BfarmTubularSoilProbeRs485Element} from "./components/bfarm-tubular-soil-probe-rs485-element";
+import {BfarmAirVelocitySensorSm3789Element} from "./components/bfarm-air-velocity-sensor-sm3789-element";
+import {BfarmLux120kRs485Element} from "./components/bfarm-lux120k-rs485-element";
+import {BfarmWeatherSensorRs485Element} from "./components/bfarm-weather-sensor-rs485-element";
 
 export {AVRRunner} from "./emulator/avr-runner";
 export {EmulatorManager} from './emulator/emulator-manager';
@@ -607,6 +615,14 @@ export class HackCable {
         BfarmUltrasonicRs485Element,
         BfarmTurbidityXm3318bRs485Element,
         BfarmTurbidityXm8518Rs485Element,
+        BfarmNitrateIsfetRs485Element,
+        BfarmTmecTensioRs485Element,
+        BfarmTmecAnalogElement,
+        BfarmWaterQualitySuiteRs485Element,
+        BfarmTubularSoilProbeRs485Element,
+        BfarmAirVelocitySensorSm3789Element,
+        BfarmLux120kRs485Element,
+        BfarmWeatherSensorRs485Element,
     ];
 
     public activateSensorComponent(busType: string, pin1: number, pin2: number) {

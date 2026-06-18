@@ -12,6 +12,7 @@ export type SerialCallback = (text: string) => void;
 export type ModbusReadCallback = (slaveId: number, regAddr: number) => number;
 export type SensorCallback = () => number;
 export type IndexedSensorCallback = (index: number) => number;
+export type AnalogReadCallback = (pin: number) => number;
 
 type ScheduledPinEvent = {
     atMs: number;
@@ -39,6 +40,7 @@ export class ArduinoWasmShim {
         private onSht31Hum:    SensorCallback,
         private onBh1750Lux:   SensorCallback,
         private onSen55Value:  IndexedSensorCallback,
+        private onAnalogRead?: AnalogReadCallback,
     ) {}
 
     /** Must be called after WebAssembly.instantiate() to enable string reads */
@@ -132,7 +134,7 @@ export class ArduinoWasmShim {
 
                 // ---- Analog I/O ----
                 analogRead(pin: number): number {
-                    return self.analogValues.get(pin) ?? 0;
+                    return self.analogValues.get(pin) ?? self.onAnalogRead?.(pin) ?? 0;
                 },
                 analogWrite(pin: number, value: number) {
                     self.writePin(pin, value > 0);
