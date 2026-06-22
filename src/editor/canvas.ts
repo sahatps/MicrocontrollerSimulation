@@ -16,6 +16,38 @@ const MIN_CANVAS_HEIGHT = 1200;
 const CANVAS_ORIGIN_OFFSET_X = 600;
 const CANVAS_ORIGIN_OFFSET_Y = 420;
 
+const FastPanningSelectionPolicy = draw2d.policy.canvas.SingleSelectionPolicy.extend({
+    NAME: "hackCable.policy.canvas.FastPanningSelectionPolicy",
+
+    onMouseDrag: function(
+        canvas: Canvas,
+        dx: number,
+        dy: number,
+        dx2: number,
+        dy2: number,
+        shiftKey: boolean,
+        ctrlKey: boolean
+    ) {
+        this._super(canvas, dx, dy, dx2, dy2, shiftKey, ctrlKey);
+
+        // The pointer target is hit-tested once on mousedown by Canvas.
+        // Draw2D's stock panning policy repeats getBestFigure() on every
+        // mousemove, which becomes noticeably expensive on large circuits.
+        if (!canvas.isBlankPanActive()) return;
+
+        const host = canvas.getPanScrollHost();
+        if (!host) return;
+
+        // Draw2D reports drag deltas in canvas coordinates:
+        //   pointer movement in CSS pixels * zoomFactor
+        // Scroll offsets are CSS pixels, so convert the delta back. Without
+        // this, zooming in (zoomFactor < 1) makes panning proportionally slow.
+        const zoom = Math.max(Number(canvas.getZoom()) || 1, 0.001);
+        host.scrollLeft -= dx2 / zoom;
+        host.scrollTop -= dy2 / zoom;
+    }
+});
+
 export class Canvas extends draw2d.Canvas{
 
     private selected: any = null;
@@ -47,7 +79,7 @@ export class Canvas extends draw2d.Canvas{
         this.initializeViewPreferences();
 
         // Edit policies
-        this.installEditPolicy(new draw2d.policy.canvas.PanningSelectionPolicy())
+        this.installEditPolicy(new FastPanningSelectionPolicy())
         this.installEditPolicy(new draw2d.policy.canvas.SnapToGeometryEditPolicy())
         this.installEditPolicy(new draw2d.policy.canvas.SnapToInBetweenEditPolicy())
         this.installEditPolicy(new draw2d.policy.canvas.SnapToCenterEditPolicy())
@@ -235,6 +267,14 @@ export class Canvas extends draw2d.Canvas{
     private getScrollHost(): HTMLElement | null {
         const scrollArea: any = this.getScrollArea?.();
         return scrollArea?.get ? scrollArea.get(0) as HTMLElement : null;
+    }
+
+    public isBlankPanActive(): boolean {
+        return this.isPanningPointerDown;
+    }
+
+    public getPanScrollHost(): HTMLElement | null {
+        return this.getScrollHost();
     }
 
     private getContentBounds(): { x: number; y: number; width: number; height: number } | null {
