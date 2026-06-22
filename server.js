@@ -14,8 +14,13 @@ const normalizeBasePath = (value) => {
     return `/${trimmed.replace(/^\/+|\/+$/g, '')}`;
 };
 const APP_BASE_PATH = normalizeBasePath(process.env.APP_BASE_PATH);
-const publicRoute = (pathSuffix = '') =>
-    `${APP_BASE_PATH}/${String(pathSuffix).replace(/^\/+/, '')}`;
+const routeFor = (basePath, pathSuffix = '') =>
+    `${basePath}/${String(pathSuffix).replace(/^\/+/, '')}`;
+const routeVariants = (pathSuffix = '') => {
+    const routes = [routeFor('', pathSuffix)];
+    if (APP_BASE_PATH) routes.push(routeFor(APP_BASE_PATH, pathSuffix));
+    return routes;
+};
 
 app.use(cors());
 app.use(express.json({ limit: '100kb' }));
@@ -28,7 +33,7 @@ if (shouldServeStatic) {
     });
 }
 
-app.get(publicRoute('health'), (_req, res) => {
+app.get(routeVariants('health'), (_req, res) => {
     res.json({
         ok: true,
         serveStatic: shouldServeStatic,
@@ -38,7 +43,7 @@ app.get(publicRoute('health'), (_req, res) => {
 });
 
 if (shouldServeStatic) {
-    app.use(publicRoute('wasm-clang'), async (req, res) => {
+    const proxyWasmClang = async (req, res) => {
         const targetUrl = new URL(`/wasm-clang${req.url}`, WASM_CLANG_ORIGIN);
         const controller = new AbortController();
         const onClose = () => controller.abort();
@@ -75,7 +80,11 @@ if (shouldServeStatic) {
         } finally {
             req.off('close', onClose);
         }
-    });
+    };
+
+    for (const route of routeVariants('wasm-clang')) {
+        app.use(route, proxyWasmClang);
+    }
 
     if (APP_BASE_PATH) {
         app.use((req, res, next) => {
@@ -87,13 +96,15 @@ if (shouldServeStatic) {
         });
     }
 
-    app.use(publicRoute(), express.static(DIST_WEB_DIR));
+    for (const route of routeVariants()) {
+        app.use(route, express.static(DIST_WEB_DIR));
+    }
 
-    app.get(publicRoute(), (_req, res) => {
+    app.get(routeVariants(), (_req, res) => {
         res.sendFile(path.join(DIST_WEB_DIR, 'index.html'));
     });
 }
 
 app.listen(PORT, () => {
-    console.log(`HackCable server running on http://localhost:${PORT}${publicRoute()}`);
+    console.log(`HackCable server running on http://localhost:${PORT}${routeFor(APP_BASE_PATH)}`);
 });
