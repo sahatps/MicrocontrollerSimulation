@@ -110,7 +110,9 @@ This starts a development server at http://localhost:3000
 
 ## Environment Variables
 
-This project doesn't require environment variables for deployment.
+Set `APP_BASE_PATH` when the deployment is mounted below the domain root. For
+example, use `/simulation` for `https://bfarm.in.th/simulation/`. Leave it
+unset (or set it to `/`) for a root deployment.
 
 ## Support
 

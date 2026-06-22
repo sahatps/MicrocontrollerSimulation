@@ -23,17 +23,17 @@
         <div class="controlbar-topright">
             <div class="controlbar-topright-row controlbar-topright-main">
                 <select id="board-select" class="controlbar-select-corner board-mode-corner">
-                    <option value="arduino">Arduino Uno</option>
-                    <option value="esp32">ESP32</option>
-                    <option value="custom-esp32">Custom ESP32</option>
-                    <option value="handysense">Handysense</option>
+                    <option value="arduino" disabled>Arduino Uno</option>
+                    <option value="esp32" disabled>ESP32</option>
+                    <option value="custom-esp32" disabled>Custom ESP32</option>
+                    <option value="handysense" disabled>Handysense</option>
                     <option value="handysense-real" selected>Handysense real</option>
-                    <option value="handysense-pro">Handysense pro</option>
+                    <option value="handysense-pro" disabled>Handysense pro</option>
                 </select>
                 <select id="compiler-mode" class="controlbar-select-corner compiler-mode-corner" title="Compilation method" style="display:none">
                     <option value="clang-llvm" selected>Clang/LLVM WASM (first download ~35MB)</option>
                 </select>
-                <button id="language-toggle" class="language-toggle-btn language-toggle-corner" aria-label="Toggle language">EN</button>
+                <button id="language-toggle" class="language-toggle-btn language-toggle-corner" aria-label="Toggle language" hidden aria-hidden="true">EN</button>
             </div>
             <div class="controlbar-topright-row controlbar-topright-examples">
                 <select id="code-examples" class="controlbar-select-corner examples-mode-corner">

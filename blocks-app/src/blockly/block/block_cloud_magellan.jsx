@@ -1,4 +1,5 @@
 import * as Blockly from 'blockly/core';
+import { publicAssetUrl } from '../../utils/asset-url';
 
 Blockly.Blocks["magellan_begin"] = {
     init: function () {
@@ -9,11 +10,11 @@ Blockly.Blocks["magellan_begin"] = {
       //   24,
       //   "*"))
       // this.appendDummyInput()
-      //   .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"));
+      //   .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"));
       this.appendDummyInput()
-        .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"))
+        .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"))
         .appendField("Magellan Begin");
-      // .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 40, 40, "*"));
+      // .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 40, 40, "*"));
       // this.appendDummyInput()
       //   .appendField("Magellan Begin");
       this.appendDummyInput()
@@ -53,7 +54,7 @@ Blockly.Blocks["magellan_begin"] = {
   //     //   "*"))
   //     this.appendDummyInput()
   //       .appendField(new Blockly.FieldImage(
-  //         ("/icon/icon-magellan.png"),
+  //         (publicAssetUrl("icon/icon-magellan.png")),
   //         30,
   //         30,
   //         "*"))
@@ -61,7 +62,7 @@ Blockly.Blocks["magellan_begin"] = {
   //     // this.appendDummyInput()
   //     // .appendField("Magellan Begin");
   //     // this.appendDummyInput()
-  //     // .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 30, 30, { alt: '*', flipRtl: 'FALSE'}));
+  //     // .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 30, 30, { alt: '*', flipRtl: 'FALSE'}));
   //     // // this.appendDummyInput()
   //     //   .appendField("Magellan Begin");
   //     this.appendValueInput("msg")
@@ -97,7 +98,7 @@ Blockly.Blocks["magellan_begin"] = {
       //   24,
       //   "*"))
       this.appendDummyInput()
-        .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 30, 30, "*"))
+        .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 30, 30, "*"))
         .appendField("Magellan Begin");
       // // this.appendDummyInput()
       //   .appendField("Magellan Begin");
@@ -135,7 +136,7 @@ Blockly.Blocks["magellan_begin"] = {
   //     //   "*"))
   //     this.appendDummyInput()      
   //     .appendField(new Blockly.FieldImage(
-  //       ("/icon/icon-magellan.png"),
+  //       (publicAssetUrl("icon/icon-magellan.png")),
   //       30,
   //       30,
   //       "*"))
@@ -249,7 +250,7 @@ Blockly.Blocks["magellan_begin"] = {
   // Blockly.Blocks['endpoint_maker'] = {
   //   init: function () {
   //     this.appendDummyInput()
-  //       .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"));
+  //       .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"));
   //     this.appendDummyInput()
   //       .appendField("zone Maker")
   //     this.setOutput(true, null);
@@ -263,7 +264,7 @@ Blockly.Blocks["magellan_begin"] = {
   Blockly.Blocks['magellan_isconnected'] = {
     init: function () {
       this.appendDummyInput()
-        .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"));
+        .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"));
       this.setInputsInline(true);
       this.appendDummyInput()
         .appendField("Magellan Is Connected")
@@ -278,7 +279,7 @@ Blockly.Blocks["magellan_begin"] = {
   // Blockly.Blocks['endpoint_enterprise'] = {
   //   init: function () {
   //     this.appendDummyInput()
-  //       .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"));
+  //       .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"));
   //     this.appendDummyInput()
   //       .appendField("zone Enterprise")
   //     this.setOutput(true, null);
@@ -297,7 +298,7 @@ Blockly.Blocks["magellan_begin"] = {
       //   24,
       //   "*"))
       this.appendDummyInput()
-        .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"));
+        .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"));
       this.appendDummyInput()
         .appendField("connect WiFi ssid")
         .appendField(new Blockly.FieldTextInput("config ssid"), "ssid")
@@ -314,7 +315,7 @@ Blockly.Blocks["magellan_begin"] = {
   Blockly.Blocks["magellan_interval"] = {
     init: function () {
       this.appendDummyInput()
-        .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"));
+        .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"));
       this.appendDummyInput()
         .appendField("Interval Time")
         .appendField(new Blockly.FieldTextInput("10"), "interval")
@@ -340,7 +341,7 @@ Blockly.Blocks["magellan_begin"] = {
   Blockly.Blocks["magellan_interval2"] = {
     init: function () {
       this.appendDummyInput()
-        .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"));
+        .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"));
       this.appendDummyInput()
         .appendField("Interval Time")
       this.appendValueInput("interval")
@@ -367,7 +368,7 @@ Blockly.Blocks["magellan_begin"] = {
   // Blockly.Blocks["callback_control"] = {
   //   init: function () {
   //     this.appendDummyInput()
-  //       .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"));
+  //       .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"));
   //     this.appendDummyInput()
   //       // .appendField(new Blockly.FieldImage(
   //       //   "/static/icons/netpie-logo.png",
@@ -429,7 +430,7 @@ Blockly.Blocks["magellan_begin"] = {
   Blockly.Blocks["callback_magellan"] = {
     init: function () {
       this.appendDummyInput()
-        .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"));
+        .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"));
       // this.appendDummyInput()
       // .appendField(new Blockly.FieldImage(
       //   "/static/icons/netpie-logo.png",
@@ -487,11 +488,11 @@ Blockly.Blocks["magellan_begin"] = {
     init: function () {
       this.appendDummyInput()
         .appendField(new Blockly.FieldImage(
-          ("/icon/icon-magellan.png"),
+          (publicAssetUrl("icon/icon-magellan.png")),
           25,
           25,
           "*"))
-      // .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"));
+      // .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"));
       this.setInputsInline(true);
       this.appendDummyInput()
         .appendField("Magellan Reconnect")
@@ -507,7 +508,7 @@ Blockly.Blocks["magellan_begin"] = {
 //     init: function () {
 //       this.setInputsInline(true);
 //       this.appendDummyInput()
-//         .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"))
+//         .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"))
 //         .appendField("If Sensor Name")
 //         .appendField(new Blockly.FieldTextInput("SensorName"), "sensorKey");
 //       this.appendDummyInput()
@@ -623,7 +624,7 @@ Blockly.Blocks["magellan_begin"] = {
 //   Blockly.Blocks['if_else_mutator'] = {
 //     init: function () {
 //       this.appendDummyInput()
-//         .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"))
+//         .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"))
 //         .appendField("if-else structure");
 //       this.appendStatementInput('STACK');
 //       this.setColour("#17bf28");
@@ -635,7 +636,7 @@ Blockly.Blocks["magellan_begin"] = {
 //   Blockly.Blocks['else_if'] = {
 //     init: function () {
 //       this.appendDummyInput()
-//         .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"))
+//         .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"))
 //         .appendField("else if value")
 //         .appendField(new Blockly.FieldTextInput("sensorValue"), "sensorValue");
 //       this.appendStatementInput("DO")
@@ -652,7 +653,7 @@ Blockly.Blocks["magellan_begin"] = {
 //   Blockly.Blocks['else'] = {
 //     init: function () {
 //       this.appendDummyInput()
-//         .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"))
+//         .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"))
 //         .appendField("else");
 //       this.appendStatementInput("DO")
 //         .setCheck(null)
@@ -845,7 +846,7 @@ Blockly.Blocks["magellan_begin"] = {
     init: function () {
       this.setInputsInline(true);
       this.appendDummyInput()
-        .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"))
+        .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"))
         .appendField("Subscribe ")
         .appendField(new Blockly.FieldDropdown([["Control", "Control"], ["Server Config", "Server Config"]]), "reqType");
       this.setPreviousStatement(true, null);
@@ -860,7 +861,7 @@ Blockly.Blocks["magellan_begin"] = {
     init: function () {
       this.setInputsInline(true);
       this.appendDummyInput()
-        .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"))
+        .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"))
         .appendField("Request Value ")
         .appendField(new Blockly.FieldDropdown([["Control", "Control"], ["Server Config", "Server Config"]]), "reqType");
       this.appendDummyInput()
@@ -877,7 +878,7 @@ Blockly.Blocks["magellan_begin"] = {
   Blockly.Blocks['magellan_sensor_add'] = {
     init: function () {
       this.appendDummyInput()
-        .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"))
+        .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"))
         .appendField("Add Sensor Name: ")
         .appendField(new Blockly.FieldTextInput("SensorName"), "sensorKey")
       this.setInputsInline(true);
@@ -894,7 +895,7 @@ Blockly.Blocks["magellan_begin"] = {
   Blockly.Blocks['magellan_sensor_add_txt'] = {
     init: function () {
       this.appendDummyInput()
-        .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"))
+        .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"))
         .appendField("Add Sensor Name: ")
         .appendField(new Blockly.FieldTextInput("SensorName"), "sensorKey")
       this.setInputsInline(true);
@@ -915,7 +916,7 @@ Blockly.Blocks["magellan_begin"] = {
   Blockly.Blocks['magellan_sensor_report'] = {
     init: function () {
       this.appendDummyInput()
-        .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"))
+        .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"))
         .appendField("Report Sensor");
       this.setTooltip("Report Sensor");
       this.appendStatementInput("report_sensor")
@@ -931,7 +932,7 @@ Blockly.Blocks["magellan_begin"] = {
   Blockly.Blocks['magellan_client_config_add'] = {
     init: function () {
       this.appendDummyInput()
-        .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"))
+        .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"))
         .appendField("Add Client Config Name: ")
         .appendField(new Blockly.FieldTextInput("ConfigName"), "sensorKey")
       this.setInputsInline(true);
@@ -948,7 +949,7 @@ Blockly.Blocks["magellan_begin"] = {
   Blockly.Blocks['magellan_client_config_add_txt'] = {
     init: function () {
       this.appendDummyInput()
-        .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"))
+        .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"))
         .appendField("Add Client Config Name: ")
         .appendField(new Blockly.FieldTextInput("ConfigName"), "sensorKey")
       this.setInputsInline(true);
@@ -969,7 +970,7 @@ Blockly.Blocks["magellan_begin"] = {
   Blockly.Blocks['magellan_client_config_send'] = {
     init: function () {
       this.appendDummyInput()
-        .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"))
+        .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"))
         .appendField("Send Client Config");
       this.setTooltip("Send Client Config");
       this.appendStatementInput("client_config_save")
@@ -987,7 +988,7 @@ Blockly.Blocks["magellan_begin"] = {
     init: function () {
       this.setInputsInline(true);
       this.appendDummyInput()
-        .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"))
+        .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"))
         .appendField("On Sensor Name: ")
       this.appendDummyInput()
         .appendField(new Blockly.FieldDropdown([["==", "=="], ["!=", "!="]]), "condition");
@@ -1068,7 +1069,7 @@ Blockly.Blocks["magellan_begin"] = {
     init: function () {
       this.setInputsInline(true);
       this.appendDummyInput()
-        .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"))
+        .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"))
         .appendField("On Value Name: ")
       this.appendDummyInput()
         .appendField(new Blockly.FieldDropdown([["==", "=="], ["!=", "!="]]), "condition");
@@ -1086,7 +1087,7 @@ Blockly.Blocks["magellan_begin"] = {
     init: function () {
       this.setInputsInline(true);
       this.appendDummyInput()
-        .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"))
+        .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"))
         .appendField("Value")
       // this.appendDummyInput()
       //   .appendField(new Blockly.FieldDropdown([["String", "String"],["Int", "Int"], ["Float", "Float"], ["Boolean", "Boolean"]]), "extract_type");
@@ -1104,7 +1105,7 @@ Blockly.Blocks["magellan_begin"] = {
     init: function () {
       this.setInputsInline(true);
       this.appendDummyInput()
-        .appendField(new Blockly.FieldImage(("/icon/icon-magellan.png"), 25, 25, "*"))
+        .appendField(new Blockly.FieldImage((publicAssetUrl("icon/icon-magellan.png")), 25, 25, "*"))
         .appendField("Convert");
       this.appendValueInput("val_conv");
       this.appendDummyInput()

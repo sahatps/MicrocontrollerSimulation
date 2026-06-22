@@ -56,6 +56,12 @@
       font-size 16px
       line-height 1
 
+      svg
+        display block
+        width 16px
+        height 16px
+        fill currentColor
+
     .toggle-label
       font-family Rubik
       font-size 13px
@@ -70,8 +76,8 @@
 
   .hackCable-toggle-catalog-floating
     position absolute
-    top 8px
-    left 8px
+    top 0
+    left 0
     width 36px
     height 36px
     padding 0
@@ -98,24 +104,30 @@
       line-height 1
       color #f6fff1
 
+      svg
+        display block
+        width 20px
+        height 20px
+        fill currentColor
+
     &.active
-      top 8px
-      left 8px
+      top 0
+      left 0
       z-index 811
 
   .hackCable-catalog-bar
     position absolute
     top 0
-    left 8px
+    left 0
     right auto
     width 168px
     background-color rgba(255, 255, 255, 0.96)
     border 1px solid #d4dbe6
-    border-radius 8px
+    border-radius 0
     box-shadow 0 4px 14px rgba(0, 0, 0, 0.1)
     flex-shrink 0
     overflow hidden
-    max-height calc(100vh - 16px)
+    max-height 100vh
     transition max-height 0.3s ease, opacity 0.2s ease
     z-index 800
     pointer-events auto
@@ -130,16 +142,16 @@
       display flex
       flex-direction column
       align-items stretch
-      height calc(100vh - 16px)
+      height 100vh
       padding 52px 8px 8px
       gap 8px
       box-sizing border-box
 
   .hackCable-toggle-catalog-floating.active + .hackCable-catalog-bar
-    max-height calc(100vh - 16px)
+    max-height 100vh
 
     .hackCable-catalog-bar-inner
-      height calc(100vh - 16px)
+      height 100vh
       padding 52px 8px 8px
 
     .hackCable-catalog-actions
@@ -584,10 +596,10 @@
   .hackCable-root
     .hackCable-catalog-bar
       width 150px
-      max-height calc(100vh - 16px)
+      max-height 100vh
 
       .hackCable-catalog-bar-inner
-        height calc(100vh - 16px)
+        height 100vh
 
       .hackCable-catalog-list
         .hackCable-catalog-element
@@ -606,10 +618,10 @@
   .hackCable-root
     .hackCable-catalog-bar
       width 140px
-      max-height calc(100vh - 16px)
+      max-height 100vh
 
       .hackCable-catalog-bar-inner
-        height calc(100vh - 16px)
+        height 100vh
 
     .hackCable-editor
       height 65vh

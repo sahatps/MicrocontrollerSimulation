@@ -258,8 +258,8 @@ body.controlbar-hidden #hackCable
     top 0
     bottom 20px
     width var(--controlbar-width)
-    background-color #30343F
-    border-left 1px solid black
+    background-color #77af5a
+    border-left 1px solid #5f9447
     padding 56px 10px 10px
     display flex
     flex-direction column
@@ -320,8 +320,8 @@ body.controlbar-hidden #hackCable
         border none
         outline none
         background transparent
-        color #d3d7df
-        font-size 12px
+        color #f4fff0
+        font-size 0.9rem
         font-weight 600
         line-height 1.2
         cursor pointer
@@ -333,6 +333,10 @@ body.controlbar-hidden #hackCable
         option
             color #111
             background #fff
+
+            &:disabled
+                color #8f98a3
+                background #eef1ec
 
     .examples-mode-corner
         width 100%
@@ -346,8 +350,8 @@ body.controlbar-hidden #hackCable
         border none
         outline none
         background transparent
-        color #d3d7df
-        font-size 13px
+        color #f4fff0
+        font-size 0.9rem
         font-weight 700
         line-height 1
         cursor pointer
@@ -361,7 +365,7 @@ body.controlbar-hidden #hackCable
     .status-message
         padding 8px 12px
         border-radius 5px
-        font-size 14px
+        font-size 0.95rem
         font-weight 500
         text-align center
         transition all 0.3s ease
@@ -392,7 +396,7 @@ body.controlbar-hidden #hackCable
         display block
         margin-top 10px
         margin-bottom 5px
-        font-size 14px
+        font-size 0.95rem
 
     textarea
         border none
@@ -402,7 +406,7 @@ body.controlbar-hidden #hackCable
         min-height 120px
         padding 8px
         font-family monospace
-        font-size 13px
+        font-size 0.9rem
         box-sizing border-box
         scrollbar-width thin
         scrollbar-color rgba(229, 231, 235, 0.12) transparent
@@ -439,7 +443,7 @@ body.controlbar-hidden #hackCable
             padding 6px 12px
             cursor pointer
             transition background-color 0.2s
-            font-size 14px
+            font-size 0.95rem
             background-color white
             color black
             width 100%
@@ -455,7 +459,7 @@ body.controlbar-hidden #hackCable
             background-color white
             color black
             cursor pointer
-            font-size 14px
+            font-size 0.95rem
             width 100%
 
             option
@@ -609,7 +613,7 @@ body.controlbar-hidden #hackCable
             border none
             border-radius 5px
             padding 6px 10px
-            font-size 13px
+            font-size 0.9rem
             font-family monospace
             width 100%
             box-sizing border-box
@@ -630,19 +634,19 @@ body.controlbar-hidden #hackCable
             border none
             border-radius 5px 5px 0 0
             padding 6px 10px
-            background-color #3d4150
-            color #e5e7eb
-            font-size 13px
+            background-color #a8cd8b
+            color #f4fff0
+            font-size 1rem
             font-weight 600
             text-align center
             cursor pointer
 
             &:hover
-                background-color #4a4e5a
+                background-color #b7d79f
 
             &.active
-                background-color #1a1a1a
-                color #ffffff
+                background-color #ffffff
+                color #77af5a
 
         .editor-tab-panel
             display block
@@ -668,7 +672,7 @@ body.controlbar-hidden #hackCable
                 background-color #1b1d23
                 color #f4efcf
                 font-family Consolas, 'Courier New', monospace
-                font-size 13px
+                font-size 0.9rem
                 line-height 1.6
 
             &[data-editor-panel="code"] .CodeMirror-gutters
@@ -761,19 +765,19 @@ body.controlbar-hidden #hackCable
                 .mock-source-btn
                     border none
                     border-radius 6px
-                    background-color #2f3644
-                    color #d1d5db
-                    font-size 12px
+                    background-color #a8cd8b
+                    color #f4fff0
+                    font-size 0.9rem
                     font-weight 600
                     padding 6px 10px
                     cursor pointer
 
                     &:hover
-                        background-color #3a4355
+                        background-color #b7d79f
 
                     &.active
-                        background-color #5b8def
-                        color #ffffff
+                        background-color #ffffff
+                        color #77af5a
 
                 .mock-source-panel
                     display flex
@@ -809,7 +813,7 @@ body.controlbar-hidden #hackCable
                     padding 4px 10px
                     background-color #20283a
                     color #d1d5db
-                    font-size 11px
+                    font-size 0.9rem
                     font-weight 600
                     cursor pointer
 
@@ -835,7 +839,7 @@ body.controlbar-hidden #hackCable
                     flex-direction column
                     gap 4px
                     color #e5e7eb
-                    font-size 11px
+                    font-size 0.9rem
                     font-weight 600
 
                     select,
@@ -846,14 +850,14 @@ body.controlbar-hidden #hackCable
                         background-color #10141c
                         color #f9fafb
                         padding 4px 8px
-                        font-size 11px
+                        font-size 0.9rem
 
                 .mock-delete-point-btn
                     border 1px solid #6b2f35
                     border-radius 6px
                     background-color #3b1f24
                     color #fecaca
-                    font-size 11px
+                    font-size 0.9rem
                     font-weight 600
                     padding 5px 10px
                     cursor pointer
@@ -877,7 +881,7 @@ body.controlbar-hidden #hackCable
                     display block
 
                 .mock-graph-hint
-                    font-size 11px
+                    font-size 0.9rem
                     color #a7b0bf
 
                 .mock-timeline-editor
@@ -889,7 +893,7 @@ body.controlbar-hidden #hackCable
                     align-items center
                     gap 8px
                     color #e5e7eb
-                    font-size 12px
+                    font-size 0.9rem
                     font-weight 600
 
                     input
@@ -899,7 +903,7 @@ body.controlbar-hidden #hackCable
                         background-color #13161d
                         color #f9fafb
                         padding 4px 8px
-                        font-size 12px
+                        font-size 0.9rem
 
                 .mock-loop-pill
                     border 1px solid #325f88
@@ -907,7 +911,7 @@ body.controlbar-hidden #hackCable
                     color #bfdbfe
                     border-radius 999px
                     padding 4px 10px
-                    font-size 11px
+                    font-size 0.9rem
                     font-weight 700
 
                 .mock-timeline-tracks
@@ -932,7 +936,7 @@ body.controlbar-hidden #hackCable
 
                 .mock-timeline-track-title
                     margin 0
-                    font-size 12px
+                    font-size 0.95rem
                     color #f3f4f6
                     font-weight 700
 
@@ -942,7 +946,7 @@ body.controlbar-hidden #hackCable
                     padding 4px 8px
                     background-color #222938
                     color #d1d5db
-                    font-size 11px
+                    font-size 0.9rem
                     font-weight 600
                     cursor pointer
 
@@ -964,7 +968,7 @@ body.controlbar-hidden #hackCable
                     border-radius 4px
                     background linear-gradient(90deg, #22d3ee, #0ea5e9)
                     color #082f49
-                    font-size 10px
+                    font-size 0.9rem
                     font-weight 700
                     display flex
                     align-items center
@@ -989,14 +993,14 @@ body.controlbar-hidden #hackCable
                         background-color #10141c
                         color #f9fafb
                         padding 4px 6px
-                        font-size 11px
+                        font-size 0.9rem
 
                 .mock-timeline-delete-btn
                     border 1px solid #6b2f35
                     border-radius 6px
                     background-color #3b1f24
                     color #fecaca
-                    font-size 11px
+                    font-size 0.9rem
                     font-weight 600
                     padding 4px 8px
                     cursor pointer
@@ -1005,7 +1009,7 @@ body.controlbar-hidden #hackCable
                         background-color #4a252d
 
                 .mock-timeline-empty
-                    font-size 11px
+                    font-size 0.9rem
                     color #9ca3af
                     padding 2px 0
 
@@ -1014,7 +1018,7 @@ body.controlbar-hidden #hackCable
                     background-color rgba(127, 29, 29, 0.2)
                     border-radius 6px
                     color #fecaca
-                    font-size 11px
+                    font-size 0.9rem
                     padding 6px 8px
 
     #compiled-io-container
@@ -1056,20 +1060,20 @@ body.controlbar-hidden #hackCable
             border none
             border-radius 5px 5px 0 0
             padding 6px 8px
-            background-color #3d4150
-            color #e5e7eb
-            font-size 12px
+            background-color #a8cd8b
+            color #f4fff0
+            font-size 1rem
             font-weight 600
             text-align center
             cursor pointer
             min-width 0
 
             &:hover
-                background-color #4a4e5a
+                background-color #b7d79f
 
             &.active
-                background-color #1a1a1a
-                color #ffffff
+                background-color #ffffff
+                color #77af5a
 
         .compiled-window-actions
             position absolute
@@ -1111,7 +1115,7 @@ body.controlbar-hidden #hackCable
             padding 4px 8px
             background-color #4b5563
             color #e5e7eb
-            font-size 11px
+            font-size 0.9rem
             font-weight 600
             line-height 1
             width auto
@@ -1149,7 +1153,7 @@ body.controlbar-hidden #hackCable
     color #d9f99d
     border-radius 5px
     border 1px solid #3f4754
-    font-size 12px
+    font-size 0.9rem
     line-height 1.3
     white-space pre-wrap
     word-break break-word
@@ -1165,19 +1169,19 @@ body.controlbar-hidden #hackCable
             border-radius 5px 5px 0 0
             padding 7px 8px
             cursor pointer
-            background-color #3d4150
-            color #aaa
-            font-size 13px
+            background-color #a8cd8b
+            color #f4fff0
+            font-size 1rem
             font-weight 500
             transition background-color 0.2s, color 0.2s
 
             &:hover
-                background-color #4a4e5a
+                background-color #b7d79f
                 color white
 
             &.active
-                background-color #4CAF50
-                color white
+                background-color #ffffff
+                color #77af5a
 
     .tab-panel
         display none

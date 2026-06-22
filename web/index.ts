@@ -23,8 +23,9 @@ installWasmCompatHarness();
 const mountingDiv = document.getElementById('hackCable');
 if(!mountingDiv) throw new DOMException("Mounting div not found")
 
-const lang = localStorage.getItem('hackCable-webExample-language');
-let hackCable = new HackCable(mountingDiv, lang ? lang : 'en_us');
+const languageStorageKey = 'hackCable-webExample-language';
+localStorage.setItem(languageStorageKey, 'en_us');
+let hackCable = new HackCable(mountingDiv, 'en_us');
 
 // Clang/LLVM WASM state
 const clangRunner = new ClangWasmRunner();
@@ -6486,11 +6487,6 @@ if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
 // language
 
 const languageToggle = document.getElementById('language-toggle') as HTMLButtonElement | null;
-const languageStorageKey = 'hackCable-webExample-language';
-
-const getCurrentLanguage = () => {
-    return localStorage.getItem(languageStorageKey) === 'th_th' ? 'th_th' : 'en_us';
-};
 
 function normalizeBoardSelection(board: string | null | undefined): 'arduino' | 'esp32' | 'custom-esp32' | 'handysense' | 'handysense-real' | 'handysense-pro' {
     switch (board) {
@@ -6518,17 +6514,14 @@ function getHandysenseComponentId(board: string | null | undefined): number {
 
 const updateLanguageToggleLabel = () => {
     if (!languageToggle) return;
-    const currentLanguage = getCurrentLanguage();
-    // Show the target language on the button.
-    languageToggle.textContent = currentLanguage === 'th_th' ? 'EN' : 'TH';
+    languageToggle.textContent = 'EN';
 };
 
 updateLanguageToggleLabel();
 
 languageToggle?.addEventListener("click", async () => {
-    const nextLanguage = getCurrentLanguage() === 'th_th' ? 'en_us' : 'th_th';
-    await hackCable.changeLanguage(nextLanguage);
-    localStorage.setItem(languageStorageKey, nextLanguage);
+    await hackCable.changeLanguage('en_us');
+    localStorage.setItem(languageStorageKey, 'en_us');
     updateLanguageToggleLabel();
     updateUITranslations();
 });
@@ -6537,19 +6530,17 @@ languageToggle?.addEventListener("click", async () => {
 const boardSelect = document.getElementById('board-select') as HTMLSelectElement;
 
 if (boardSelect) {
-    // Load saved board selection
-    const savedBoard = normalizeBoardSelection(localStorage.getItem('hackCable-selectedBoard'));
-    if (savedBoard) {
-        boardSelect.value = savedBoard;
-        localStorage.setItem('hackCable-selectedBoard', savedBoard);
-    } else {
-        // Set default to Handysense real
-        boardSelect.value = 'handysense-real';
-        localStorage.setItem('hackCable-selectedBoard', 'handysense-real');
-    }
+    // Lock board selection to Handysense real for now.
+    boardSelect.value = 'handysense-real';
+    localStorage.setItem('hackCable-selectedBoard', 'handysense-real');
 
     boardSelect.addEventListener('change', () => {
         const selectedBoard = normalizeBoardSelection(boardSelect.value);
+        if (selectedBoard !== 'handysense-real') {
+            boardSelect.value = 'handysense-real';
+            localStorage.setItem('hackCable-selectedBoard', 'handysense-real');
+            return;
+        }
         console.log(`Board changed to: ${selectedBoard}`);
 
         // Save selection to localStorage

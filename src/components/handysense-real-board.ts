@@ -12,6 +12,9 @@ const SPI_CLK_SIGNAL = [{ type: 'spi', signal: 'SCK', bus: 0 }];
 const SPI_CS_SIGNAL = [{ type: 'spi', signal: 'SS', bus: 0 }];
 
 export const HANDYSENSE_REAL_BOARD_CONTROL_EVENT = 'handysense-real-board-control';
+const HANDYSENSE_REAL_OVERLAY_Z_INDEX = '950';
+const HANDYSENSE_REAL_OVERLAY_BUTTON_Z_INDEX = '951';
+const HANDYSENSE_REAL_FACE_TOGGLE_Z_INDEX = '960';
 
 export type HandysenseRealBoardControlName =
   | 'reset'
@@ -501,7 +504,7 @@ export class HandysenseRealBoardElement extends HandysenseProBoardElement {
     overlay.style.width = '100vw';
     overlay.style.height = '100vh';
     overlay.style.pointerEvents = 'none';
-    overlay.style.zIndex = '10000';
+    overlay.style.zIndex = HANDYSENSE_REAL_OVERLAY_Z_INDEX;
 
     const controls: HandysenseRealBoardControlName[] = ['reset', 'boot', 'button0', 'button1', 'button2', 'button3'];
     controls.forEach((control) => {
@@ -513,7 +516,7 @@ export class HandysenseRealBoardElement extends HandysenseProBoardElement {
       button.setAttribute('aria-label', HANDYSENSE_REAL_CONTROL_LABELS[control]);
       button.style.position = 'fixed';
       button.style.pointerEvents = 'auto';
-      button.style.zIndex = '10001';
+      button.style.zIndex = HANDYSENSE_REAL_OVERLAY_BUTTON_Z_INDEX;
       button.style.touchAction = 'none';
       button.addEventListener('pointerdown', (event) => {
         this.consumeControlInteraction(event);
@@ -637,14 +640,15 @@ export class HandysenseRealBoardElement extends HandysenseProBoardElement {
 
     const container = document.createElement('div');
     container.style.position = 'fixed';
-    container.style.display = 'flex';
+    container.style.display = 'none';
     container.style.gap = '4px';
     container.style.padding = '4px';
     container.style.borderRadius = '10px';
     container.style.background = 'rgba(15,44,23,0.92)';
     container.style.border = '1px solid #b8dcbf';
-    container.style.zIndex = '9999';
-    container.style.pointerEvents = 'auto';
+    container.style.zIndex = HANDYSENSE_REAL_FACE_TOGGLE_Z_INDEX;
+    container.style.pointerEvents = 'none';
+    container.setAttribute('aria-hidden', 'true');
 
     const createButton = (label: string, mode: BoardFaceMode) => {
       const button = document.createElement('button');

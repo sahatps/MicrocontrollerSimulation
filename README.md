@@ -70,13 +70,14 @@ docker compose -f docker-compose.prod.yml up --build
 Then open:
 
 ```text
-http://localhost:3000
+http://localhost:3000/simulation/
 ```
 
 This production image:
 - serves the built web app and proxy from a single container
 - uses a single public port: `3000`
-- proxies `/wasm-clang` internally, so the browser does not need a separate dev server
+- serves the app under `/simulation` by default
+- proxies `/simulation/wasm-clang` internally, so the browser does not need a separate dev server
 - does not install native compiler toolchains in the container
 
 If you want to publish it for others:
@@ -84,6 +85,12 @@ If you want to publish it for others:
 ```bash
 docker build -f Dockerfile.prod -t yourname/hackcable:latest .
 docker push yourname/hackcable:latest
+```
+
+To build the production image at the domain root instead, pass an empty base path:
+
+```bash
+docker build -f Dockerfile.prod --build-arg APP_BASE_PATH=/ -t yourname/hackcable:latest .
 ```
 
 Then they can run:

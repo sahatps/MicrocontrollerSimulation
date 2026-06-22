@@ -2,6 +2,9 @@ FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
+ARG APP_BASE_PATH=/simulation
+ENV APP_BASE_PATH=${APP_BASE_PATH}
+
 COPY package.json package-lock.json ./
 RUN npm ci
 
@@ -12,6 +15,8 @@ FROM node:20-bookworm-slim
 
 WORKDIR /app
 
+ARG APP_BASE_PATH=/simulation
+
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
@@ -21,6 +26,7 @@ COPY --from=builder /app/server.js ./server.js
 ENV NODE_ENV=production
 ENV SERVE_STATIC=1
 ENV PORT=3000
+ENV APP_BASE_PATH=${APP_BASE_PATH}
 
 EXPOSE 3000
 

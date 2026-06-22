@@ -1,9 +1,10 @@
 import * as Blockly from 'blockly/core';
+import { publicAssetUrl } from '../../utils/asset-url';
 
 Blockly.Blocks["WIFI_begin"] = {
     init: function () {
         this.appendDummyInput()
-            .appendField(new Blockly.FieldImage("/icon/netpie-logo.png", 24, 24, "*"))
+            .appendField(new Blockly.FieldImage(publicAssetUrl("icon/netpie-logo.png"), 24, 24, "*"))
             .appendField("connect WiFi ssid")
             .appendField(new Blockly.FieldTextInput("test"), "ssid")
             .appendField("password")
@@ -19,7 +20,7 @@ Blockly.Blocks["WIFI_begin"] = {
 Blockly.Blocks["WIFI_begin_2"] = {
     init: function () {
         this.appendDummyInput()
-            .appendField(new Blockly.FieldImage("/icon/netpie-logo.png", 24, 24, "*"))
+            .appendField(new Blockly.FieldImage(publicAssetUrl("icon/netpie-logo.png"), 24, 24, "*"))
             .appendField("connect WiFi ssid")
             .appendField(new Blockly.FieldTextInput("test"), "ssid")
             .appendField("password")
@@ -35,7 +36,7 @@ Blockly.Blocks["WIFI_begin_2"] = {
 Blockly.Blocks["WIFI_begin_3"] = {
     init: function () {
         this.appendDummyInput()
-            .appendField(new Blockly.FieldImage("/icon/netpie-logo.png", 24, 24, "*"))
+            .appendField(new Blockly.FieldImage(publicAssetUrl("icon/netpie-logo.png"), 24, 24, "*"))
             .appendField("connect WiFi ssid")
             .appendField(new Blockly.FieldTextInput("test"), "ssid")
             .appendField("password")
@@ -65,7 +66,7 @@ Blockly.Blocks["WIFI_begin_3"] = {
 Blockly.Blocks["netpie_begin"] = {
     init: function () {
         this.appendDummyInput()
-            .appendField(new Blockly.FieldImage("/icon/netpie-logo.png", 24, 24, "*"))
+            .appendField(new Blockly.FieldImage(publicAssetUrl("icon/netpie-logo.png"), 24, 24, "*"))
             .appendField("NETPIE Begin");
         this.appendDummyInput()
             .setAlign(Blockly.inputs.Align.LEFT)
@@ -104,7 +105,7 @@ Blockly.Blocks["netpie_connect"] = {
             "CLIENT-" + Math.random().toString(36).substring(5).toUpperCase();
         this.appendDummyInput()
             .appendField(
-                new Blockly.FieldImage("/icon/netpie-logo.png", 24, 24, "*")
+                new Blockly.FieldImage(publicAssetUrl("icon/netpie-logo.png"), 24, 24, "*")
             )
             .appendField("CONNECT")
             .appendField(new Blockly.FieldTextInput(""), "MQTT_CLIENT_ID");
@@ -119,7 +120,7 @@ Blockly.Blocks["netpie_connect"] = {
 Blockly.Blocks["pub_topic"] = {
     init: function () {
         this.appendDummyInput()
-            .appendField(new Blockly.FieldImage("/icon/netpie-logo.png", 24, 24, "*"))
+            .appendField(new Blockly.FieldImage(publicAssetUrl("icon/netpie-logo.png"), 24, 24, "*"))
             .appendField("pub_topic");
 
         this.appendDummyInput()
@@ -142,7 +143,7 @@ Blockly.Blocks["pub_topic"] = {
 Blockly.Blocks["payload"] = {
     init: function () {
         this.appendDummyInput()
-            .appendField(new Blockly.FieldImage("/icon/netpie-logo.png", 24, 24, "*"))
+            .appendField(new Blockly.FieldImage(publicAssetUrl("icon/netpie-logo.png"), 24, 24, "*"))
             .appendField("message(payload)");
         this.setOutput(true, null);
         this.setColour("#FF5757");
@@ -154,7 +155,7 @@ Blockly.Blocks["payload"] = {
 Blockly.Blocks["netpie_topic"] = {
     init: function () {
         this.appendDummyInput()
-            .appendField(new Blockly.FieldImage("/icon/netpie-logo.png", 24, 24, "*"))
+            .appendField(new Blockly.FieldImage(publicAssetUrl("icon/netpie-logo.png"), 24, 24, "*"))
             .appendField("Topic_netpie");
         this.setOutput(true, null);
         this.setColour("#FF5757");
@@ -166,7 +167,7 @@ Blockly.Blocks["netpie_topic"] = {
 // Blockly.Blocks["text"] = {
 //     init: function () {
 //         this.appendDummyInput()
-//             .appendField(new Blockly.FieldImage("/icon/netpie-logo.png", 24, 24, "*"))
+//             .appendField(new Blockly.FieldImage(publicAssetUrl("icon/netpie-logo.png"), 24, 24, "*"))
 //             .appendField("Text")
 //             .appendField(new Blockly.FieldTextInput(""), "text_");
 //         this.setOutput(true, null);
@@ -180,7 +181,7 @@ Blockly.Blocks["callback_netpie"] = {
     init: function () {
         this.appendDummyInput()
             .appendField(
-                new Blockly.FieldImage("/icon/netpie-logo.png", 24, 24, "*")
+                new Blockly.FieldImage(publicAssetUrl("icon/netpie-logo.png"), 24, 24, "*")
             )
             .appendField("MQTT CALLBACK topic");
         this.appendStatementInput("loop_callback").setCheck(null);
@@ -196,7 +197,7 @@ Blockly.Blocks["callback_netpie"] = {
 Blockly.Blocks["callback_topic"] = {
     init: function () {
         this.appendDummyInput()
-            .appendField(new Blockly.FieldImage("/icon/netpie-logo.png", 24, 24, "*"))
+            .appendField(new Blockly.FieldImage(publicAssetUrl("icon/netpie-logo.png"), 24, 24, "*"))
             .appendField("Topic_Callback")
             .appendField(new Blockly.FieldTextInput(""), "topic_callback");
         this.setPreviousStatement(true, null);
@@ -210,7 +211,7 @@ Blockly.Blocks["callback_topic"] = {
 Blockly.Blocks["callback_setup"] = {
     init: function () {
         this.appendDummyInput()
-            .appendField(new Blockly.FieldImage("/icon/netpie-logo.png", 24, 24, "*"))
+            .appendField(new Blockly.FieldImage(publicAssetUrl("icon/netpie-logo.png"), 24, 24, "*"))
             .appendField("Callback_Setup");
         this.setPreviousStatement(true, null);
         this.setNextStatement(true, null);

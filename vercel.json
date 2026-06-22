@@ -4,8 +4,16 @@
   "framework": null,
   "rewrites": [
     {
+      "source": "/simulation/wasm-clang/:path*",
+      "destination": "https://binji.github.io/wasm-clang/:path*"
+    },
+    {
       "source": "/wasm-clang/:path*",
       "destination": "https://binji.github.io/wasm-clang/:path*"
+    },
+    {
+      "source": "/simulation/:path*",
+      "destination": "/:path*"
     }
   ],
   "headers": [

@@ -19,6 +19,7 @@ import './block/index_block.jsx';
 import './generate/index_generate.jsx';
 
 import TexttoCode from "../function/TexttoCode";
+import { appUrl } from '../utils/asset-url';
 
 
 // Set Blockly language
@@ -991,7 +992,7 @@ setPin_ErrorSensor(19, 18, 5);
         try {
             const body = JSON.stringify({ code: convertedCode });
             console.log("Sending code for verification:", body);
-            const response = await fetch('http://localhost:3001/api/verify-arduino', {
+            const response = await fetch(appUrl('api/verify-arduino'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: body

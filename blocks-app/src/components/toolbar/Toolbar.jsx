@@ -1,4 +1,5 @@
 import './toolbar.css'
+import { publicAssetUrl } from '../../utils/asset-url'
 
 function Toolbar({
     showCode,
@@ -26,7 +27,7 @@ function Toolbar({
         <div className='toolbar'>
             <div className="toolbar-content">
                 <div className='toolbar-x'>
-                    <img src="/FarmBlock.png" alt="" />
+                    <img src={publicAssetUrl('FarmBlock.png')} alt="" />
                     <select
                         className="toolbar-example-select"
                         value={selectedExample}

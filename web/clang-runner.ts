@@ -18,7 +18,8 @@
  *   https://binji.github.io/wasm-clang/
  */
 
-const BASE_URL  = '/wasm-clang/';
+const APP_BASE_PATH = process.env.APP_BASE_PATH || '';
+const BASE_URL = `${APP_BASE_PATH}/wasm-clang/`;
 const CACHE_NAME = 'hackcable-clang-v5';
 
 // Files pre-downloaded by the main thread and read by the Worker from cache.

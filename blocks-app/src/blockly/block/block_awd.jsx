@@ -1,4 +1,5 @@
 import * as Blockly from 'blockly/core';
+import { publicAssetUrl } from '../../utils/asset-url';
 
 Blockly.Blocks["HandySense_awdv1"] = {
     init: function () {
@@ -6,7 +7,7 @@ Blockly.Blocks["HandySense_awdv1"] = {
         this.appendDummyInput()
             .appendField(
                 new Blockly.FieldImage(
-                    "/icon/source-code.png",
+                    publicAssetUrl("icon/source-code.png"),
                     40,
                     40,
                     "*"
@@ -15,7 +16,7 @@ Blockly.Blocks["HandySense_awdv1"] = {
             .appendField("Alternate Wetting and Drying");
         this.appendDummyInput()
             .setAlign(Blockly.inputs.Align.LEFT)
-            .appendField(new Blockly.FieldImage("/icon/netpie-logo.png", 20, 20, "*"))
+            .appendField(new Blockly.FieldImage(publicAssetUrl("icon/netpie-logo.png"), 20, 20, "*"))
             .appendField("NETPIE setting")
         this.appendDummyInput()
             .setAlign(Blockly.inputs.Align.LEFT)
@@ -31,7 +32,7 @@ Blockly.Blocks["HandySense_awdv1"] = {
             .appendField(new Blockly.FieldTextInput(""), "n_secret");
         this.appendDummyInput()
             .setAlign(Blockly.inputs.Align.LEFT)
-            .appendField(new Blockly.FieldImage("/icon/icons8_thinkspeak.png", 20, 20, "*"))
+            .appendField(new Blockly.FieldImage(publicAssetUrl("icon/icons8_thinkspeak.png"), 20, 20, "*"))
             .appendField("Thinkspeak setting")
         this.appendDummyInput()
             .setAlign(Blockly.inputs.Align.LEFT)
@@ -39,7 +40,7 @@ Blockly.Blocks["HandySense_awdv1"] = {
             .appendField(new Blockly.FieldTextInput(""), "t_api");
         this.appendDummyInput()
             .setAlign(Blockly.inputs.Align.LEFT)
-            .appendField(new Blockly.FieldImage("/icon/sun.png", 20, 20, "*"))
+            .appendField(new Blockly.FieldImage(publicAssetUrl("icon/sun.png"), 20, 20, "*"))
             .appendField("Sensor")
         this.appendValueInput("value_sensor1")
             .appendField("    ▸ Sensor 1")
@@ -61,7 +62,7 @@ Blockly.Blocks["HandySense_awdv1"] = {
         //   .appendField("Sensor 3");
         this.appendDummyInput()
             .setAlign(Blockly.inputs.Align.LEFT)
-            .appendField(new Blockly.FieldImage("/icon/icons8_Story_Time_96px-d.png", 20, 20, "*"))
+            .appendField(new Blockly.FieldImage(publicAssetUrl("icon/icons8_Story_Time_96px-d.png"), 20, 20, "*"))
             .appendField("Delay")
             .appendField(new Blockly.FieldTextInput("300000"), "delay");
         this.appendDummyInput();

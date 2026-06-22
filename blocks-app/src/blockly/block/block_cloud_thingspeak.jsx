@@ -1,10 +1,11 @@
 import * as Blockly from 'blockly/core';
+import { publicAssetUrl } from '../../utils/asset-url';
 
 Blockly.Blocks["Thingspeak_begin"] = {
     init: function () {
         this.appendDummyInput()
             .appendField(new Blockly.FieldImage(
-                "/icon/icons8_thinkspeak.png",
+                publicAssetUrl("icon/icons8_thinkspeak.png"),
                 24,
                 24,
                 "*"))
@@ -36,7 +37,7 @@ Blockly.Blocks["Thingspeak_connectWifi"] = {
 
         this.appendDummyInput()
             .appendField(new Blockly.FieldImage(
-                "/icon/icons8_thinkspeak.png",
+                publicAssetUrl("icon/icons8_thinkspeak.png"),
                 24,
                 24,
                 "*"))
@@ -56,7 +57,7 @@ Blockly.Blocks["Thingspeak_Finish"] = {
 
         this.appendDummyInput()
             .appendField(new Blockly.FieldImage(
-                "/icon/icons8_thinkspeak.png",
+                publicAssetUrl("icon/icons8_thinkspeak.png"),
                 24,
                 24,
                 "*"))
@@ -78,7 +79,7 @@ Blockly.Blocks['Thingspeak_set_field_value'] = {
     init: function () {
         this.appendValueInput("VALUE")
             .appendField(new Blockly.FieldImage(
-                "/icon/icons8_thinkspeak.png",
+                publicAssetUrl("icon/icons8_thinkspeak.png"),
                 24,
                 24,
                 "*"))

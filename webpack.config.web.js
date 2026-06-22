@@ -5,6 +5,15 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
 const webpack = require('webpack')
 
+const normalizeBasePath = (value) => {
+    const trimmed = String(value || '').trim();
+    if (!trimmed || trimmed === '/') return '';
+    return `/${trimmed.replace(/^\/+|\/+$/g, '')}`;
+};
+
+const appBasePath = normalizeBasePath(process.env.APP_BASE_PATH);
+const publicUrl = (pathSuffix) => `${appBasePath}/${pathSuffix.replace(/^\/+/, '')}`;
+
 module.exports = {
     entry: ["@babel/polyfill", path.resolve(__dirname, 'web') + "/index.ts"],
     performance: {
@@ -25,7 +34,7 @@ module.exports = {
         static: [
             {
                 directory: path.join(__dirname, 'blocks-app/dist'),
-                publicPath: '/blocks'
+                publicPath: publicUrl('blocks')
             }
         ],
         headers: {
@@ -36,15 +45,27 @@ module.exports = {
             'Cross-Origin-Embedder-Policy': 'credentialless'
         },
         onBeforeSetupMiddleware: (devServer) => {
-            devServer.app.get('/', (req, res) => {
+            if (appBasePath) {
+                devServer.app.use((req, res, next) => {
+                    if (req.path === appBasePath) {
+                        res.redirect(308, `${appBasePath}/`);
+                        return;
+                    }
+                    next();
+                });
+            }
+            devServer.app.get(`${appBasePath}/`, (_req, res) => {
                 res.sendFile(path.join(__dirname, 'web/shell.html'));
             });
         },
         proxy: [
             {
-                context: ['/api'],
+                context: [publicUrl('api')],
                 target: 'http://localhost:3001',
                 changeOrigin: true,
+                ...(appBasePath ? {
+                    pathRewrite: { [`^${appBasePath}`]: '' },
+                } : {}),
                 onError: (err, req, res) => {
                     res.writeHead(503, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({
@@ -54,10 +75,13 @@ module.exports = {
                 }
             },
             {
-                context: ['/wasm-clang'],
+                context: [publicUrl('wasm-clang')],
                 target: 'https://binji.github.io',
                 changeOrigin: true,
                 secure: false,
+                ...(appBasePath ? {
+                    pathRewrite: { [`^${appBasePath}`]: '' },
+                } : {}),
             }
         ]
     },
@@ -80,7 +104,7 @@ module.exports = {
     output: {
         filename: 'bundle.js',
         path: path.resolve(__dirname, 'dist/web/hackcable'),
-        publicPath: '/hackcable/',
+        publicPath: publicUrl('hackcable/'),
         clean: true
     },
     resolve: {
@@ -147,6 +171,9 @@ module.exports = {
             "$": "jquery",
             "jQuery": "jquery",
             "window.jQuery": "jquery"
-        })
+        }),
+        new webpack.DefinePlugin({
+            'process.env.APP_BASE_PATH': JSON.stringify(appBasePath),
+        }),
     ],
 }
