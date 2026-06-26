@@ -36,6 +36,7 @@ coverage/
 *.tmp
 .cache/
 *.tar
+!web/wasm-clang/sysroot.tar
 *.tar.gz
 *.zip
 *.7z

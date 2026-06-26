@@ -4,6 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>HackCable</title>
+    <script>
+        (function() {
+            function hasCookie(name) {
+                return document.cookie.split(';').some(function(cookie) {
+                    return cookie.trim().split('=')[0] === name;
+                });
+            }
+
+            function isLocalUrl() {
+                return window.location.protocol === 'file:' ||
+                    window.location.hostname === 'localhost' ||
+                    window.location.hostname === '127.0.0.1' ||
+                    window.location.hostname === '::1' ||
+                    window.location.hostname === '[::1]';
+            }
+
+            if (!hasCookie('email') && isLocalUrl()) {
+                document.cookie = 'email=local@hackcable.dev; path=/; SameSite=Lax';
+            }
+
+            if (!hasCookie('email') && !isLocalUrl() && window.location.pathname !== '/blockly') {
+                window.location.replace('/blockly');
+            }
+        })();
+    </script>
     <link rel="icon" href="./assets/icon.png" />
 
     <!-- CSS will be auto-injected -->
@@ -30,7 +55,7 @@
                     <option value="handysense-real" selected>Handysense real</option>
                     <option value="handysense-pro" disabled>Handysense pro</option>
                 </select>
-                <select id="compiler-mode" class="controlbar-select-corner compiler-mode-corner" title="Compilation method" style="display:none">
+                <select id="compiler-mode" class="controlbar-select-corner compiler-mode-corner" title="Compilation method" hidden aria-hidden="true" style="display:none">
                     <option value="clang-llvm" selected>Clang/LLVM WASM (first download ~35MB)</option>
                 </select>
                 <button id="language-toggle" class="language-toggle-btn language-toggle-corner" aria-label="Toggle language" hidden aria-hidden="true">EN</button>

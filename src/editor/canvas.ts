@@ -58,6 +58,10 @@ export class Canvas extends draw2d.Canvas{
     private isPanningPointerDown = false;
     private darkMode = false;
     private gridVisible = true;
+    private responsiveCanvasResizeTimer: any = null;
+    private lastCanvasLogicalWidth = 0;
+    private lastCanvasLogicalHeight = 0;
+    private isSyncingCanvasLayout = false;
 
     constructor(divId: string){
         super(divId);
@@ -231,37 +235,83 @@ export class Canvas extends draw2d.Canvas{
     }
 
     private setupResponsiveCanvas(){
-        // Update canvas dimensions based on container size
-        const updateCanvasDimensions = () => {
-            const container = document.querySelector('.hackCable-editor') as HTMLElement;
-            if (container) {
-                const width = Math.max(container.clientWidth, MIN_CANVAS_WIDTH);
-                const height = Math.max(container.clientHeight, MIN_CANVAS_HEIGHT);
-
-                // Update canvas element dimensions
-                const canvasElement = document.getElementById('hackCable-canvas');
-                if (canvasElement) {
-                    canvasElement.style.width = width + 'px';
-                    canvasElement.style.height = height + 'px';
-                    canvasElement.style.paddingLeft = CANVAS_ORIGIN_OFFSET_X + 'px';
-                    canvasElement.style.paddingTop = CANVAS_ORIGIN_OFFSET_Y + 'px';
-                }
-            }
-        };
+        const scheduleCanvasLayoutSync = () => this.scheduleCanvasLayoutSync();
 
         // Initial update
-        setTimeout(updateCanvasDimensions, 100);
+        setTimeout(scheduleCanvasLayoutSync, 100);
 
         // Update on window resize
-        let resizeTimeout: any;
         window.addEventListener('resize', () => {
-            clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(updateCanvasDimensions, 250);
+            clearTimeout(this.responsiveCanvasResizeTimer);
+            this.responsiveCanvasResizeTimer = setTimeout(scheduleCanvasLayoutSync, 250);
         });
     }
 
     private onZoomChange(){
         css(this.overlayContainer, {transform: 'scale(' + 1/this.getZoom() + ')'})
+        this.scheduleCanvasLayoutSync();
+    }
+
+    private scheduleCanvasLayoutSync(): void {
+        if (this.isSyncingCanvasLayout) return;
+        requestAnimationFrame(() => this.syncCanvasLayout());
+    }
+
+    private syncCanvasLayout(): void {
+        if (this.isSyncingCanvasLayout) return;
+
+        const container = this.getEditorElement();
+        this.canvasElement = this.canvasElement || document.getElementById('hackCable-canvas');
+        if (!container || !this.canvasElement) return;
+
+        this.isSyncingCanvasLayout = true;
+        try {
+            const logicalWidth = Math.max(container.clientWidth, MIN_CANVAS_WIDTH);
+            const logicalHeight = Math.max(container.clientHeight, MIN_CANVAS_HEIGHT);
+            const zoomScale = 1 / Math.max(Number(this.getZoom()) || 1, 0.001);
+            const renderedOverflowWidth = Math.max(0, Math.ceil(logicalWidth * (zoomScale - 1)));
+            const renderedOverflowHeight = Math.max(0, Math.ceil(logicalHeight * (zoomScale - 1)));
+
+            if (
+                logicalWidth !== this.lastCanvasLogicalWidth ||
+                logicalHeight !== this.lastCanvasLogicalHeight
+            ) {
+                this.setDimension(logicalWidth, logicalHeight);
+                this.lastCanvasLogicalWidth = logicalWidth;
+                this.lastCanvasLogicalHeight = logicalHeight;
+            }
+            this.applyZoomedDraw2dSize(logicalWidth, logicalHeight, zoomScale);
+
+            const regionConstraint = (this as any).regionDragDropConstraint;
+            regionConstraint?.setBoundingBox?.(
+                new (draw2d as any).geo.Rectangle(0, 0, logicalWidth, logicalHeight)
+            );
+
+            css(this.overlayContainer, {
+                width: logicalWidth,
+                height: logicalHeight
+            });
+            css(this.canvasElement, {
+                paddingLeft: CANVAS_ORIGIN_OFFSET_X,
+                paddingTop: CANVAS_ORIGIN_OFFSET_Y,
+                paddingRight: renderedOverflowWidth,
+                paddingBottom: renderedOverflowHeight
+            });
+        } finally {
+            this.isSyncingCanvasLayout = false;
+        }
+    }
+
+    private applyZoomedDraw2dSize(logicalWidth: number, logicalHeight: number, zoomScale: number): void {
+        const canvasAny = this as any;
+        canvasAny.paper?.setViewBox?.(0, 0, logicalWidth, logicalHeight);
+
+        if (!this.canvasElement) return;
+        Array.from(this.canvasElement.children).forEach((child) => {
+            if (child.tagName.toLowerCase() !== 'svg') return;
+            child.setAttribute('width', String(logicalWidth * zoomScale));
+            child.setAttribute('height', String(logicalHeight * zoomScale));
+        });
     }
 
     private getScrollHost(): HTMLElement | null {

@@ -14,7 +14,7 @@
 | UI / Wiring canvas | [Draw2D](http://www.draw2d.org) |
 | Component visuals | [Wokwi Elements](https://github.com/wokwi/wokwi-elements) |
 | Arduino emulation | [AVR8JS](https://github.com/wokwi/avr8js) |
-| ESP32 C++ compilation | Browser-side `clang-llvm` via `/wasm-clang` proxy |
+| ESP32 C++ compilation | Browser-side `clang-llvm` via self-hosted `/wasm-clang` assets |
 | Frontend build | Webpack 5 + Babel + TypeScript |
 | Internationalization | i18next (`src/ui/i18n/`) |
 
@@ -23,14 +23,14 @@
 | Server | Port | Start command |
 |--------|------|---------------|
 | Webpack dev server (web app) | 3000 | `npm run serve:web` |
-| Lightweight backend/proxy | 3001 | `npm run serve:backend` |
+| Lightweight backend/static server | 3001 | `npm run serve:backend` |
 | Both together | — | `npm run dev` |
 
 Access the app at **http://localhost:3000**
 
-The webpack dev server proxies:
-- `/api` → `http://localhost:3001`
-- `/wasm-clang` → `https://binji.github.io` (external WASM toolchain)
+The webpack dev server proxies `/api` to `http://localhost:3001`.
+
+The webpack dev server serves `/wasm-clang` directly from `web/wasm-clang/`.
 
 ## Key npm Scripts
 
@@ -61,8 +61,9 @@ web/
   arduino-headers.ts
   arduino-wasm-shim.ts
   clang-runner.ts
+  wasm-clang/       # Self-hosted Clang/LLVM WASM toolchain assets
 
-server.js           # Express backend for health/static/proxy routes (port 3001)
+server.js           # Express backend for health/static routes (port 3001)
 webpack.config.js           # Library bundle config
 webpack.config.web.js       # Web app bundle config
 ```

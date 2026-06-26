@@ -70,6 +70,7 @@ The build process creates the following files in `dist/web/`:
 - `bundle.js` - Compiled JavaScript bundle
 - `assets/` - Static assets (icons, SVG files)
 - `blocks/` - Embedded Blocks app build
+- `wasm-clang/` - Self-hosted Clang/LLVM WASM toolchain assets
 
 ## Verification
 
@@ -95,6 +96,7 @@ If the build fails:
 ### Missing Assets
 If assets are not loading:
 - Verify that the `web/assets/` directory contains all necessary files
+- Verify that the `web/wasm-clang/` directory contains the compiler assets
 - Check the browser console for 404 errors
 
 ## Local Development

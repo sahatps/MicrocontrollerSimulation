@@ -1,13 +1,11 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { Readable } = require('stream');
 
 const app = express();
 const shouldServeStatic = process.env.SERVE_STATIC === '1';
 const PORT = Number(process.env.PORT || (shouldServeStatic ? 3000 : 3001));
 const DIST_WEB_DIR = path.join(__dirname, 'dist', 'web');
-const WASM_CLANG_ORIGIN = 'https://binji.github.io';
 const normalizeBasePath = (value) => {
     const trimmed = String(value || '').trim();
     if (!trimmed || trimmed === '/') return '';
@@ -20,6 +18,35 @@ const routeVariants = (pathSuffix = '') => {
     const routes = [routeFor('', pathSuffix)];
     if (APP_BASE_PATH) routes.push(routeFor(APP_BASE_PATH, pathSuffix));
     return routes;
+};
+const BLOCKLY_REDIRECT_PATH = '/blockly';
+const LOCAL_EMAIL_COOKIE_VALUE = 'local@hackcable.dev';
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+const hasCookie = (req, name) =>
+    String(req.headers.cookie || '')
+        .split(';')
+        .some((cookie) => cookie.trim().split('=')[0] === name);
+const isLocalRequest = (req) => LOCAL_HOSTNAMES.has(req.hostname);
+const isBlocklyRedirectPath = (req) =>
+    req.path === BLOCKLY_REDIRECT_PATH || req.path.startsWith(`${BLOCKLY_REDIRECT_PATH}/`);
+const isPageRequest = (req) =>
+    req.method === 'GET' &&
+    (req.accepts('html') || req.path === '/' || req.path === APP_BASE_PATH);
+const requireEmailCookie = (req, res, next) => {
+    if (!isBlocklyRedirectPath(req) && isPageRequest(req) && !hasCookie(req, 'email')) {
+        if (isLocalRequest(req)) {
+            res.cookie('email', LOCAL_EMAIL_COOKIE_VALUE, {
+                path: '/',
+                sameSite: 'lax',
+            });
+            next();
+            return;
+        }
+
+        res.redirect(302, BLOCKLY_REDIRECT_PATH);
+        return;
+    }
+    next();
 };
 
 app.use(cors());
@@ -43,48 +70,7 @@ app.get(routeVariants('health'), (_req, res) => {
 });
 
 if (shouldServeStatic) {
-    const proxyWasmClang = async (req, res) => {
-        const targetUrl = new URL(`/wasm-clang${req.url}`, WASM_CLANG_ORIGIN);
-        const controller = new AbortController();
-        const onClose = () => controller.abort();
-        req.on('close', onClose);
-
-        try {
-            const upstream = await fetch(targetUrl, {
-                method: req.method,
-                signal: controller.signal,
-            });
-
-            res.status(upstream.status);
-            for (const [key, value] of upstream.headers.entries()) {
-                if (key.toLowerCase() === 'transfer-encoding') continue;
-                res.setHeader(key, value);
-            }
-
-            if (!upstream.body) {
-                res.end();
-                return;
-            }
-
-            Readable.fromWeb(upstream.body).pipe(res);
-        } catch (error) {
-            if (!res.headersSent) {
-                res.status(502).json({
-                    error: 'Failed to fetch wasm-clang assets',
-                    code: 'WASM_CLANG_PROXY_ERROR',
-                    details: error.message || String(error),
-                });
-            } else {
-                res.end();
-            }
-        } finally {
-            req.off('close', onClose);
-        }
-    };
-
-    for (const route of routeVariants('wasm-clang')) {
-        app.use(route, proxyWasmClang);
-    }
+    app.use(requireEmailCookie);
 
     if (APP_BASE_PATH) {
         app.use((req, res, next) => {

@@ -13,6 +13,19 @@ const normalizeBasePath = (value) => {
 
 const appBasePath = normalizeBasePath(process.env.APP_BASE_PATH);
 const publicUrl = (pathSuffix) => `${appBasePath}/${pathSuffix.replace(/^\/+/, '')}`;
+const blocklyRedirectPath = '/blockly';
+const localEmailCookieValue = 'local@hackcable.dev';
+const localHostnames = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+const hasCookie = (req, name) =>
+    String(req.headers.cookie || '')
+        .split(';')
+        .some((cookie) => cookie.trim().split('=')[0] === name);
+const isLocalRequest = (req) => localHostnames.has(req.hostname);
+const isBlocklyRedirectPath = (req) =>
+    req.path === blocklyRedirectPath || req.path.startsWith(`${blocklyRedirectPath}/`);
+const isPageRequest = (req) =>
+    req.method === 'GET' &&
+    (req.accepts('html') || req.path === '/' || req.path === appBasePath);
 
 module.exports = {
     entry: ["@babel/polyfill", path.resolve(__dirname, 'web') + "/index.ts"],
@@ -35,16 +48,35 @@ module.exports = {
             {
                 directory: path.join(__dirname, 'blocks-app/dist'),
                 publicPath: publicUrl('blocks')
+            },
+            {
+                directory: path.join(__dirname, 'web/wasm-clang'),
+                publicPath: publicUrl('wasm-clang')
             }
         ],
         headers: {
             'Cross-Origin-Opener-Policy': 'same-origin',
-            // credentialless: allows cross-origin fetches without CORP headers
-            // (needed for binji/wasm-clang files from binji.github.io).
-            // Still enables SharedArrayBuffer (same as require-corp).
+            // Keeps SharedArrayBuffer available for browser-side wasm-clang.
             'Cross-Origin-Embedder-Policy': 'credentialless'
         },
         onBeforeSetupMiddleware: (devServer) => {
+            devServer.app.use((req, res, next) => {
+                if (!isBlocklyRedirectPath(req) && isPageRequest(req) && !hasCookie(req, 'email')) {
+                    if (isLocalRequest(req)) {
+                        res.cookie('email', localEmailCookieValue, {
+                            path: '/',
+                            sameSite: 'lax',
+                        });
+                        next();
+                        return;
+                    }
+
+                    res.redirect(302, blocklyRedirectPath);
+                    return;
+                }
+                next();
+            });
+
             if (appBasePath) {
                 devServer.app.use((req, res, next) => {
                     if (req.path === appBasePath) {
@@ -73,15 +105,6 @@ module.exports = {
                         code: 'BACKEND_UNAVAILABLE'
                     }));
                 }
-            },
-            {
-                context: [publicUrl('wasm-clang')],
-                target: 'https://binji.github.io',
-                changeOrigin: true,
-                secure: false,
-                ...(appBasePath ? {
-                    pathRewrite: { [`^${appBasePath}`]: '' },
-                } : {}),
             }
         ]
     },
@@ -89,6 +112,7 @@ module.exports = {
     optimization: {
         minimizer: [
             new TerserPlugin({
+                exclude: /wasm-clang[\\/]/,
                 terserOptions: {
                     compress: {
                         // Drop noisy runtime logs in production builds to reduce
@@ -159,6 +183,10 @@ module.exports = {
                 {
                     from: './web/assets',
                     to: 'assets'
+                },
+                {
+                    from: './web/wasm-clang',
+                    to: path.resolve(__dirname, 'dist/web/wasm-clang')
                 },
                 {
                     from: './web/shell.html',

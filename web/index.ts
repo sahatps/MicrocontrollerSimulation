@@ -635,10 +635,11 @@ function markCompileStale() {
 }
 
 function updateCompilerVisibility() {
-    const board = normalizeBoardSelection(boardSelectEl?.value);
-    const isESP32 = board === 'esp32' || board === 'custom-esp32' || isHandysenseBoard(board);
     if (compilerModeSelect) {
-        compilerModeSelect.style.display = isESP32 ? 'inline-block' : 'none';
+        compilerModeSelect.value = 'clang-llvm';
+        compilerModeSelect.hidden = true;
+        compilerModeSelect.setAttribute('aria-hidden', 'true');
+        compilerModeSelect.style.display = 'none';
     }
 }
 boardSelectEl?.addEventListener('change', () => {

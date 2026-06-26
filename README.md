@@ -43,7 +43,7 @@ Build or start the live server of the web page that use the library
 
 This repository can run in Docker for local development, including:
 - the web app on `http://localhost:3000`
-- the lightweight backend/proxy on `http://localhost:3001`
+- the lightweight backend/static server on `http://localhost:3001`
 
 Start it with:
 
@@ -53,7 +53,7 @@ docker compose up --build
 
 Notes:
 - ESP32 compilation is browser-side `clang-llvm` only.
-- The backend is kept for app serving and `/wasm-clang` proxying.
+- `/wasm-clang` compiler assets are self-hosted static files in this project.
 - Source files are mounted into the container, so code changes on your machine are reflected immediately.
 - The first browser compile can take a while because `wasm-clang` downloads its toolchain on first use.
 
@@ -74,10 +74,10 @@ http://localhost:3000/simulation/
 ```
 
 This production image:
-- serves the built web app and proxy from a single container
+- serves the built web app and self-hosted compiler assets from a single container
 - uses a single public port: `3000`
 - serves the app under `/simulation` by default
-- proxies `/simulation/wasm-clang` internally, so the browser does not need a separate dev server
+- serves `/simulation/wasm-clang` from the bundled static assets
 - does not install native compiler toolchains in the container
 
 If you want to publish it for others:
