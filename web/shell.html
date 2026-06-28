@@ -199,10 +199,10 @@
 
   <div id="frames">
     <div id="pane-hackcable" class="pane">
-      <iframe id="frame-hackcable" src="./hackcable/index.html" allow="cross-origin-isolated"></iframe>
+      <iframe id="frame-hackcable" title="HackCable circuit simulator" allow="cross-origin-isolated"></iframe>
     </div>
     <div id="pane-bfarm" class="pane hidden">
-      <iframe id="frame-bfarm" src="./blocks/index.html"></iframe>
+      <iframe id="frame-bfarm" title="B-Farm blocks editor"></iframe>
     </div>
   </div>
 
@@ -220,6 +220,17 @@
       throw new Error('HackCable shell loaded inside iframe');
     }
 
+    // Vercel may serve this shell at both /blockly and /blockly/. Resolve the
+    // application mount explicitly so a trailing slash cannot turn the frame
+    // URLs into /blockly/blocks/... and recursively load this shell again.
+    var shellBasePath = window.location.pathname
+      .replace(/\/+$/, '')
+      .replace(/\/index\.html$/, '')
+      .replace(/\/blockly$/, '');
+    var appPath = function(path) {
+      return `${shellBasePath}/${String(path).replace(/^\/+/, '')}`;
+    };
+
     var hcPane  = document.getElementById('pane-hackcable');
     var bfPane  = document.getElementById('pane-bfarm');
     var btnCircuit = document.getElementById('btn-circuit');
@@ -229,6 +240,10 @@
     var btnGrid = document.getElementById('btn-grid');
     var btnControlBar = document.getElementById('btn-controlbar');
     var frameHackCable = document.getElementById('frame-hackcable');
+    var frameBfarm = document.getElementById('frame-bfarm');
+
+    frameHackCable.src = appPath('hackcable/index.html');
+    frameBfarm.src = appPath('blocks/index.html');
 
     function sendToHackCable(message) {
       if (frameHackCable && frameHackCable.contentWindow) {
@@ -237,7 +252,7 @@
     }
 
     function openBlockly() {
-      window.location.href = `${window.location.origin}/blockly`;
+      window.location.href = `${window.location.origin}${appPath('blockly')}`;
     }
 
     function setControlBarBtnState(hidden) {
