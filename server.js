@@ -19,7 +19,7 @@ const routeVariants = (pathSuffix = '') => {
     if (APP_BASE_PATH) routes.push(routeFor(APP_BASE_PATH, pathSuffix));
     return routes;
 };
-const BLOCKLY_REDIRECT_PATH = '/blockly';
+const BLOCKLY_REDIRECT_PATH = routeFor(APP_BASE_PATH, 'blockly');
 const LOCAL_EMAIL_COOKIE_VALUE = 'local@hackcable.dev';
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 const hasCookie = (req, name) =>

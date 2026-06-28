@@ -20,12 +20,27 @@
                     window.location.hostname === '[::1]';
             }
 
+            function normalizePath(path) {
+                var normalized = String(path || '').replace(/\/index\.html$/, '').replace(/\/+$/, '');
+                return normalized || '';
+            }
+
+            function joinPath(basePath, path) {
+                return `${normalizePath(basePath)}/${String(path).replace(/^\/+/, '')}`.replace(/\/{2,}/g, '/');
+            }
+
+            function getBlocklyPath() {
+                var currentPath = normalizePath(window.location.pathname);
+                var appBasePath = currentPath.replace(/\/hackcable$/, '');
+                return joinPath(appBasePath, 'blockly');
+            }
+
             if (!hasCookie('email') && isLocalUrl()) {
                 document.cookie = 'email=local@hackcable.dev; path=/; SameSite=Lax';
             }
 
-            if (!hasCookie('email') && !isLocalUrl() && window.location.pathname !== '/blockly') {
-                window.location.replace('/blockly');
+            if (!hasCookie('email') && !isLocalUrl() && normalizePath(window.location.pathname) !== normalizePath(getBlocklyPath())) {
+                window.location.replace(getBlocklyPath());
             }
         })();
     </script>

@@ -20,12 +20,27 @@
           window.location.hostname === '[::1]';
       }
 
+      function normalizePath(path) {
+        var normalized = String(path || '').replace(/\/index\.html$/, '').replace(/\/+$/, '');
+        return normalized || '';
+      }
+
+      function joinPath(basePath, path) {
+        return `${normalizePath(basePath)}/${String(path).replace(/^\/+/, '')}`.replace(/\/{2,}/g, '/');
+      }
+
+      function getBlocklyPath() {
+        var currentPath = normalizePath(window.location.pathname);
+        var appBasePath = currentPath.replace(/\/blockly$/, '');
+        return joinPath(appBasePath, 'blockly');
+      }
+
       if (!hasCookie('email') && isLocalUrl()) {
         document.cookie = 'email=local@hackcable.dev; path=/; SameSite=Lax';
       }
 
-      if (!hasCookie('email') && !isLocalUrl() && window.location.pathname !== '/blockly') {
-        window.location.replace('/blockly');
+      if (!hasCookie('email') && !isLocalUrl() && normalizePath(window.location.pathname) !== normalizePath(getBlocklyPath())) {
+        window.location.replace(getBlocklyPath());
       }
     })();
   </script>
@@ -220,15 +235,62 @@
       throw new Error('HackCable shell loaded inside iframe');
     }
 
-    // Vercel may serve this shell at both /blockly and /blockly/. Resolve the
-    // application mount explicitly so a trailing slash cannot turn the frame
-    // URLs into /blockly/blocks/... and recursively load this shell again.
-    var shellBasePath = window.location.pathname
-      .replace(/\/+$/, '')
-      .replace(/\/index\.html$/, '')
-      .replace(/\/blockly$/, '');
+    function normalizePath(path) {
+      var normalized = String(path || '').replace(/\/index\.html$/, '').replace(/\/+$/, '');
+      return normalized || '';
+    }
+
+    function joinPath(basePath, path) {
+      return `${normalizePath(basePath)}/${String(path).replace(/^\/+/, '')}`.replace(/\/{2,}/g, '/');
+    }
+
+    // Some deploys expose the shell at /blockly while the assets still live at
+    // /blocks/...; others nest them under /blockly/blocks/... . Try both and
+    // pick the first path that resolves to the expected document.
+    var currentShellPath = normalizePath(window.location.pathname);
+    var shellBasePath = currentShellPath.replace(/\/blockly$/, '');
     var appPath = function(path) {
-      return `${shellBasePath}/${String(path).replace(/^\/+/, '')}`;
+      return joinPath(shellBasePath, path);
+    };
+    var shellRelativePath = function(path) {
+      return joinPath(currentShellPath, path);
+    };
+    var getBlocklyPath = function() {
+      return joinPath(shellBasePath, 'blockly');
+    };
+    var uniquePaths = function(paths) {
+      return paths.filter(function(path, index) {
+        return path && paths.indexOf(path) === index;
+      });
+    };
+    var frameCandidates = function(path) {
+      return uniquePaths([
+        appPath(path),
+        shellRelativePath(path)
+      ]);
+    };
+    var looksLikeShellDocument = function(html) {
+      return html.indexOf('HackCable shell loaded inside iframe') !== -1;
+    };
+    var looksLikeHackCableDocument = function(html) {
+      return html.indexOf('<title>HackCable</title>') !== -1 && html.indexOf('id="hackCable"') !== -1;
+    };
+    var looksLikeBlocksDocument = function(html) {
+      return html.indexOf('<title>B-Farm</title>') !== -1;
+    };
+    var resolveFramePath = async function(paths, validator) {
+      for (var i = 0; i < paths.length; i++) {
+        var candidate = paths[i];
+        try {
+          var response = await fetch(candidate, { credentials: 'same-origin', cache: 'no-store' });
+          if (!response.ok) continue;
+          var html = await response.text();
+          if (looksLikeShellDocument(html)) continue;
+          if (!validator || validator(html)) return candidate;
+        } catch (_error) {
+        }
+      }
+      return paths[0];
     };
 
     var hcPane  = document.getElementById('pane-hackcable');
@@ -242,8 +304,10 @@
     var frameHackCable = document.getElementById('frame-hackcable');
     var frameBfarm = document.getElementById('frame-bfarm');
 
-    frameHackCable.src = appPath('hackcable/index.html');
-    frameBfarm.src = appPath('blocks/index.html');
+    (async function configureFrames() {
+      frameHackCable.src = await resolveFramePath(frameCandidates('hackcable/index.html'), looksLikeHackCableDocument);
+      frameBfarm.src = await resolveFramePath(frameCandidates('blocks/index.html'), looksLikeBlocksDocument);
+    })();
 
     function sendToHackCable(message) {
       if (frameHackCable && frameHackCable.contentWindow) {
@@ -252,7 +316,7 @@
     }
 
     function openBlockly() {
-      window.location.href = `${window.location.origin}${appPath('blockly')}`;
+      window.location.href = `${window.location.origin}${getBlocklyPath()}`;
     }
 
     function setControlBarBtnState(hidden) {

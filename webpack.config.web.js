@@ -10,10 +10,12 @@ const normalizeBasePath = (value) => {
     if (!trimmed || trimmed === '/') return '';
     return `/${trimmed.replace(/^\/+|\/+$/g, '')}`;
 };
+const routeFor = (basePath, pathSuffix = '') =>
+    `${basePath}/${String(pathSuffix).replace(/^\/+/, '')}`;
 
 const appBasePath = normalizeBasePath(process.env.APP_BASE_PATH);
 const publicUrl = (pathSuffix) => `${appBasePath}/${pathSuffix.replace(/^\/+/, '')}`;
-const blocklyRedirectPath = '/blockly';
+const blocklyRedirectPath = routeFor(appBasePath, 'blockly');
 const localEmailCookieValue = 'local@hackcable.dev';
 const localHostnames = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 const hasCookie = (req, name) =>
