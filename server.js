@@ -14,6 +14,10 @@ const normalizeBasePath = (value) => {
 const APP_BASE_PATH = normalizeBasePath(process.env.APP_BASE_PATH);
 const routeFor = (basePath, pathSuffix = '') =>
     `${basePath}/${String(pathSuffix).replace(/^\/+/, '')}`;
+const normalizeRoutePath = (value) => {
+    const trimmed = String(value || '').replace(/\/index\.html$/, '').replace(/\/+$/, '');
+    return trimmed || '';
+};
 const routeVariants = (pathSuffix = '') => {
     const routes = [routeFor('', pathSuffix)];
     if (APP_BASE_PATH) routes.push(routeFor(APP_BASE_PATH, pathSuffix));
@@ -29,11 +33,16 @@ const hasCookie = (req, name) =>
 const isLocalRequest = (req) => LOCAL_HOSTNAMES.has(req.hostname);
 const isBlocklyRedirectPath = (req) =>
     req.path === BLOCKLY_REDIRECT_PATH || req.path.startsWith(`${BLOCKLY_REDIRECT_PATH}/`);
-const isPageRequest = (req) =>
-    req.method === 'GET' &&
-    (req.accepts('html') || req.path === '/' || req.path === APP_BASE_PATH);
+const ROOT_ENTRY_PATHS = new Set([
+    normalizeRoutePath(routeFor('', '')),
+    normalizeRoutePath(routeFor('', 'index.html')),
+    normalizeRoutePath(routeFor(APP_BASE_PATH, '')),
+    normalizeRoutePath(routeFor(APP_BASE_PATH, 'index.html')),
+]);
+const isRootEntryRequest = (req) =>
+    req.method === 'GET' && ROOT_ENTRY_PATHS.has(normalizeRoutePath(req.path));
 const requireEmailCookie = (req, res, next) => {
-    if (!isBlocklyRedirectPath(req) && isPageRequest(req) && !hasCookie(req, 'email')) {
+    if (!isBlocklyRedirectPath(req) && isRootEntryRequest(req) && !hasCookie(req, 'email')) {
         if (isLocalRequest(req)) {
             res.cookie('email', LOCAL_EMAIL_COOKIE_VALUE, {
                 path: '/',

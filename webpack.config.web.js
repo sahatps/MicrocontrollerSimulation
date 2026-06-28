@@ -12,6 +12,10 @@ const normalizeBasePath = (value) => {
 };
 const routeFor = (basePath, pathSuffix = '') =>
     `${basePath}/${String(pathSuffix).replace(/^\/+/, '')}`;
+const normalizeRoutePath = (value) => {
+    const trimmed = String(value || '').replace(/\/index\.html$/, '').replace(/\/+$/, '');
+    return trimmed || '';
+};
 
 const appBasePath = normalizeBasePath(process.env.APP_BASE_PATH);
 const publicUrl = (pathSuffix) => `${appBasePath}/${pathSuffix.replace(/^\/+/, '')}`;
@@ -25,9 +29,14 @@ const hasCookie = (req, name) =>
 const isLocalRequest = (req) => localHostnames.has(req.hostname);
 const isBlocklyRedirectPath = (req) =>
     req.path === blocklyRedirectPath || req.path.startsWith(`${blocklyRedirectPath}/`);
-const isPageRequest = (req) =>
-    req.method === 'GET' &&
-    (req.accepts('html') || req.path === '/' || req.path === appBasePath);
+const rootEntryPaths = new Set([
+    normalizeRoutePath(routeFor('', '')),
+    normalizeRoutePath(routeFor('', 'index.html')),
+    normalizeRoutePath(routeFor(appBasePath, '')),
+    normalizeRoutePath(routeFor(appBasePath, 'index.html')),
+]);
+const isRootEntryRequest = (req) =>
+    req.method === 'GET' && rootEntryPaths.has(normalizeRoutePath(req.path));
 
 module.exports = {
     entry: ["@babel/polyfill", path.resolve(__dirname, 'web') + "/index.ts"],
@@ -63,7 +72,7 @@ module.exports = {
         },
         onBeforeSetupMiddleware: (devServer) => {
             devServer.app.use((req, res, next) => {
-                if (!isBlocklyRedirectPath(req) && isPageRequest(req) && !hasCookie(req, 'email')) {
+                if (!isBlocklyRedirectPath(req) && isRootEntryRequest(req) && !hasCookie(req, 'email')) {
                     if (isLocalRequest(req)) {
                         res.cookie('email', localEmailCookieValue, {
                             path: '/',

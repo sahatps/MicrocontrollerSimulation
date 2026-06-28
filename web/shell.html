@@ -35,11 +35,26 @@
         return joinPath(appBasePath, 'blockly');
       }
 
+      function isTopLevel() {
+        try {
+          return window.top === window.self;
+        } catch (_error) {
+          return false;
+        }
+      }
+
+      function isRootEntryPath() {
+        var currentPath = normalizePath(window.location.pathname);
+        var blocklyPath = normalizePath(getBlocklyPath());
+        var appBasePath = normalizePath(blocklyPath.replace(/\/blockly$/, ''));
+        return currentPath === appBasePath || currentPath === `${appBasePath}/index.html`.replace(/\/{2,}/g, '/');
+      }
+
       if (!hasCookie('email') && isLocalUrl()) {
         document.cookie = 'email=local@hackcable.dev; path=/; SameSite=Lax';
       }
 
-      if (!hasCookie('email') && !isLocalUrl() && normalizePath(window.location.pathname) !== normalizePath(getBlocklyPath())) {
+      if (!hasCookie('email') && !isLocalUrl() && isTopLevel() && isRootEntryPath()) {
         window.location.replace(getBlocklyPath());
       }
     })();
