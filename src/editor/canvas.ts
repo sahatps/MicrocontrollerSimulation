@@ -53,6 +53,8 @@ export class Canvas extends draw2d.Canvas{
     private selected: any = null;
     private codeGenerator: CodeGenerator;
     private onCircuitChangeCallback: ((code: string) => void) | null = null;
+    private onCircuitStateChangeCallback: (() => void) | null = null;
+    private circuitStateChangeTimer: ReturnType<typeof setTimeout> | null = null;
     private editorElement: HTMLElement | null = null;
     private canvasElement: HTMLElement | null = null;
     private isPanningPointerDown = false;
@@ -496,9 +498,39 @@ export class Canvas extends draw2d.Canvas{
     }
 
     /**
+     * Set a lightweight callback for persisting the circuit state. Unlike code
+     * generation, this fires immediately so a refresh cannot lose the latest edit.
+     */
+    public setOnCircuitStateChangeCallback(callback: () => void) {
+        this.onCircuitStateChangeCallback = callback;
+    }
+
+    /** Notify persistence without regenerating code. Drag updates can be debounced. */
+    public notifyCircuitStateChange(debounce = false) {
+        if (debounce) {
+            if (this.circuitStateChangeTimer) clearTimeout(this.circuitStateChangeTimer);
+            this.circuitStateChangeTimer = setTimeout(() => {
+                this.circuitStateChangeTimer = null;
+                this.onCircuitStateChangeCallback?.();
+            }, 150);
+            return;
+        }
+
+        if (this.circuitStateChangeTimer) {
+            clearTimeout(this.circuitStateChangeTimer);
+            this.circuitStateChangeTimer = null;
+        }
+        if (this.onCircuitStateChangeCallback) {
+            this.onCircuitStateChangeCallback();
+        }
+    }
+
+    /**
      * Called when circuit changes (components added/removed, connections made/broken)
      */
     private onCircuitChange() {
+        this.notifyCircuitStateChange();
+
         // Debounce to avoid generating code too frequently
         setTimeout(() => {
             const generatedCode = this.codeGenerator.generateCode();

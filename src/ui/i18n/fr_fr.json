@@ -36,6 +36,14 @@
   "wokwiComponents.sht31Sensor.description": "Capteur I2C haute précision de température et d'humidité",
   "wokwiComponents.bh1750Sensor.name": "Capteur BH1750 (I2C)",
   "wokwiComponents.bh1750Sensor.description": "Capteur I2C d'intensité lumineuse ambiante (lux)",
+  "wokwiComponents.sht31Rs485Sensor.name": "Capteur SHT31 (RS485)",
+  "wokwiComponents.sht31Rs485Sensor.description": "Capteur Modbus RS485 de température et d'humidité SHT31",
+  "wokwiComponents.weight3kgRs485Sensor.name": "Capteur de poids 3 kg (RS485)",
+  "wokwiComponents.weight3kgRs485Sensor.description": "Capteur de charge Modbus RS485 jusqu'à 3 kg",
+  "wokwiComponents.windDirectionRs485Sensor.name": "Capteur de direction du vent (RS485)",
+  "wokwiComponents.windDirectionRs485Sensor.description": "Capteur Modbus RS485 de direction du vent en degrés",
+  "wokwiComponents.dtPar485Sensor.name": "Capteur DT-Par485",
+  "wokwiComponents.dtPar485Sensor.description": "Capteur Modbus RS485 de rayonnement photosynthétiquement actif",
   "wokwiComponents.currentLoop420mA.name": "Boucle de courant 4-20mA (MCP3424)",
   "wokwiComponents.currentLoop420mA.description": "ADC I2C pour lecture de capteurs industriels 4-20mA",
   "wokwiComponents.soilMoistureSensor.name": "Capteur d'humidité du sol",
@@ -143,5 +151,10 @@
   "ui.mock.sensor.tubularMoisture50": "Humidite tubulaire 50 cm (%)",
   "ui.mock.sensor.tubularTemperature50": "Temperature tubulaire 50 cm (C)",
   "ui.mock.sensor.airVelocity": "Vitesse de l'air (m/s)",
-  "ui.mock.sensor.noise": "Bruit (dB)"
+  "ui.mock.sensor.noise": "Bruit (dB)",
+  "ui.mock.sensor.weight": "Poids (g)",
+  "ui.mock.sensor.windDirection": "Direction du vent (degrés)",
+  "ui.mock.sensor.windSpeed": "Vitesse du vent (m/s)",
+  "ui.mock.sensor.rain": "Précipitations (mm)",
+  "ui.mock.sensor.par": "PAR (umol/m2/s)"
 }

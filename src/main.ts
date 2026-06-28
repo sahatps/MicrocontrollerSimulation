@@ -42,6 +42,10 @@ import {BfarmTubularSoilProbeRs485Element} from "./components/bfarm-tubular-soil
 import {BfarmAirVelocitySensorSm3789Element} from "./components/bfarm-air-velocity-sensor-sm3789-element";
 import {BfarmLux120kRs485Element} from "./components/bfarm-lux120k-rs485-element";
 import {BfarmWeatherSensorRs485Element} from "./components/bfarm-weather-sensor-rs485-element";
+import {Sht31Rs485SensorElement} from "./components/sht31-rs485-sensor-element";
+import {Weight3kgRs485SensorElement} from "./components/weight-3kg-rs485-sensor-element";
+import {WindDirectionRs485SensorElement} from "./components/wind-direction-rs485-sensor-element";
+import {DtPar485SensorElement} from "./components/dt-par485-sensor-element";
 
 export {AVRRunner} from "./emulator/avr-runner";
 export {EmulatorManager} from './emulator/emulator-manager';
@@ -135,6 +139,7 @@ export class HackCable {
     private isESP32BoardElement(element: any): boolean {
         return element instanceof ESP32DevkitV1Element
             || element instanceof CustomESP32BoardElement
+            || element instanceof HandysenseRealBoardElement
             || element instanceof HandysenseProBoardElement;
     }
 
@@ -623,6 +628,10 @@ export class HackCable {
         BfarmAirVelocitySensorSm3789Element,
         BfarmLux120kRs485Element,
         BfarmWeatherSensorRs485Element,
+        Sht31Rs485SensorElement,
+        Weight3kgRs485SensorElement,
+        WindDirectionRs485SensorElement,
+        DtPar485SensorElement,
     ];
 
     public activateSensorComponent(busType: string, pin1: number, pin2: number) {
@@ -642,9 +651,7 @@ export class HackCable {
                     const otherFigure = otherPort?.getParent();
                     if (!otherFigure) return;
                     const otherEl = otherFigure.componentElement;
-                    if (!(otherEl instanceof ESP32DevkitV1Element ||
-                          otherEl instanceof CustomESP32BoardElement ||
-                          otherEl instanceof HandysenseProBoardElement)) return;
+                    if (!this.isESP32BoardElement(otherEl)) return;
                     const pinName: string = otherPort.getLocator().portId;
                     const pinNumber = this.parseBoardPinNumber(pinName) ?? -1;
                     if (pinNumber === pin1 || pinNumber === pin2) matched = true;

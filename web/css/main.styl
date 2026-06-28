@@ -479,7 +479,9 @@ body.controlbar-hidden #hackCable
             display flex
             flex-direction row
             flex-wrap nowrap
-            gap 10px
+            align-items center
+            justify-content space-between
+            gap 0
 
         .sim-http-toggle-btn
             width 38px
@@ -515,6 +517,47 @@ body.controlbar-hidden #hackCable
                 height 23px
                 display block
                 fill currentColor
+
+        .session-circle-btn
+            width 44px
+            min-width 44px
+            height 44px
+            padding 0
+            border none
+            border-radius 50%
+            outline none
+            box-shadow none
+            background-color transparent
+            color #315021
+            display flex
+            align-items center
+            justify-content center
+            text-align center
+            cursor pointer
+            flex 0 0 auto
+            transition background-color 0.2s, color 0.2s, transform 0.2s, outline-color 0.2s, border-color 0.2s
+
+            &:hover
+                background-color #f8f8f8
+                color #77af5a
+
+            &:active
+                transform scale(0.94)
+
+            &:focus,
+            &:focus-visible
+                border none
+                outline none
+                box-shadow none
+
+            .session-action-icon
+                width auto
+                height auto
+                display block
+                font-size 40px
+                font-weight 400
+                line-height 1
+                font-variation-settings 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24
 
         .sim-http-settings
             position absolute
@@ -665,6 +708,43 @@ body.controlbar-hidden #hackCable
                 background-color #1b1d23
                 overflow hidden
 
+                .code-editor-actions
+                    position absolute
+                    top 0
+                    right 0
+                    z-index 5
+                    display flex
+                    gap 0 !important
+
+                    button
+                        display block
+                        margin 0 !important
+                        min-width 52px
+                        padding 5px 10px
+                        border 1px solid #4fa75d
+                        border-radius 0
+                        background-color rgba(27, 29, 35, 0.92)
+                        color #dff4d8
+                        font-size 0.78rem
+                        font-weight 600
+                        cursor pointer
+                        transition background-color 0.15s, color 0.15s
+
+                        &:hover
+                            background-color #4fa75d
+                            color #fff
+
+                        &:focus-visible
+                            outline 2px solid #a8cd8b
+                            outline-offset 2px
+
+                        &:first-child
+                            border-bottom-left-radius 4px
+
+                        &:last-child
+                            border-left 0
+                            margin-left -1px !important
+
             &[data-editor-panel="code"] .CodeMirror
                 width 100%
                 height 100%
@@ -757,6 +837,9 @@ body.controlbar-hidden #hackCable
                 display flex
                 flex-direction column
                 gap 10px
+
+                &[hidden]
+                    display none !important
 
                 .mock-source-toggle
                     display flex
@@ -1360,7 +1443,7 @@ footer
 
                 .run-controls-row
                     flex-wrap nowrap
-                    gap 8px
+                    gap 0
 
                 .run-circle-btn
                     width 40px
@@ -1373,6 +1456,11 @@ footer
                     min-width 34px
                     height 40px
                     font-size 18px
+
+                .session-circle-btn
+                    width 200px
+                    min-width 40px
+                    height 200px
 
                 .sim-http-settings
                     width 280px
@@ -1424,7 +1512,7 @@ body.controlbar-resizing
             .buttonBar.run-controls
                 .run-controls-row
                     flex-wrap nowrap
-                    gap 6px
+                    gap 0
 
                 .run-circle-btn
                     width 36px
@@ -1437,6 +1525,11 @@ body.controlbar-resizing
                     min-width 30px
                     height 36px
                     font-size 16px
+
+                .session-circle-btn
+                    width 36px
+                    min-width 36px
+                    height 36px
 
                 .sim-http-settings
                     width 240px

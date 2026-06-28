@@ -1007,3 +1007,49 @@ Weather register map:
   - `Ultrasonic rs485` reads `getResponseBuffer(256)`, which may not match typical Modbus buffer indexing.
   - `Water Quality` mixes multiple independent sensor objects in one plugin.
 - For parser/emulator tests, preserving the original code shape from `generators_*.js` is more important than making every snippet perfectly idiomatic.
+# Legacy `#blocks` sensor components added to Circuit
+
+The following register maps come directly from the generators currently loaded by
+`blocks-app/src/blockly/generate/index_generate.jsx`. These components belong to the
+Circuit `Sensor` dropdown (`ComponentType.BFARM`).
+
+## SHT31 RS485
+
+- Generator object: `rs485_sht31Meter`
+- Bus: `Serial2`, 9600 baud, slave ID selected by the block
+- Read: holding registers `0..1`
+
+| Register / buffer | Field | Mock key | Raw scale | Code conversion | Default |
+| ---: | --- | --- | ---: | --- | ---: |
+| 0 | Temperature | `temperature` | x10 | `/10.0f` | 25 C |
+| 1 | Humidity | `humidity` | x10 | `/10.0f` | 60 %RH |
+
+## Weight 3 kg RS485
+
+- Generator object: `rs485_weight`
+- Bus: `Serial2`, 9600 baud, slave ID selected by the block
+- Read: holding registers `0..1`; generated value uses buffer `1` plus user offset
+
+| Register / buffer | Field | Mock key | Raw scale | Code conversion | Default |
+| ---: | --- | --- | ---: | --- | ---: |
+| 1 | Weight | `weight` | x1 | `+ offset` | 1500 g |
+
+## Wind direction RS485
+
+- Generator object: `rs485_windd`
+- Bus: `Serial2`, 9600 baud, slave ID selected by the block
+- Read: holding registers `0..1`
+
+| Register / buffer | Field | Mock key | Raw scale | Code conversion | Default |
+| ---: | --- | --- | ---: | --- | ---: |
+| 0 | Direction | `wind_direction` | x10 | `/10.0f` | 180 degrees |
+
+## DT-Par485
+
+- Generator object: `rs485_pair`
+- Bus: `Serial2`, 9600 baud, slave ID selected by the block
+- Read: holding registers `0..1`
+
+| Register / buffer | Field | Mock key | Raw scale | Code conversion | Default |
+| ---: | --- | --- | ---: | --- | ---: |
+| 0 | PAR | `par` | x1 | none | 650 umol/m2/s |

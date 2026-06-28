@@ -235,6 +235,18 @@ setTimeout(() => {
     }
 
     // Setup automatic code generation when circuit changes
+    const persistCurrentCircuit = () => {
+        try {
+            const data = hackCable.editor.getEditorSaveData();
+            localStorage.setItem('savedEditor', JSON.stringify(data));
+        } catch (error) {
+            console.warn('[HackCable] Unable to auto-save circuit:', error);
+        }
+    };
+
+    hackCable.editor.canvas.setOnCircuitStateChangeCallback(persistCurrentCircuit);
+    window.addEventListener('pagehide', persistCurrentCircuit);
+
     hackCable.editor.canvas.setOnCircuitChangeCallback((generatedCode: string) => {
         if (codeInput instanceof HTMLTextAreaElement) {
             // Only update if user hasn't written custom code
@@ -253,7 +265,7 @@ setTimeout(() => {
         if (savedExample && codeExamples[savedExample]) {
             examplesSelect.value = savedExample;
         } else {
-            examplesSelect.value = 'new_bfarm_smart_greenhouse';
+            examplesSelect.value = 'handysense_real_six_button_test';
         }
     }
     setTimeout(() => {
@@ -262,17 +274,11 @@ setTimeout(() => {
         if (!currentCode) {
             const selectedKey = examplesSelect.value && codeExamples[examplesSelect.value]
                 ? examplesSelect.value
-                : 'new_bfarm_smart_greenhouse';
-            setCodeEditorValue(preprocessExampleCode(selectedKey, codeExamples[selectedKey]));
+                : 'handysense_real_six_button_test';
+            setCodeEditorValue(codeExamples[selectedKey]);
             localStorage.setItem('hackCable-webExample-inputCode', getCodeEditorValue());
             localStorage.setItem(EXAMPLE_SELECTION_STORAGE_KEY, selectedKey);
             return;
-        }
-
-        const detectedKey = detectNewBfarmExampleFromCode(currentCode);
-        if (detectedKey && codeExamples[detectedKey]) {
-            examplesSelect.value = detectedKey;
-            localStorage.setItem(EXAMPLE_SELECTION_STORAGE_KEY, detectedKey);
         }
     }, 1000);
 }, 100);
@@ -282,6 +288,7 @@ const executeButton = document.getElementById('execute');
 const stopButton = document.getElementById('stop');
 const pauseButton = document.getElementById('pause');
 const buildCircuitFromCodeButton = document.getElementById('build-circuit-from-code');
+const clearCodeButton = document.getElementById('clear-code');
 const codeInput = document.getElementById('code-editor');
 const hexInput = document.getElementById('code-compiled');
 const statusMessage = document.getElementById('status-message');
@@ -300,7 +307,7 @@ const HANDYSENSE_REAL_RUNTIME_INPUT_PINS: Record<Exclude<HandysenseRealBoardCont
 };
 
 type MockSource = 'text' | 'timeline';
-type SensorKey = 'humidity' | 'temperature' | 'ph' | 'lux' | 'soil' | 'co2' | 'pressure' | 'ec' | 'nitrogen' | 'phosphorus' | 'potassium' | 'ammonia' | 'pm1' | 'pm25' | 'pm4' | 'pm10' | 'voc' | 'nox' | 'distance' | 'turbidity' | 'nitrate_vout' | 'nitrate_vout_temp' | 'nitrate_sample' | 'nitrate_error' | 'nitrate_r_square' | 'nitrate_sensitivity' | 'nitrate_std1' | 'nitrate_std2' | 'nitrate_std3' | 'voltage' | 'tmec_analog_uv' | 'water_level' | 'water_temperature' | 'dissolved_oxygen' | 'do_temperature' | 'ammonia_temperature' | 'tubular_moisture_10' | 'tubular_temperature_10' | 'tubular_moisture_20' | 'tubular_temperature_20' | 'tubular_moisture_30' | 'tubular_temperature_30' | 'tubular_moisture_40' | 'tubular_temperature_40' | 'tubular_moisture_50' | 'tubular_temperature_50' | 'air_velocity' | 'noise';
+type SensorKey = 'humidity' | 'temperature' | 'ph' | 'lux' | 'soil' | 'co2' | 'pressure' | 'ec' | 'nitrogen' | 'phosphorus' | 'potassium' | 'ammonia' | 'pm1' | 'pm25' | 'pm4' | 'pm10' | 'voc' | 'nox' | 'distance' | 'turbidity' | 'nitrate_vout' | 'nitrate_vout_temp' | 'nitrate_sample' | 'nitrate_error' | 'nitrate_r_square' | 'nitrate_sensitivity' | 'nitrate_std1' | 'nitrate_std2' | 'nitrate_std3' | 'voltage' | 'tmec_analog_uv' | 'water_level' | 'water_temperature' | 'dissolved_oxygen' | 'do_temperature' | 'ammonia_temperature' | 'tubular_moisture_10' | 'tubular_temperature_10' | 'tubular_moisture_20' | 'tubular_temperature_20' | 'tubular_moisture_30' | 'tubular_temperature_30' | 'tubular_moisture_40' | 'tubular_temperature_40' | 'tubular_moisture_50' | 'tubular_temperature_50' | 'air_velocity' | 'noise' | 'weight' | 'wind_direction' | 'wind_speed' | 'rain' | 'par';
 type MockSegment = { startSec: number; endSec: number; value: number };
 type MockTimelineConfig = { durationSec: number; tracks: Record<SensorKey, MockSegment[]> };
 type GraphPoint = { tSec: number; value: number };
@@ -340,7 +347,7 @@ type SaveFileHandle = {
     }>;
 };
 
-const SENSOR_KEYS: SensorKey[] = ['humidity', 'temperature', 'ph', 'lux', 'soil', 'co2', 'pressure', 'ec', 'nitrogen', 'phosphorus', 'potassium', 'ammonia', 'pm1', 'pm25', 'pm4', 'pm10', 'voc', 'nox', 'distance', 'turbidity', 'nitrate_vout', 'nitrate_vout_temp', 'nitrate_sample', 'nitrate_error', 'nitrate_r_square', 'nitrate_sensitivity', 'nitrate_std1', 'nitrate_std2', 'nitrate_std3', 'voltage', 'tmec_analog_uv', 'water_level', 'water_temperature', 'dissolved_oxygen', 'do_temperature', 'ammonia_temperature', 'tubular_moisture_10', 'tubular_temperature_10', 'tubular_moisture_20', 'tubular_temperature_20', 'tubular_moisture_30', 'tubular_temperature_30', 'tubular_moisture_40', 'tubular_temperature_40', 'tubular_moisture_50', 'tubular_temperature_50', 'air_velocity', 'noise'];
+const SENSOR_KEYS: SensorKey[] = ['humidity', 'temperature', 'ph', 'lux', 'soil', 'co2', 'pressure', 'ec', 'nitrogen', 'phosphorus', 'potassium', 'ammonia', 'pm1', 'pm25', 'pm4', 'pm10', 'voc', 'nox', 'distance', 'turbidity', 'nitrate_vout', 'nitrate_vout_temp', 'nitrate_sample', 'nitrate_error', 'nitrate_r_square', 'nitrate_sensitivity', 'nitrate_std1', 'nitrate_std2', 'nitrate_std3', 'voltage', 'tmec_analog_uv', 'water_level', 'water_temperature', 'dissolved_oxygen', 'do_temperature', 'ammonia_temperature', 'tubular_moisture_10', 'tubular_temperature_10', 'tubular_moisture_20', 'tubular_temperature_20', 'tubular_moisture_30', 'tubular_temperature_30', 'tubular_moisture_40', 'tubular_temperature_40', 'tubular_moisture_50', 'tubular_temperature_50', 'air_velocity', 'noise', 'weight', 'wind_direction', 'wind_speed', 'rain', 'par'];
 const SENSOR_KEY_SET = new Set<SensorKey>(SENSOR_KEYS);
 const SENSOR_DEFAULT_RANGES: Record<SensorKey, SensorRange> = {
     humidity: { min: 0, max: 100 },
@@ -391,6 +398,11 @@ const SENSOR_DEFAULT_RANGES: Record<SensorKey, SensorRange> = {
     tubular_temperature_50: { min: -10, max: 60 },
     air_velocity: { min: 0, max: 60 },
     noise: { min: 0, max: 150 },
+    weight: { min: 0, max: 3000 },
+    wind_direction: { min: 0, max: 360 },
+    wind_speed: { min: 0, max: 60 },
+    rain: { min: 0, max: 500 },
+    par: { min: 0, max: 3000 },
 };
 const SENSOR_LABEL_KEYS: Record<SensorKey, string> = {
     humidity: 'ui.mock.sensor.humidity',
@@ -441,6 +453,11 @@ const SENSOR_LABEL_KEYS: Record<SensorKey, string> = {
     tubular_temperature_50: 'ui.mock.sensor.tubularTemperature50',
     air_velocity: 'ui.mock.sensor.airVelocity',
     noise: 'ui.mock.sensor.noise',
+    weight: 'ui.mock.sensor.weight',
+    wind_direction: 'ui.mock.sensor.windDirection',
+    wind_speed: 'ui.mock.sensor.windSpeed',
+    rain: 'ui.mock.sensor.rain',
+    par: 'ui.mock.sensor.par',
 };
 const MOCK_SOURCE_STORAGE_KEY = 'hackCable-mock-source';
 const MOCK_TIMELINE_STORAGE_KEY = 'hackCable-mock-timeline';
@@ -675,6 +692,11 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
     compileButton.addEventListener("click", () => compile());
     executeButton.addEventListener("click", () => { clearSerial(); execute(); setTimeout(startIOMonitor, 200); });
     buildCircuitFromCodeButton?.addEventListener('click', () => buildCircuitFromCurrentCode());
+    clearCodeButton?.addEventListener('click', () => {
+        if (!confirm('Clear all code? This action cannot be undone.')) return;
+        setCodeEditorValue('');
+        codeMirrorEditor?.focus();
+    });
     stopButton.addEventListener("click", () => {
         if ((stopButton as HTMLButtonElement).disabled) return;
         hackCable.emulatorManager.stop();
@@ -2669,8 +2691,32 @@ function circuitHasComponent(componentId: number): boolean {
     return found;
 }
 
-function getActiveModbusMockProfile(): 'bfarm-7in1-soil' | 'bfarm-ammonia-rs485' | 'bfarm-soil-temp-multiread-rs485' | 'bfarm-ultrasonic-rs485' | 'bfarm-turbidity-xm3318b-rs485' | 'bfarm-turbidity-xm8518-rs485' | 'bfarm-nitrate-isfet-rs485' | 'bfarm-tmec-tensio-rs485' | 'bfarm-water-quality-suite-rs485' | 'bfarm-tubular-soil-probe-rs485' | 'bfarm-air-velocity-sm3789' | 'bfarm-lux120k-rs485' | 'bfarm-weather-sensor-rs485' | 'default-weather' {
+function getActiveModbusMockProfile(): 'sensor-weather-htco2plx' | 'sensor-ph-rs485' | 'sensor-rain-rs485' | 'sensor-wind-speed-rs485' | 'sensor-sht31-rs485' | 'sensor-weight-3kg-rs485' | 'sensor-wind-direction-rs485' | 'sensor-dt-par485' | 'bfarm-7in1-soil' | 'bfarm-ammonia-rs485' | 'bfarm-soil-temp-multiread-rs485' | 'bfarm-ultrasonic-rs485' | 'bfarm-turbidity-xm3318b-rs485' | 'bfarm-turbidity-xm8518-rs485' | 'bfarm-nitrate-isfet-rs485' | 'bfarm-tmec-tensio-rs485' | 'bfarm-water-quality-suite-rs485' | 'bfarm-tubular-soil-probe-rs485' | 'bfarm-air-velocity-sm3789' | 'bfarm-lux120k-rs485' | 'bfarm-weather-sensor-rs485' | 'default-weather' {
     const selectedExample = getSelectedExampleKey();
+    if (selectedExample === 'handysense_real_sensor_weather_htco2plx_test' || circuitHasComponent(40)) {
+        return 'sensor-weather-htco2plx';
+    }
+    if (selectedExample === 'handysense_real_sensor_ph_rs485_test' || circuitHasComponent(35)) {
+        return 'sensor-ph-rs485';
+    }
+    if (selectedExample === 'handysense_real_sensor_rain_rs485_test' || circuitHasComponent(37)) {
+        return 'sensor-rain-rs485';
+    }
+    if (selectedExample === 'handysense_real_sensor_wind_speed_rs485_test' || circuitHasComponent(38)) {
+        return 'sensor-wind-speed-rs485';
+    }
+    if (selectedExample === 'handysense_real_sensor_sht31_rs485_test' || circuitHasComponent(67)) {
+        return 'sensor-sht31-rs485';
+    }
+    if (selectedExample === 'handysense_real_sensor_weight_3kg_rs485_test' || circuitHasComponent(68)) {
+        return 'sensor-weight-3kg-rs485';
+    }
+    if (selectedExample === 'handysense_real_sensor_wind_direction_rs485_test' || circuitHasComponent(69)) {
+        return 'sensor-wind-direction-rs485';
+    }
+    if (selectedExample === 'handysense_real_sensor_dt_par485_test' || circuitHasComponent(70)) {
+        return 'sensor-dt-par485';
+    }
     if (selectedExample === 'handysense_real_bfarm_7in1_soil_multiread_test' || circuitHasComponent(52)) {
         return 'bfarm-7in1-soil';
     }
@@ -2739,6 +2785,44 @@ function getFloat32BigEndianWords(value: number): [number, number] {
 
 // Sensor data bridges for Clang/LLVM ESP32 examples
 (window as any).hackcable_modbus_read = (slaveId: number, regAddr: number): number => {
+    const activeProfile = getActiveModbusMockProfile();
+    if (activeProfile === 'sensor-weather-htco2plx') {
+        const registers: Record<number, number> = {
+            500: getScaledMockRegisterValue('humidity', 60.0, 10),
+            501: getScaledMockRegisterValue('temperature', 25.0, 10),
+            503: getScaledMockRegisterValue('co2', 400.0),
+            505: getScaledMockRegisterValue('pressure', 1013.0),
+            507: getScaledMockRegisterValue('lux', 500.0),
+        };
+        return registers[regAddr] ?? 0;
+    }
+    if (activeProfile === 'sensor-ph-rs485') {
+        if (regAddr === 0) return getScaledMockRegisterValue('temperature', 25.0, 10);
+        if (regAddr === 1) return getScaledMockRegisterValue('ph', 7.0, 10);
+        return 0;
+    }
+    if (activeProfile === 'sensor-rain-rs485') {
+        return regAddr === 0 ? getScaledMockRegisterValue('rain', 12.0, 10) : 0;
+    }
+    if (activeProfile === 'sensor-wind-speed-rs485') {
+        return regAddr === 0 ? getScaledMockRegisterValue('wind_speed', 5.0, 10) : 0;
+    }
+    if (activeProfile === 'sensor-sht31-rs485') {
+        const registers: Record<number, number> = {
+            0: getScaledMockRegisterValue('temperature', 25.0, 10),
+            1: getScaledMockRegisterValue('humidity', 60.0, 10),
+        };
+        return registers[regAddr] ?? 0;
+    }
+    if (activeProfile === 'sensor-weight-3kg-rs485') {
+        return regAddr === 1 ? getScaledMockRegisterValue('weight', 1500.0) : 0;
+    }
+    if (activeProfile === 'sensor-wind-direction-rs485') {
+        return regAddr === 0 ? getScaledMockRegisterValue('wind_direction', 180.0, 10) : 0;
+    }
+    if (activeProfile === 'sensor-dt-par485') {
+        return regAddr === 0 ? getScaledMockRegisterValue('par', 650.0) : 0;
+    }
     if (getActiveModbusMockProfile() === 'bfarm-7in1-soil') {
         const soil7in1Registers: Record<number, number> = {
             0: getScaledMockRegisterValue('soil', 50.0, 10),
@@ -3649,80 +3733,6 @@ void loop() {
   delay(500);
 }`
 ,
-
-    handysense_relay_load_no: `// HandySense Relay Load Test (NO contacts)
-// Load wiring:
-// R1_COM->VIN_1, R1_NO->LED1.A, LED1.C->GND_5
-// R2_COM->VIN_2, R2_NO->LED2.A, LED2.C->GND_6
-// R3_COM->3V3_R1, R3_NO->LED3.A, LED3.C->GND_R1
-// R4_COM->3V3_R2, R4_NO->LED4.A, LED4.C->GND_R2
-// Expected: LEDs are OFF when relay is LOW, ON when relay is HIGH
-
-const int RELAY1_PIN = 25;
-const int RELAY2_PIN = 4;
-const int RELAY3_PIN = 12;
-const int RELAY4_PIN = 13;
-
-void setup() {
-  Serial.begin(115200);
-  pinMode(RELAY1_PIN, OUTPUT);
-  pinMode(RELAY2_PIN, OUTPUT);
-  pinMode(RELAY3_PIN, OUTPUT);
-  pinMode(RELAY4_PIN, OUTPUT);
-  digitalWrite(RELAY1_PIN, LOW);
-  digitalWrite(RELAY2_PIN, LOW);
-  digitalWrite(RELAY3_PIN, LOW);
-  digitalWrite(RELAY4_PIN, LOW);
-  Serial.println("HandySense relay NO load test started");
-}
-
-void loop() {
-  digitalWrite(RELAY1_PIN, HIGH); delay(400);
-  digitalWrite(RELAY1_PIN, LOW);  delay(250);
-  digitalWrite(RELAY2_PIN, HIGH); delay(400);
-  digitalWrite(RELAY2_PIN, LOW);  delay(250);
-  digitalWrite(RELAY3_PIN, HIGH); delay(400);
-  digitalWrite(RELAY3_PIN, LOW);  delay(250);
-  digitalWrite(RELAY4_PIN, HIGH); delay(400);
-  digitalWrite(RELAY4_PIN, LOW);  delay(600);
-}`,
-
-    handysense_relay_load_nc: `// HandySense Relay Load Test (NC contacts)
-// Load wiring:
-// R1_COM->VIN_1, R1_NC->LED1.A, LED1.C->GND_5
-// R2_COM->VIN_2, R2_NC->LED2.A, LED2.C->GND_6
-// R3_COM->3V3_R1, R3_NC->LED3.A, LED3.C->GND_R1
-// R4_COM->3V3_R2, R4_NC->LED4.A, LED4.C->GND_R2
-// Expected: LEDs are ON when relay is LOW, OFF when relay is HIGH
-
-const int RELAY1_PIN = 25;
-const int RELAY2_PIN = 4;
-const int RELAY3_PIN = 12;
-const int RELAY4_PIN = 13;
-
-void setup() {
-  Serial.begin(115200);
-  pinMode(RELAY1_PIN, OUTPUT);
-  pinMode(RELAY2_PIN, OUTPUT);
-  pinMode(RELAY3_PIN, OUTPUT);
-  pinMode(RELAY4_PIN, OUTPUT);
-  digitalWrite(RELAY1_PIN, LOW);
-  digitalWrite(RELAY2_PIN, LOW);
-  digitalWrite(RELAY3_PIN, LOW);
-  digitalWrite(RELAY4_PIN, LOW);
-  Serial.println("HandySense relay NC load test started");
-}
-
-void loop() {
-  digitalWrite(RELAY1_PIN, HIGH); delay(400);
-  digitalWrite(RELAY1_PIN, LOW);  delay(250);
-  digitalWrite(RELAY2_PIN, HIGH); delay(400);
-  digitalWrite(RELAY2_PIN, LOW);  delay(250);
-  digitalWrite(RELAY3_PIN, HIGH); delay(400);
-  digitalWrite(RELAY3_PIN, LOW);  delay(250);
-  digitalWrite(RELAY4_PIN, HIGH); delay(400);
-  digitalWrite(RELAY4_PIN, LOW);  delay(600);
-}`,
 
     handysense_real_six_button_test: `// Handysense real - 6 Button Test
 // On-board controls:
@@ -4957,6 +4967,208 @@ void loop() {
   delay(1000);
 }`,
 
+    handysense_real_sensor_weather_htco2plx_test: `// Handysense real - Weather HTCO2PLX (RS485) Test
+// One component covers the Carbon dioxide and Pressure block categories.
+#include <HandySense.h>
+#include <Arduino.h>
+#include <ModbusMaster.h>
+ModbusMaster rs485_Weather_HTCo2PLx;
+void setup() {
+  Serial.begin(115200);
+  Serial2.begin(9600, SERIAL_8N1, 16, 17);
+  rs485_Weather_HTCo2PLx.begin(1, Serial2);
+}
+void loop() {
+  if (rs485_Weather_HTCo2PLx.readHoldingRegisters(500, 10) == ModbusMaster::ku8MBSuccess) {
+    float humidity = rs485_Weather_HTCo2PLx.getResponseBuffer(0) / 10.0f;
+    float temperature = rs485_Weather_HTCo2PLx.getResponseBuffer(1) / 10.0f;
+    float co2 = rs485_Weather_HTCo2PLx.getResponseBuffer(3);
+    float pressure = rs485_Weather_HTCo2PLx.getResponseBuffer(5);
+    Serial.print("humidity="); Serial.print(humidity, 1);
+    Serial.print(",temperature="); Serial.print(temperature, 1);
+    Serial.print(",co2="); Serial.print(co2, 0);
+    Serial.print(",pressure="); Serial.println(pressure, 0);
+  }
+  delay(1000);
+}`,
+
+    handysense_real_sensor_ph_rs485_test: `// Handysense real - pH Sensor (RS485) Test
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+ModbusMaster PHrs485;
+void setup() {
+  Serial.begin(115200);
+  Wire.begin();
+  Serial2.begin(9600, SERIAL_8N1, 16, 17);
+  PHrs485.begin(1, Serial2);
+}
+void loop() {
+  if (PHrs485.readHoldingRegisters(0, 2) == ModbusMaster::ku8MBSuccess) {
+    float temperature = PHrs485.getResponseBuffer(0) / 10.0f;
+    float ph = PHrs485.getResponseBuffer(1) / 10.0f;
+    Serial.print("temperature="); Serial.print(temperature, 1);
+    Serial.print(",ph="); Serial.println(ph, 1);
+  }
+  delay(1000);
+}`,
+
+    handysense_real_sensor_rain_rs485_test: `// Handysense real - Rain Sensor (RS485) Test
+#include <HandySense.h>
+#include <Arduino.h>
+#include <ModbusMaster.h>
+ModbusMaster rs485_rain;
+void setup() {
+  Serial.begin(115200);
+  Serial2.begin(9600, SERIAL_8N1, 16, 17);
+  rs485_rain.begin(1, Serial2);
+}
+void loop() {
+  if (rs485_rain.readHoldingRegisters(0, 2) == ModbusMaster::ku8MBSuccess) {
+    float rain = rs485_rain.getResponseBuffer(0) / 10.0f;
+    Serial.print("rain="); Serial.println(rain, 1);
+  }
+  delay(1000);
+}`,
+
+    handysense_real_sensor_wind_speed_rs485_test: `// Handysense real - Wind Speed Sensor (RS485) Test
+#include <HandySense.h>
+#include <Arduino.h>
+#include <ModbusMaster.h>
+ModbusMaster rs485_winds;
+void setup() {
+  Serial.begin(115200);
+  Serial2.begin(9600, SERIAL_8N1, 16, 17);
+  rs485_winds.begin(1, Serial2);
+}
+void loop() {
+  if (rs485_winds.readHoldingRegisters(0, 2) == ModbusMaster::ku8MBSuccess) {
+    float windSpeed = rs485_winds.getResponseBuffer(0) / 10.0f;
+    Serial.print("wind_speed="); Serial.println(windSpeed, 1);
+  }
+  delay(1000);
+}`,
+
+    handysense_real_sensor_sht31_i2c_test: `// Handysense real - SHT31 Sensor (I2C) Test
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <SHT31.h>
+SHT31 sht31;
+void setup() {
+  Serial.begin(115200);
+  Wire.begin();
+  sht31.begin(0x44);
+}
+void loop() {
+  sht31.read();
+  Serial.print("temperature="); Serial.print(sht31.getTemperature(), 1);
+  Serial.print(",humidity="); Serial.println(sht31.getHumidity(), 1);
+  delay(1000);
+}`,
+
+    handysense_real_sensor_bh1750_i2c_test: `// Handysense real - BH1750 Sensor (I2C) Test
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <BH1750.h>
+BH1750 lightMeter;
+void setup() {
+  Serial.begin(115200);
+  Wire.begin();
+  lightMeter.begin();
+}
+void loop() {
+  float lux = lightMeter.readLightLevel();
+  Serial.print("lux="); Serial.println(lux, 1);
+  delay(1000);
+}`,
+
+    handysense_real_sensor_sht31_rs485_test: `// Handysense real - SHT31 Sensor (RS485) Test
+// Generator shape: rs485_sht31Meter.readHoldingRegisters(0, 2)
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+ModbusMaster rs485_sht31Meter;
+void setup() {
+  Serial.begin(115200);
+  Wire.begin();
+  Serial2.begin(9600, SERIAL_8N1, 16, 17);
+  rs485_sht31Meter.begin(1, Serial2);
+}
+void loop() {
+  if (rs485_sht31Meter.readHoldingRegisters(0, 2) == ModbusMaster::ku8MBSuccess) {
+    float temperature = rs485_sht31Meter.getResponseBuffer(0) / 10.0f;
+    float humidity = rs485_sht31Meter.getResponseBuffer(1) / 10.0f;
+    Serial.print("temperature="); Serial.print(temperature, 1);
+    Serial.print(",humidity="); Serial.println(humidity, 1);
+  }
+  delay(1000);
+}`,
+
+    handysense_real_sensor_weight_3kg_rs485_test: `// Handysense real - Weight Sensor 3 kg (RS485) Test
+// Generator shape: rs485_weight.readHoldingRegisters(0, 2), value at buffer 1
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+ModbusMaster rs485_weight;
+void setup() {
+  Serial.begin(115200);
+  Wire.begin();
+  Serial2.begin(9600, SERIAL_8N1, 16, 17);
+  rs485_weight.begin(1, Serial2);
+}
+void loop() {
+  if (rs485_weight.readHoldingRegisters(0, 2) == ModbusMaster::ku8MBSuccess) {
+    float weight = rs485_weight.getResponseBuffer(1) + 0;
+    Serial.print("weight="); Serial.println(weight, 0);
+  }
+  delay(1000);
+}`,
+
+    handysense_real_sensor_wind_direction_rs485_test: `// Handysense real - Wind Direction Sensor (RS485) Test
+// Generator shape: rs485_windd.readHoldingRegisters(0, 2)
+#include <HandySense.h>
+#include <Arduino.h>
+#include <ModbusMaster.h>
+ModbusMaster rs485_windd;
+void setup() {
+  Serial.begin(115200);
+  Serial2.begin(9600, SERIAL_8N1, 16, 17);
+  rs485_windd.begin(1, Serial2);
+}
+void loop() {
+  if (rs485_windd.readHoldingRegisters(0, 2) == ModbusMaster::ku8MBSuccess) {
+    float direction = rs485_windd.getResponseBuffer(0) / 10.0f;
+    Serial.print("wind_direction="); Serial.println(direction, 1);
+  }
+  delay(1000);
+}`,
+
+    handysense_real_sensor_dt_par485_test: `// Handysense real - DT-Par485 Sensor Test
+// Generator shape: rs485_pair.readHoldingRegisters(0, 2)
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+ModbusMaster rs485_pair;
+void setup() {
+  Serial.begin(115200);
+  Wire.begin();
+  Serial2.begin(9600, SERIAL_8N1, 16, 17);
+  rs485_pair.begin(1, Serial2);
+}
+void loop() {
+  if (rs485_pair.readHoldingRegisters(0, 2) == ModbusMaster::ku8MBSuccess) {
+    float par = rs485_pair.getResponseBuffer(0);
+    Serial.print("par="); Serial.println(par, 0);
+  }
+  delay(1000);
+}`,
+
     // ============================================
     // BFarm - Field Sensor Examples
     // ============================================
@@ -5778,391 +5990,7 @@ void loop() {
     w_temp, w_humidity, w_co2, w_pressure);
   delay(2000);
 }`,
-
-    // ============================================
-    // new Bfarm Test - Canonical #block.md format
-    // ============================================
-    new_bfarm_smart_greenhouse: `// new Bfarm Test - Smart Greenhouse End-to-End
-// Blocks used: HandySense_Setup, HandySense_setPin_Relay, sht31_begin_i2c, sht31_read_init_i2c, sht31_read_humid_i2c, sht31_read_temp_i2c, bh1750_begin, bh1750_read, wifi_connect, wifi_start_server, wifi_server_on, wifi_server_send, controls_if, logic_compare, relay_on, relay_off, time_delay
-// Coverage: HS Generic, Sensor, WiFi, Electronic, Logic, Time
-
-// HandySense_Setup
-#SETUP setup_HandySense();#END
-#SETUP Serial.begin(115200);#END
-// HandySense_setPin_Relay
-#SETUP setPin_Relay(32,33,25,26);#END
-#SETUP setPin_SW(36,39,34,35);#END
-#SETUP setPin_ErrorSensor(19,18,5);#END
-
-// sht31_begin_i2c
-#EXTINC#include "SHT31.h"#END
-#EXTINC#include <Wire.h>#END
-#VARIABLE SHT31 sht;#END
-#SETUP Wire.begin();#END
-#SETUP Wire.setClock(10000);#END
-#SETUP sht.begin(0x44);#END
-
-// bh1750_begin
-#EXTINC#include <BH1750.h>#END
-#VARIABLE BH1750 lightMeter;#END
-#SETUP lightMeter.begin();#END
-
-// wifi_connect + wifi_start_server
-#EXTINC#include <WiFi.h>#END
-#EXTINC#include <WebServer.h>#END
-#VARIABLE WebServer server(80);#END
-#VARIABLE float ghHumidity = 0;#END
-#VARIABLE float ghTemp = 0;#END
-#VARIABLE float ghLux = 0;#END
-#VARIABLE bool fanOn = false;#END
-#FUNCTION void connectGreenhouseWifi(){ WiFi.begin("FarmSSID","FarmPass123"); while(WiFi.status() != WL_CONNECTED){ delay(500); } }#END
-#SETUP connectGreenhouseWifi();#END
-#SETUP server.begin();#END
-#LOOP_EXT_CODE server.handleClient();#END
-
-// wifi_server_on + wifi_server_send
-#SETUP server.on("/status", [](){#END
-#SETUP   String payload = String("humidity=") + String(ghHumidity,1) + String(",temp=") + String(ghTemp,1) + String(",lux=") + String(ghLux,0);#END
-#SETUP   server.send(200, "text/plain", payload);#END
-#SETUP });#END
-
-// sht31_read_init_i2c
-#LOOP_EXT_CODE sht.read();#END
-// sht31_read_humid_i2c
-#LOOP_EXT_CODE ghHumidity = sht.getHumidity();#END
-// sht31_read_temp_i2c
-#LOOP_EXT_CODE ghTemp = sht.getTemperature();#END
-// bh1750_read
-#LOOP_EXT_CODE ghLux = lightMeter.readLightLevel();#END
-
-// controls_if + logic_compare + relay_on + relay_off
-#LOOP_EXT_CODE if ((ghHumidity > 82.0f) || (ghTemp > 32.0f)) {#END
-#LOOP_EXT_CODE   digitalWrite(const_relay_pin[1], HIGH);#END
-#LOOP_EXT_CODE   fanOn = true;#END
-#LOOP_EXT_CODE } else {#END
-#LOOP_EXT_CODE   digitalWrite(const_relay_pin[1], LOW);#END
-#LOOP_EXT_CODE   fanOn = false;#END
-#LOOP_EXT_CODE }#END
-#LOOP_EXT_CODE Serial.println(String("humidity=") + String(ghHumidity,1) + String(",temp=") + String(ghTemp,1) + String(",lux=") + String(ghLux,0) + String(",fan=") + String(fanOn ? 1 : 0));#END
-// time_delay
-#LOOP_EXT_CODE delay(1000);#END`,
-
-    new_bfarm_awd_automation: `// new Bfarm Test - Paddy Field AWD Automation
-// Blocks used: HandySense_awdv1, CJOB_begin, CJOB_addschedule_every_minutes, CJOB_enable_schedule, io_analog_read, math_arithmetic, controls_if, logic_compare, relay_on, relay_off, time_sync, time_get_hour, time_get_minute, pub_topic
-// Coverage: Solution, Cronjob, GPIO, Math, Logic, Time, Cloud
-
-// HandySense_awdv1 scaffold fragments
-#EXTINC#include <WiFi.h>#END
-#EXTINC#include <ThingSpeakWriter_asukiaaa.h>#END
-#EXTINC#include <mqtt_client.h>#END
-#EXTINC#include <pub_topic.h>#END
-#FUNCTION void connectWifiIfNotConnected(){ if (WiFi.status() != WL_CONNECTED) { WiFi.begin("FarmSSID","FarmPass123"); while(WiFi.status() != WL_CONNECTED){ delay(500); } } }#END
-#FUNCTION void Netpiecallback(String topic,byte* payload,unsigned int length){ }#END
-#SETUP Serial.begin(115200);#END
-#SETUP setupMQTT();#END
-
-// CJOB_begin
-#EXTINC#include <time.h>#END
-#EXTINC#include "cjob.h"#END
-#VARIABLE int CJOB_begin;#END
-#LOOP_EXT_CODE Cron.delay();#END
-
-// time_sync + time_get_hour/minute
-#EXTINC#include "BFarmTime.h"#END
-#VARIABLE BFarmTime bfarmtime;#END
-#SETUP bfarmtime.sync();#END
-
-#VARIABLE CronID_t id_awdCycle;#END
-#VARIABLE int soilRaw = 0;#END
-#VARIABLE float waterDepthCm = 0;#END
-#VARIABLE bool valveOpen = false;#END
-#VARIABLE const int AWD_RELAY_INDEX = 0;#END
-#VARIABLE int awdNowHour = 0;#END
-#VARIABLE int awdNowMinute = 0;#END
-#VARIABLE unsigned long awdLastStatusMs = 0;#END
-#VARIABLE void awdCycle();#END
-#FUNCTION void awdCycle(){#END
-#FUNCTION   soilRaw = analogRead(36);#END
-#FUNCTION   waterDepthCm = ((4095 - soilRaw) / 4095.0f) * 15.0f;#END
-#FUNCTION   if (waterDepthCm < 3.0f) {#END
-#FUNCTION     digitalWrite(const_relay_pin[AWD_RELAY_INDEX], HIGH);#END
-#FUNCTION     valveOpen = true;#END
-#FUNCTION   } else {#END
-#FUNCTION     digitalWrite(const_relay_pin[AWD_RELAY_INDEX], LOW);#END
-#FUNCTION     valveOpen = false;#END
-#FUNCTION   }#END
-#FUNCTION   pub_topic("@msg/awd/depth", waterDepthCm);#END
-#FUNCTION }#END
-
-#SETUP setPin_Relay(25,4,12,13);#END
-#SETUP setPin_SW(36,39,34,35);#END
-#SETUP setPin_ErrorSensor(19,18,5);#END
-#SETUP soilRaw = 0;#END
-#SETUP waterDepthCm = 0;#END
-#SETUP valveOpen = false;#END
-#SETUP awdNowHour = 0;#END
-#SETUP awdNowMinute = 0;#END
-#SETUP awdLastStatusMs = 0;#END
-// CJOB_addschedule_every_minutes
-#SETUP id_awdCycle = Cron.create("0 */15 * * * *", awdCycle, false);#END
-// CJOB_enable_schedule
-#SETUP Cron.enable(id_awdCycle);#END
-
-#LOOP_EXT_CODE connectWifiIfNotConnected();#END
-#LOOP_EXT_CODE awdCycle();#END
-#LOOP_EXT_CODE awdNowHour = bfarmtime.getHour();#END
-#LOOP_EXT_CODE awdNowMinute = bfarmtime.getMinute();#END
-#LOOP_EXT_CODE Netpieclient.loop();#END
-#LOOP_EXT_CODE if (millis() - awdLastStatusMs >= 1000UL) {#END
-#LOOP_EXT_CODE   awdLastStatusMs = millis();#END
-#LOOP_EXT_CODE   Serial.println(String("soil_raw=") + String(soilRaw) + String(",depth_cm=") + String(waterDepthCm,2) + String(",valve=") + String(valveOpen ? 1 : 0) + String(",pump=") + String(valveOpen ? 1 : 0) + String(",hour=") + String(awdNowHour) + String(",minute=") + String(awdNowMinute));#END
-#LOOP_EXT_CODE }#END
-#LOOP_EXT_CODE delay(200);#END`,
-
-    new_bfarm_fertigation_lab: `// new Bfarm Test - Fertigation Controller Lab
-// Blocks used: Initial_Fertilizer, Load_preferences, Read_pH, Read_EC, Read_temp, control_pH, control_EC, set_preferences, serial_usb_init, serial_write_data, controls_if, math_arithmetic
-// Coverage: Solution(Fertilizer Control), Variables, Math, Serial, Logic
-
-// Initial_Fertilizer
-#EXTINC#include <Preferences.h>#END
-#EXTINC#include <fertilizer.h>#END
-#VARIABLE Preferences preferences;#END
-#SETUP preferences = Preferences();#END
-#SETUP preferences.begin("credentials", false);#END
-#SETUP load_preferences();#END
-
-#VARIABLE int adcPH = 1800;#END
-#VARIABLE int adcEC = 2000;#END
-#VARIABLE int adcTemp = 1700;#END
-#VARIABLE float phValue = 0;#END
-#VARIABLE float tempValue = 0;#END
-#VARIABLE int ecValue = 0;#END
-#VARIABLE int phPumpState = 0;#END
-#VARIABLE int ecPumpState = 0;#END
-#VARIABLE int mixValveState = 0;#END
-#VARIABLE unsigned long fertLastRunMs = 0;#END
-#VARIABLE unsigned long fertLastStatusMs = 0;#END
-
-// serial_usb_init
-#SETUP Serial.begin(115200);#END
-#SETUP setPin_Relay(25,4,12,13);#END
-// set_preferences
-#SETUP calTemp = 25;#END
-#SETUP calPH4 = 1500;#END
-#SETUP calPH7 = 2000;#END
-#SETUP calPH10 = 2500;#END
-#SETUP calEC0 = 100;#END
-#SETUP calEC1413 = 1300;#END
-#SETUP PHthresh_min = 5.8;#END
-#SETUP PHthresh_max = 6.6;#END
-#SETUP ECthresh_min = 900;#END
-#SETUP PHdura_value = 3;#END
-#SETUP ECdura_value = 4;#END
-#SETUP set_preferences();#END
-#SETUP adcPH = 1800;#END
-#SETUP adcEC = 2000;#END
-#SETUP adcTemp = 1700;#END
-#SETUP phValue = 0;#END
-#SETUP tempValue = 0;#END
-#SETUP ecValue = 0;#END
-#SETUP phPumpState = 0;#END
-#SETUP ecPumpState = 0;#END
-#SETUP mixValveState = 0;#END
-#SETUP fertLastRunMs = 0;#END
-#SETUP fertLastStatusMs = 0;#END
-
-#FUNCTION void fertigationStep(){#END
-// Read_pH
-#FUNCTION phValue = (float)(PHcompute(adcPH));#END
-// Read_temp
-#FUNCTION tempValue = (float)(Tempcompute(adcTemp));#END
-// Read_EC
-#FUNCTION ecValue = (int)(ECcompute(adcEC,adcTemp));#END
-// control_pH
-#FUNCTION control_pH(phValue);#END
-// control_EC
-#FUNCTION control_EC(ecValue);#END
-#FUNCTION }#END
-
-// Load_preferences
-#LOOP_EXT_CODE load_preferences();#END
-#LOOP_EXT_CODE if (millis() - fertLastRunMs >= 1500UL) {#END
-#LOOP_EXT_CODE   fertLastRunMs = millis();#END
-#LOOP_EXT_CODE   adcPH = analogRead(36);#END
-#LOOP_EXT_CODE   adcEC = analogRead(39);#END
-#LOOP_EXT_CODE   adcTemp = analogRead(34);#END
-#LOOP_EXT_CODE   fertigationStep();#END
-#LOOP_EXT_CODE   if ((phValue < PHthresh_min) || (phValue > PHthresh_max)) { Serial.println("pH out of range"); }#END
-#LOOP_EXT_CODE   phPumpState = digitalRead(const_relay_pin[0]);#END
-#LOOP_EXT_CODE   ecPumpState = digitalRead(const_relay_pin[1]);#END
-#LOOP_EXT_CODE   mixValveState = digitalRead(const_relay_pin[2]);#END
-#LOOP_EXT_CODE }#END
-// serial_write_data
-#LOOP_EXT_CODE if (millis() - fertLastStatusMs >= 1000UL) {#END
-#LOOP_EXT_CODE   fertLastStatusMs = millis();#END
-#LOOP_EXT_CODE   Serial.println(String("pH=") + String(phValue,2) + String(",EC=") + String(ecValue) + String(",Temp=") + String(tempValue,1) + String(",ph_pump=") + String(phPumpState) + String(",ec_pump=") + String(ecPumpState) + String(",mix_valve=") + String(mixValveState));#END
-#LOOP_EXT_CODE }#END
-#LOOP_EXT_CODE delay(100);#END`,
-
-    new_bfarm_weather_station_sim: `// new Bfarm Test - Edge Weather Station Simulator
-// Blocks used: Weather_HTCo2PLx_begin_rs485, Weather_HTCo2PLx_read_humidity_rs485, Weather_HTCo2PLx_read_temperature_rs485, Weather_HTCo2PLx_read_co2_rs485, Weather_HTCo2PLx_read_pressure_rs485, wifi_connect, netpie_begin, netpie_connect, pub_topic, serial_write_data
-// Coverage: Sensor(RS485), WiFi, Cloud, Serial
-
-// Weather_HTCo2PLx_begin_rs485
-#EXTINC#include <ModbusMaster.h>#END
-#VARIABLE ModbusMaster rs485_Weather_HTCo2PLx;#END
-#VARIABLE float Weather_HTCo2PLx;#END
-#VARIABLE #define RXD 16#END
-#VARIABLE #define TXD 17#END
-#SETUP Serial.begin(115200);#END
-#SETUP pinMode(25, OUTPUT);#END
-#SETUP Serial2.begin(9600, SERIAL_8N1, RXD, TXD);#END
-#SETUP rs485_Weather_HTCo2PLx.begin(1, Serial2);#END
-
-// wifi_connect
-#EXTINC#include <WiFi.h>#END
-#SETUP WiFi.begin("FarmSSID","FarmPass123");#END
-#SETUP while(WiFi.status() != WL_CONNECTED){ delay(500); }#END
-
-// netpie_begin
-#EXTINC#include <pub_topic.h>#END
-#EXTINC#include <mqtt_client.h>#END
-#FUNCTION const char* Netpiemqtt_server = "broker.netpie.io";#END
-#FUNCTION const int Netpiemqtt_port = 1883;#END
-#SETUP setupMQTT();#END
-#SETUP Netpieclient.setServer(Netpiemqtt_server, Netpiemqtt_port);#END
-
-#VARIABLE int weatherReadResult = 0;#END
-#VARIABLE float weatherHumidity = 0;#END
-#VARIABLE float weatherTemp = 0;#END
-#VARIABLE float weatherCO2 = 0;#END
-#VARIABLE float weatherPressure = 0;#END
-#VARIABLE int weatherLedState = 0;#END
-#VARIABLE unsigned long weatherLastPollMs = 0;#END
-#VARIABLE unsigned long weatherLastStatusMs = 0;#END
-#VARIABLE int weatherRs485Ok = 0;#END
-#SETUP weatherReadResult = 0;#END
-#SETUP weatherHumidity = 0;#END
-#SETUP weatherTemp = 0;#END
-#SETUP weatherCO2 = 0;#END
-#SETUP weatherPressure = 0;#END
-#SETUP weatherLedState = 0;#END
-#SETUP weatherLastPollMs = 0;#END
-#SETUP weatherLastStatusMs = 0;#END
-#SETUP weatherRs485Ok = 0;#END
-
-// Weather_HTCo2PLx_read_*_rs485 + netpie_connect + pub_topic
-#LOOP_EXT_CODE if (millis() - weatherLastPollMs >= 3000UL) {#END
-#LOOP_EXT_CODE   weatherLastPollMs = millis();#END
-#LOOP_EXT_CODE   weatherReadResult = rs485_Weather_HTCo2PLx.readHoldingRegisters(500, 10);#END
-#LOOP_EXT_CODE   weatherRs485Ok = 0;#END
-#LOOP_EXT_CODE   if (weatherReadResult == 0) {#END
-#LOOP_EXT_CODE     weatherRs485Ok = 1;#END
-#LOOP_EXT_CODE     weatherHumidity = ((rs485_Weather_HTCo2PLx.getResponseBuffer(0) / 10.00f));#END
-#LOOP_EXT_CODE     weatherTemp = ((rs485_Weather_HTCo2PLx.getResponseBuffer(1) / 10.00f));#END
-#LOOP_EXT_CODE     weatherCO2 = ((rs485_Weather_HTCo2PLx.getResponseBuffer(3) / 1.00f));#END
-#LOOP_EXT_CODE     weatherPressure = ((rs485_Weather_HTCo2PLx.getResponseBuffer(5) / 1.00f));#END
-#LOOP_EXT_CODE   }#END
-#LOOP_EXT_CODE   if (!Netpieclient.connected()) Netpieclient.connect("weather-sim");#END
-#LOOP_EXT_CODE   Netpieclient.loop();#END
-#LOOP_EXT_CODE   pub_topic("@msg/weather/temp", weatherTemp);#END
-#LOOP_EXT_CODE   pub_topic("@msg/weather/humidity", weatherHumidity);#END
-#LOOP_EXT_CODE   pub_topic("@msg/weather/co2", weatherCO2);#END
-#LOOP_EXT_CODE   if (weatherLedState == 0) {#END
-#LOOP_EXT_CODE     weatherLedState = 1;#END
-#LOOP_EXT_CODE   } else {#END
-#LOOP_EXT_CODE     weatherLedState = 0;#END
-#LOOP_EXT_CODE   }#END
-#LOOP_EXT_CODE   if (weatherLedState == 1) {#END
-#LOOP_EXT_CODE     digitalWrite(25, HIGH);#END
-#LOOP_EXT_CODE   } else {#END
-#LOOP_EXT_CODE     digitalWrite(25, LOW);#END
-#LOOP_EXT_CODE   }#END
-#LOOP_EXT_CODE }#END
-// serial_write_data
-#LOOP_EXT_CODE if (millis() - weatherLastStatusMs >= 1000UL) {#END
-#LOOP_EXT_CODE   weatherLastStatusMs = millis();#END
-#LOOP_EXT_CODE   Serial.println(String("W:temp=") + String(weatherTemp,1) + String(",humidity=") + String(weatherHumidity,1) + String(",co2=") + String(weatherCO2,0) + String(",pressure=") + String(weatherPressure,1) + String(",led=") + String(weatherLedState) + String(",rs485_ok=") + String(weatherRs485Ok));#END
-#LOOP_EXT_CODE }#END
-#LOOP_EXT_CODE delay(100);#END`,
-
-    new_bfarm_hybrid_connectivity: `// new Bfarm Test - Hybrid Connectivity Testbed
-// Blocks used: serial_usb_init, bt_start, bt_read_line, task_timer_interrupt_ext, io_setpin, io_digital_write, io_pwm_write, text_join, text_length, math_arithmetic, math_constrain, controls_if, logic_compare, logic_operation, controls_repeat_ext
-// Coverage: Serial, Bluetooth, Task, GPIO, Text, Math, Logic, Loops
-
-#EXTINC#include "BluetoothSerial.h"#END
-#EXTINC#include "BFarmEvent.h"#END
-#VARIABLE BluetoothSerial SerialBT;#END
-#VARIABLE BFarmEvent bfarmevt;#END
-#VARIABLE int blinkPin = 25;#END
-#VARIABLE int pwmPin = 4;#END
-#VARIABLE String latestLine = "";#END
-#VARIABLE int commandPercent = 0;#END
-#VARIABLE int currentPwmValue = 0;#END
-#VARIABLE int relay1State = 0;#END
-#VARIABLE int relay2State = 0;#END
-#VARIABLE unsigned long hybridLastStatusMs = 0;#END
-
-// serial_usb_init
-#SETUP Serial.begin(115200);#END
-// bt_start
-#SETUP SerialBT.begin("HybridTestbed");#END
-#SETUP setPin_Relay(25,4,12,13);#END
-#SETUP latestLine = "";#END
-#SETUP commandPercent = 0;#END
-#SETUP currentPwmValue = 0;#END
-#SETUP relay1State = 0;#END
-#SETUP relay2State = 0;#END
-#SETUP hybridLastStatusMs = 0;#END
-// io_setpin
-#SETUP pinMode(blinkPin, OUTPUT);#END
-#SETUP pinMode(pwmPin, OUTPUT);#END
-
-// task_timer_interrupt_ext
-#BLOCKSETUP
-bfarmevt.attach("hybrid_tick",BFarmEventType::EVERY, [](){
-  SerialBT.println(String("tick:") + String(millis()));
-}, 1000, 2048);
-#END
-
-#FUNCTION int parsePercent(String line){ int raw = line.toInt(); return constrain(raw, 0, 100); }#END
-
-// bt_read_line + controls_if + logic_compare + logic_operation + math_arithmetic + math_constrain
-#LOOP_EXT_CODE while(SerialBT.available()){#END
-#LOOP_EXT_CODE   latestLine = SerialBT.readStringUntil('\\n');#END
-#LOOP_EXT_CODE   commandPercent = parsePercent(latestLine);#END
-#LOOP_EXT_CODE   currentPwmValue = (commandPercent * 255) / 100;#END
-#LOOP_EXT_CODE   if ((latestLine.length() > 0) && (latestLine != "stop")) {#END
-// io_pwm_write + io_digital_write + text_join
-#LOOP_EXT_CODE     analogWrite(pwmPin, currentPwmValue);#END
-#LOOP_EXT_CODE     digitalWrite(blinkPin, HIGH);#END
-#LOOP_EXT_CODE     relay1State = 1;#END
-#LOOP_EXT_CODE     if (currentPwmValue > 0) {#END
-#LOOP_EXT_CODE       relay2State = 1;#END
-#LOOP_EXT_CODE     } else {#END
-#LOOP_EXT_CODE       relay2State = 0;#END
-#LOOP_EXT_CODE     }#END
-#LOOP_EXT_CODE     Serial.println(String("BT cmd=") + latestLine + String(", pwm=") + String(currentPwmValue));#END
-#LOOP_EXT_CODE   } else {#END
-#LOOP_EXT_CODE     analogWrite(pwmPin, 0);#END
-#LOOP_EXT_CODE     digitalWrite(blinkPin, LOW);#END
-#LOOP_EXT_CODE     currentPwmValue = 0;#END
-#LOOP_EXT_CODE     relay1State = 0;#END
-#LOOP_EXT_CODE     relay2State = 0;#END
-#LOOP_EXT_CODE     Serial.println(String("BT cmd ignored: ") + latestLine);#END
-#LOOP_EXT_CODE   }#END
-#LOOP_EXT_CODE }#END
-// controls_repeat_ext + serial plotter status
-#LOOP_EXT_CODE if (millis() - hybridLastStatusMs >= 1000UL) {#END
-#LOOP_EXT_CODE   hybridLastStatusMs = millis();#END
-#LOOP_EXT_CODE   Serial.println(String("BT cmd=") + String(commandPercent) + String(",pwm=") + String(currentPwmValue) + String(",relay1=") + String(relay1State) + String(",relay2=") + String(relay2State) + String(",bt_rx_chars=") + String(latestLine.length()));#END
-#LOOP_EXT_CODE }#END
-#LOOP_EXT_CODE delay(200);#END`
 };
-
-function isNewBfarmExample(exampleKey: string): boolean {
-    return exampleKey.startsWith('new_bfarm_');
-}
 
 function normalizeBfarmMacroCode(rawCode: string): string {
     if (!rawCode || !hasBfarmMacroMarkers(rawCode)) {
@@ -6174,81 +6002,6 @@ function normalizeBfarmMacroCode(rawCode: string): string {
         console.warn('Failed to normalize BFarm macro code:', error);
         return rawCode;
     }
-}
-
-function preprocessExampleCode(exampleKey: string, rawCode: string): string {
-    if (!isNewBfarmExample(exampleKey)) {
-        return rawCode;
-    }
-
-    if (!hasBfarmMacroMarkers(rawCode)) {
-        return rawCode;
-    }
-
-    return normalizeBfarmMacroCode(rawCode);
-}
-
-function isBrokenCachedAwdCode(code: string): boolean {
-    if (!code) return false;
-    if (!code.includes('Paddy Field AWD Automation')) return false;
-    const awdStart = code.indexOf('void awdCycle(){');
-    const setupStart = code.indexOf('void setup() {');
-    const pubLine = code.indexOf('pub_topic("@msg/awd/depth", waterDepthCm);');
-    const missingRuntimeInit = !code.includes('awdLastStatusMs = 0');
-    if (missingRuntimeInit) return true;
-    if (awdStart < 0 || setupStart < 0 || pubLine < 0) return false;
-    // Broken output had setup() directly after pub_topic() inside awdCycle().
-    return awdStart < pubLine && pubLine < setupStart;
-}
-
-function detectNewBfarmExampleFromCode(code: string): string | null {
-    if (!code) return null;
-    const checks: Array<{ key: string; patterns: RegExp[] }> = [
-        {
-            key: 'new_bfarm_smart_greenhouse',
-            patterns: [/connectGreenhouseWifi/, /ghHumidity/, /String\("humidity="\)/],
-        },
-        {
-            key: 'new_bfarm_awd_automation',
-            patterns: [/awdCycle/, /@msg\/awd\/depth/, /pub_topic\s*\(/],
-        },
-        {
-            key: 'new_bfarm_fertigation_lab',
-            patterns: [/fertigationStep/, /PHthresh_min/, /ECthresh_min/],
-        },
-        {
-            key: 'new_bfarm_weather_station_sim',
-            patterns: [/weatherRs485Ok/, /@msg\/weather\/temp/, /Weather_HTCo2PLx/],
-        },
-        {
-            key: 'new_bfarm_hybrid_connectivity',
-            patterns: [/Hybrid Connectivity Testbed/, /SerialBT\.begin\("HybridTestbed"\)/, /latestLine/],
-        },
-    ];
-
-    for (const entry of checks) {
-        if (entry.patterns.every((p) => p.test(code))) {
-            return entry.key;
-        }
-    }
-    return null;
-}
-
-function repairCachedNewBfarmCodeIfNeeded(): void {
-    const cachedCode = localStorage.getItem('hackCable-webExample-inputCode');
-    if (!cachedCode || !isBrokenCachedAwdCode(cachedCode)) return;
-
-    const fixedCode = preprocessExampleCode(
-        'new_bfarm_awd_automation',
-        codeExamples['new_bfarm_awd_automation']
-    );
-
-    localStorage.setItem('hackCable-webExample-inputCode', fixedCode);
-    localStorage.setItem(EXAMPLE_SELECTION_STORAGE_KEY, 'new_bfarm_awd_automation');
-    if (codeInput instanceof HTMLTextAreaElement) {
-        setCodeEditorValue(fixedCode);
-    }
-    console.log('Repaired stale cached code for new_bfarm_awd_automation.');
 }
 
 function isBrokenCachedHandysenseRealSixButtonCode(code: string): boolean {
@@ -6277,10 +6030,7 @@ function repairCachedHandysenseRealSixButtonCodeIfNeeded(): void {
     const cachedCode = localStorage.getItem('hackCable-webExample-inputCode');
     if (!cachedCode || !isBrokenCachedHandysenseRealSixButtonCode(cachedCode)) return;
 
-    const fixedCode = preprocessExampleCode(
-        'handysense_real_six_button_test',
-        codeExamples['handysense_real_six_button_test']
-    );
+    const fixedCode = codeExamples['handysense_real_six_button_test'];
 
     localStorage.setItem('hackCable-webExample-inputCode', fixedCode);
     localStorage.setItem(EXAMPLE_SELECTION_STORAGE_KEY, 'handysense_real_six_button_test');
@@ -6291,16 +6041,13 @@ function repairCachedHandysenseRealSixButtonCodeIfNeeded(): void {
 }
 
 const codeExamplesSelect = document.getElementById('code-examples') as HTMLSelectElement;
-repairCachedNewBfarmCodeIfNeeded();
 repairCachedHandysenseRealSixButtonCodeIfNeeded();
 
 if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
     codeExamplesSelect.addEventListener('change', () => {
         const selectedExample = codeExamplesSelect.value;
         if (selectedExample && codeExamples[selectedExample]) {
-            const rawExampleCode = codeExamples[selectedExample];
-            const preparedExampleCode = preprocessExampleCode(selectedExample, rawExampleCode);
-            setCodeEditorValue(preparedExampleCode);
+            setCodeEditorValue(codeExamples[selectedExample]);
             localStorage.setItem('hackCable-webExample-inputCode', getCodeEditorValue());
             localStorage.setItem(EXAMPLE_SELECTION_STORAGE_KEY, selectedExample);
             markCompileStale();
@@ -6328,12 +6075,6 @@ if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
                     break;
                 case 'relaySequentialBlink':
                     setupRelayBlinkCircuit();
-                    break;
-                case 'handysense_relay_load_no':
-                    setupHandySenseRelayLoadTestCircuit(false);
-                    break;
-                case 'handysense_relay_load_nc':
-                    setupHandySenseRelayLoadTestCircuit(true);
                     break;
                 case 'handysense_real_six_button_test':
                     setupHandysenseRealSixButtonTestCircuit();
@@ -6397,6 +6138,36 @@ if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
                     break;
                 case 'handysense_real_bfarm_weather_sensor_test':
                     setupHandysenseRealBfarmWeatherSensorTestCircuit();
+                    break;
+                case 'handysense_real_sensor_weather_htco2plx_test':
+                    setupHandysenseRealSensorRs485TestCircuit(40, 'Weather HTCO2PLX');
+                    break;
+                case 'handysense_real_sensor_ph_rs485_test':
+                    setupHandysenseRealSensorRs485TestCircuit(35, 'pH RS485');
+                    break;
+                case 'handysense_real_sensor_rain_rs485_test':
+                    setupHandysenseRealSensorRs485TestCircuit(37, 'Rain RS485');
+                    break;
+                case 'handysense_real_sensor_wind_speed_rs485_test':
+                    setupHandysenseRealSensorRs485TestCircuit(38, 'Wind Speed RS485');
+                    break;
+                case 'handysense_real_sensor_sht31_i2c_test':
+                    setupHandysenseRealSensorI2cTestCircuit(41, 'SHT31 I2C');
+                    break;
+                case 'handysense_real_sensor_bh1750_i2c_test':
+                    setupHandysenseRealSensorI2cTestCircuit(42, 'BH1750 I2C');
+                    break;
+                case 'handysense_real_sensor_sht31_rs485_test':
+                    setupHandysenseRealSensorRs485TestCircuit(67, 'SHT31 RS485');
+                    break;
+                case 'handysense_real_sensor_weight_3kg_rs485_test':
+                    setupHandysenseRealSensorRs485TestCircuit(68, 'Weight 3 kg RS485');
+                    break;
+                case 'handysense_real_sensor_wind_direction_rs485_test':
+                    setupHandysenseRealSensorRs485TestCircuit(69, 'Wind Direction RS485');
+                    break;
+                case 'handysense_real_sensor_dt_par485_test':
+                    setupHandysenseRealSensorRs485TestCircuit(70, 'DT-Par485');
                     break;
                 case 'mcpSmartControl':
                     setupMcpSmartControlCircuit();
@@ -6462,22 +6233,6 @@ if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
                     break;
                 case 'test_bfarm_weather_wifi':
                     setupTestBfarmWeatherWifiCircuit();
-                    break;
-                // new Bfarm Test Examples
-                case 'new_bfarm_smart_greenhouse':
-                    setupNewBfarmSmartGreenhouseCircuit();
-                    break;
-                case 'new_bfarm_awd_automation':
-                    setupNewBfarmAwdAutomationCircuit();
-                    break;
-                case 'new_bfarm_fertigation_lab':
-                    setupNewBfarmFertigationLabCircuit();
-                    break;
-                case 'new_bfarm_weather_station_sim':
-                    setupNewBfarmWeatherStationSimCircuit();
-                    break;
-                case 'new_bfarm_hybrid_connectivity':
-                    setupNewBfarmHybridConnectivityCircuit();
                     break;
             }
         }
@@ -7323,7 +7078,7 @@ function autoWireCircuitPlanItem(
 function buildCircuitFromCurrentCode(): void {
     const rawCode = getCodeEditorValue().trim();
     if (!rawCode) {
-        showPlainStatus('No code found. Add code first, then click Build Circuit From Code.', 'error');
+        showPlainStatus('No code found. Add code first, then click Auto.', 'error');
         return;
     }
 
@@ -7861,6 +7616,54 @@ function setupHandysenseRealBfarmWeatherSensorTestCircuit() {
     }, 500);
 }
 
+function setupHandysenseRealSensorRs485TestCircuit(componentId: number, displayName: string) {
+    console.log(`Setting up Handysense real ${displayName} test circuit...`);
+    selectBoardForExample('handysense-real');
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[51]);
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
+
+    const sensorFigure = new ComponentFigure(wokwiComponentById[componentId]);
+    hackCable.editor.canvas.add(sensorFigure.setX(500).setY(60));
+
+    setTimeout(() => {
+        try {
+            connectPorts(sensorFigure, 'VCC', boardFigure, 'RS485_24V');
+            connectPorts(sensorFigure, 'GND', boardFigure, 'RS485_GND');
+            connectPorts(sensorFigure, 'A+', boardFigure, 'RS485_A');
+            connectPorts(sensorFigure, 'B-', boardFigure, 'RS485_B');
+            console.log(`Handysense real ${displayName} test setup complete!`);
+        } catch (error) {
+            console.error(`Error during Handysense real ${displayName} test wiring:`, error);
+        }
+    }, 500);
+}
+
+function setupHandysenseRealSensorI2cTestCircuit(componentId: number, displayName: string) {
+    console.log(`Setting up Handysense real ${displayName} test circuit...`);
+    selectBoardForExample('handysense-real');
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[51]);
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
+
+    const sensorFigure = new ComponentFigure(wokwiComponentById[componentId]);
+    hackCable.editor.canvas.add(sensorFigure.setX(500).setY(60));
+
+    setTimeout(() => {
+        try {
+            connectPorts(sensorFigure, 'VCC', boardFigure, 'I2C1_VCC');
+            connectPorts(sensorFigure, 'GND', boardFigure, 'I2C1_GND');
+            connectPorts(sensorFigure, 'SDA', boardFigure, 'I2C1_SDA');
+            connectPorts(sensorFigure, 'SCL', boardFigure, 'I2C1_SCL');
+            console.log(`Handysense real ${displayName} test setup complete!`);
+        } catch (error) {
+            console.error(`Error during Handysense real ${displayName} test wiring:`, error);
+        }
+    }, 500);
+}
+
 // Example 1: pH Misting Control Circuit Setup (1 sensor + 1 actuator)
 function setupPhMistingCircuit() {
     console.log("Setting up pH Misting Control circuit...");
@@ -8141,49 +7944,6 @@ function setupRelayBlinkCircuit() {
             console.log("Relay Sequential Blink circuit setup complete!");
         } catch (error) {
             console.error("Error during wiring:", error);
-        }
-    }, 500);
-}
-
-function setupHandySenseRelayLoadTestCircuit(useNormallyClosed: boolean) {
-    console.log(`Setting up HandySense relay load test (${useNormallyClosed ? 'NC' : 'NO'})...`);
-    hackCable.editor.canvas.clear();
-
-    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
-
-    const led1Figure = new ComponentFigure(wokwiComponentById[1]);
-    hackCable.editor.canvas.add(led1Figure.setX(35).setY(235));
-    const led2Figure = new ComponentFigure(wokwiComponentById[1]);
-    hackCable.editor.canvas.add(led2Figure.setX(95).setY(235));
-    const led3Figure = new ComponentFigure(wokwiComponentById[1]);
-    hackCable.editor.canvas.add(led3Figure.setX(155).setY(235));
-    const led4Figure = new ComponentFigure(wokwiComponentById[1]);
-    hackCable.editor.canvas.add(led4Figure.setX(215).setY(235));
-
-    const contactSuffix = useNormallyClosed ? 'NC' : 'NO';
-
-    setTimeout(() => {
-        try {
-            connectPorts(boardFigure, 'VIN_1', boardFigure, 'R1_COM');
-            connectPorts(boardFigure, `R1_${contactSuffix}`, led1Figure, 'A');
-            connectPorts(led1Figure, 'C', boardFigure, 'GND_5');
-
-            connectPorts(boardFigure, 'VIN_2', boardFigure, 'R2_COM');
-            connectPorts(boardFigure, `R2_${contactSuffix}`, led2Figure, 'A');
-            connectPorts(led2Figure, 'C', boardFigure, 'GND_6');
-
-            connectPorts(boardFigure, '3V3_R1', boardFigure, 'R3_COM');
-            connectPorts(boardFigure, `R3_${contactSuffix}`, led3Figure, 'A');
-            connectPorts(led3Figure, 'C', boardFigure, 'GND_R1');
-
-            connectPorts(boardFigure, '3V3_R2', boardFigure, 'R4_COM');
-            connectPorts(boardFigure, `R4_${contactSuffix}`, led4Figure, 'A');
-            connectPorts(led4Figure, 'C', boardFigure, 'GND_R2');
-
-            console.log(`HandySense relay load test (${useNormallyClosed ? 'NC' : 'NO'}) setup complete!`);
-        } catch (error) {
-            console.error(`Error during HandySense relay load test (${useNormallyClosed ? 'NC' : 'NO'}) wiring:`, error);
         }
     }, 500);
 }
@@ -8537,202 +8297,6 @@ function setupTestBfarmWeatherWifiCircuit() {
 }
 
 // ============================================
-// new Bfarm Test Circuit Setup Functions
-// ============================================
-
-function setupNewBfarmSmartGreenhouseCircuit() {
-    console.log("Setting up new Bfarm Smart Greenhouse circuit...");
-    hackCable.editor.canvas.clear();
-
-    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
-    const sht31Figure = new ComponentFigure(wokwiComponentById[41]);
-    hackCable.editor.canvas.add(sht31Figure.setX(480).setY(40));
-    const bh1750Figure = new ComponentFigure(wokwiComponentById[42]);
-    hackCable.editor.canvas.add(bh1750Figure.setX(480).setY(150));
-    const fanFigure = new ComponentFigure(wokwiComponentById[33]);
-    hackCable.editor.canvas.add(fanFigure.setX(480).setY(260));
-    const relayFigure = new ComponentFigure(wokwiComponentById[45]);
-    hackCable.editor.canvas.add(relayFigure.setX(20).setY(180));
-
-    setTimeout(() => {
-        try {
-            connectPorts(sht31Figure, 'VCC', boardFigure, '3V3_R1');
-            connectPorts(sht31Figure, 'GND', boardFigure, 'GND_R1');
-            connectPorts(sht31Figure, 'SDA', boardFigure, 'SDA_1');
-            connectPorts(sht31Figure, 'SCL', boardFigure, 'SCL_1');
-
-            connectPorts(bh1750Figure, 'VCC', boardFigure, '3V3_R2');
-            connectPorts(bh1750Figure, 'GND', boardFigure, 'GND_R2');
-            connectPorts(bh1750Figure, 'SDA', boardFigure, 'SDA_2');
-            connectPorts(bh1750Figure, 'SCL', boardFigure, 'SCL_2');
-
-            connectPorts(fanFigure, 'VCC', boardFigure, 'VIN_2');
-            connectPorts(fanFigure, 'GND', boardFigure, 'GND_6');
-            // Match code: setPin_Relay(32,33,25,26) and control const_relay_pin[1] => IO33.
-            connectPorts(fanFigure, 'SIG', boardFigure, 'IO33');
-
-            connectPorts(relayFigure, 'VCC', boardFigure, 'VIN_1');
-            connectPorts(relayFigure, 'GND', boardFigure, 'GND_5');
-            // Match the same relay mapping used in generated code.
-            connectPorts(relayFigure, 'IN1', boardFigure, 'IO32');
-            connectPorts(relayFigure, 'IN2', boardFigure, 'IO33');
-            connectPorts(relayFigure, 'IN3', boardFigure, 'IO25');
-            connectPorts(relayFigure, 'IN4', boardFigure, 'IO26');
-
-            console.log("new Bfarm Smart Greenhouse circuit setup complete!");
-        } catch (error) {
-            console.error("Error during new Bfarm Smart Greenhouse wiring:", error);
-        }
-    }, 500);
-}
-
-function setupNewBfarmAwdAutomationCircuit() {
-    console.log("Setting up new Bfarm AWD Automation circuit...");
-    hackCable.editor.canvas.clear();
-
-    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
-    const soilFigure = new ComponentFigure(wokwiComponentById[44]);
-    hackCable.editor.canvas.add(soilFigure.setX(40).setY(90));
-    const pumpFigure = new ComponentFigure(wokwiComponentById[32]);
-    hackCable.editor.canvas.add(pumpFigure.setX(500).setY(120));
-    const relayFigure = new ComponentFigure(wokwiComponentById[45]);
-    hackCable.editor.canvas.add(relayFigure.setX(500).setY(240));
-
-    setTimeout(() => {
-        try {
-            connectPorts(soilFigure, 'VCC', boardFigure, '3V3_2');
-            connectPorts(soilFigure, 'GND', boardFigure, 'GND_2');
-            connectPorts(soilFigure, 'AO', boardFigure, 'IO36');
-
-            connectPorts(pumpFigure, 'VCC', boardFigure, 'VIN_1');
-            connectPorts(pumpFigure, 'GND', boardFigure, 'GND_5');
-            connectPorts(pumpFigure, 'SIG', boardFigure, 'IO25');
-
-            connectPorts(relayFigure, 'VCC', boardFigure, 'VIN_2');
-            connectPorts(relayFigure, 'GND', boardFigure, 'GND_6');
-            // Match code: setPin_Relay(25,4,12,13) => IN1..IN4 map to IO25, IO4, IO12, IO13.
-            connectPorts(relayFigure, 'IN1', boardFigure, 'IO25');
-            connectPorts(relayFigure, 'IN2', boardFigure, 'IO4');
-            connectPorts(relayFigure, 'IN3', boardFigure, 'IO12');
-            connectPorts(relayFigure, 'IN4', boardFigure, 'IO13');
-
-            console.log("new Bfarm AWD Automation circuit setup complete!");
-        } catch (error) {
-            console.error("Error during new Bfarm AWD Automation wiring:", error);
-        }
-    }, 500);
-}
-
-function setupNewBfarmFertigationLabCircuit() {
-    console.log("Setting up new Bfarm Fertigation Lab circuit...");
-    hackCable.editor.canvas.clear();
-
-    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
-    const fertPhFigure = new ComponentFigure(wokwiComponentById[46]);
-    hackCable.editor.canvas.add(fertPhFigure.setX(500).setY(40));
-    const ecFigure = new ComponentFigure(wokwiComponentById[47]);
-    hackCable.editor.canvas.add(ecFigure.setX(500).setY(150));
-    const tempFigure = new ComponentFigure(wokwiComponentById[48]);
-    hackCable.editor.canvas.add(tempFigure.setX(500).setY(260));
-    const relayFigure = new ComponentFigure(wokwiComponentById[45]);
-    hackCable.editor.canvas.add(relayFigure.setX(20).setY(130));
-
-    setTimeout(() => {
-        try {
-            [fertPhFigure, ecFigure, tempFigure].forEach((sensorFigure) => {
-                connectPorts(sensorFigure, 'VCC', boardFigure, '3V3_R3');
-                connectPorts(sensorFigure, 'GND', boardFigure, 'GND_R3');
-                connectPorts(sensorFigure, 'A+', boardFigure, 'TX2');
-                connectPorts(sensorFigure, 'B-', boardFigure, 'RX2');
-            });
-
-            connectPorts(relayFigure, 'VCC', boardFigure, 'VIN_1');
-            connectPorts(relayFigure, 'GND', boardFigure, 'GND_5');
-            // Match code: setPin_Relay(25,4,12,13) => IN1..IN4 map to IO25, IO4, IO12, IO13.
-            connectPorts(relayFigure, 'IN1', boardFigure, 'IO25');
-            connectPorts(relayFigure, 'IN2', boardFigure, 'IO4');
-            connectPorts(relayFigure, 'IN3', boardFigure, 'IO12');
-            connectPorts(relayFigure, 'IN4', boardFigure, 'IO13');
-
-            console.log("new Bfarm Fertigation Lab circuit setup complete!");
-        } catch (error) {
-            console.error("Error during new Bfarm Fertigation Lab wiring:", error);
-        }
-    }, 500);
-}
-
-function setupNewBfarmWeatherStationSimCircuit() {
-    console.log("Setting up new Bfarm Weather Station Simulator circuit...");
-    hackCable.editor.canvas.clear();
-
-    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
-    const weatherFigure = new ComponentFigure(wokwiComponentById[40]);
-    hackCable.editor.canvas.add(weatherFigure.setX(470).setY(90));
-    const ledFigure = new ComponentFigure(wokwiComponentById[1]);
-    hackCable.editor.canvas.add(ledFigure.setX(40).setY(150));
-
-    setTimeout(() => {
-        try {
-            connectPorts(weatherFigure, 'VCC', boardFigure, '3V3_R3');
-            connectPorts(weatherFigure, 'GND', boardFigure, 'GND_R3');
-            connectPorts(weatherFigure, 'A+', boardFigure, 'TX2');
-            connectPorts(weatherFigure, 'B-', boardFigure, 'RX2');
-
-            connectPorts(ledFigure, 'A', boardFigure, 'IO25');
-            connectPorts(ledFigure, 'C', boardFigure, 'GND_5');
-
-            console.log("new Bfarm Weather Station Simulator circuit setup complete!");
-        } catch (error) {
-            console.error("Error during new Bfarm Weather Station Simulator wiring:", error);
-        }
-    }, 500);
-}
-
-function setupNewBfarmHybridConnectivityCircuit() {
-    console.log("Setting up new Bfarm Hybrid Connectivity circuit...");
-    hackCable.editor.canvas.clear();
-
-    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
-    const buttonFigure = new ComponentFigure(wokwiComponentById[49]);
-    hackCable.editor.canvas.add(buttonFigure.setX(20).setY(70));
-    const relayFigure = new ComponentFigure(wokwiComponentById[45]);
-    hackCable.editor.canvas.add(relayFigure.setX(500).setY(80));
-    const neopixelFigure = new ComponentFigure(wokwiComponentById[4]);
-    hackCable.editor.canvas.add(neopixelFigure.setX(500).setY(260));
-
-    setTimeout(() => {
-        try {
-            connectPorts(buttonFigure, 'VCC', boardFigure, '3V3_4');
-            connectPorts(buttonFigure, 'GND', boardFigure, 'GND_4');
-            connectPorts(buttonFigure, 'B1', boardFigure, 'IO32');
-            connectPorts(buttonFigure, 'B2', boardFigure, 'IO33');
-            connectPorts(buttonFigure, 'B3', boardFigure, 'IO15');
-            connectPorts(buttonFigure, 'B4', boardFigure, 'IO39');
-
-            connectPorts(relayFigure, 'VCC', boardFigure, 'VIN_1');
-            connectPorts(relayFigure, 'GND', boardFigure, 'GND_5');
-            // Match code: setPin_Relay(25,4,12,13) with blinkPin=IO25 and pwmPin=IO4.
-            connectPorts(relayFigure, 'IN1', boardFigure, 'IO25');
-            connectPorts(relayFigure, 'IN2', boardFigure, 'IO4');
-            connectPorts(relayFigure, 'IN3', boardFigure, 'IO12');
-            connectPorts(relayFigure, 'IN4', boardFigure, 'IO13');
-
-            connectPorts(neopixelFigure, 'VDD', boardFigure, 'VIN_1');
-            connectPorts(neopixelFigure, 'VSS', boardFigure, 'GND_5');
-            connectPorts(neopixelFigure, 'DIN', boardFigure, 'IO4');
-
-            console.log("new Bfarm Hybrid Connectivity circuit setup complete!");
-        } catch (error) {
-            console.error("Error during new Bfarm Hybrid Connectivity wiring:", error);
-        }
-    }, 500);
-}
-
 // postMessage listener: receive code from BFarm and handle shell resize
 window.addEventListener('message', (e: MessageEvent) => {
     if (!e.data) return;
@@ -8798,7 +8362,3 @@ autoSyncBlocksCheckbox?.addEventListener('change', () => {
         autoSyncBlocksHandler = null;
     }
 });
-
-
-
-

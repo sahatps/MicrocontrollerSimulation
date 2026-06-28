@@ -30,6 +30,7 @@
         })();
     </script>
     <link rel="icon" href="./assets/icon.png" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0" />
 
     <!-- CSS will be auto-injected -->
     <!-- JS will be auto-injected -->
@@ -64,7 +65,7 @@
                 <select id="code-examples" class="controlbar-select-corner examples-mode-corner">
                     <option value="" data-i18n="ui.selectExample">Select an example...</option>
                     <optgroup label="Handysensereal">
-                        <option value="handysense_real_six_button_test">6 Button Test</option>
+                        <option value="handysense_real_six_button_test" selected>6 Button Test</option>
                         <option value="handysense_real_eight_led_test">8 LED Test</option>
                         <option value="handysense_real_buttons_leds_test">Buttons + LEDs Test</option>
                         <option value="handysense_real_bfarm_ph_misting">BFARM RS485 pH + Misting Pump</option>
@@ -88,16 +89,17 @@
                         <option value="handysense_real_bfarm_lux120k_rs485_test">Lux120k rs485 Test</option>
                         <option value="handysense_real_bfarm_weather_sensor_test">Weather sensor Test</option>
                     </optgroup>
-                    <optgroup label="new Bfarm Test">
-                        <option value="new_bfarm_smart_greenhouse" selected>Smart Greenhouse End-to-End</option>
-                        <option value="new_bfarm_awd_automation">Paddy Field AWD Automation</option>
-                        <option value="new_bfarm_fertigation_lab">Fertigation Controller Lab</option>
-                        <option value="new_bfarm_weather_station_sim">Edge Weather Station Simulator</option>
-                        <option value="new_bfarm_hybrid_connectivity">Hybrid Connectivity Testbed</option>
-                    </optgroup>
-                    <optgroup label="Relay Contact Tests">
-                        <option value="handysense_relay_load_no">HandySense Relay Load Test (NO)</option>
-                        <option value="handysense_relay_load_nc">HandySense Relay Load Test (NC)</option>
+                    <optgroup label="Sensor Test">
+                        <option value="handysense_real_sensor_weather_htco2plx_test">Weather HTCO2PLX (RS485) Test</option>
+                        <option value="handysense_real_sensor_sht31_rs485_test">SHT31 Sensor (RS485) Test</option>
+                        <option value="handysense_real_sensor_sht31_i2c_test">SHT31 Sensor (I2C) Test</option>
+                        <option value="handysense_real_sensor_dt_par485_test">DT-Par485 Sensor Test</option>
+                        <option value="handysense_real_sensor_bh1750_i2c_test">BH1750 Sensor (I2C) Test</option>
+                        <option value="handysense_real_sensor_ph_rs485_test">pH Sensor (RS485) Test</option>
+                        <option value="handysense_real_sensor_rain_rs485_test">Rain Sensor (RS485) Test</option>
+                        <option value="handysense_real_sensor_weight_3kg_rs485_test">Weight Sensor 3 kg (RS485) Test</option>
+                        <option value="handysense_real_sensor_wind_direction_rs485_test">Wind Direction Sensor (RS485) Test</option>
+                        <option value="handysense_real_sensor_wind_speed_rs485_test">Wind Speed Sensor (RS485) Test</option>
                     </optgroup>
                 </select>
             </div>
@@ -115,25 +117,25 @@
                             <path d="M12 18.4l-2.5-2.5a3.5 3.5 0 0 1 5 0L12 18.4zm-5.1-5.1-2-2a10.6 10.6 0 0 1 14.2 0l-2 2a7.6 7.6 0 0 0-10.2 0zm-4.1-4.1-2-2a16.6 16.6 0 0 1 22.4 0l-2 2a13.6 13.6 0 0 0-18.4 0z"></path>
                         </svg>
                     </button>
+                    <button id="upload-session" class="session-circle-btn" type="button" aria-label="Upload session" title="Upload session">
+                        <span class="material-symbols-outlined session-action-icon" aria-hidden="true">files</span>
+                    </button>
+                    <button id="download-session" class="session-circle-btn" type="button" aria-label="Download session" title="Download session">
+                        <span class="material-symbols-outlined session-action-icon" aria-hidden="true">save</span>
+                    </button>
+                    <input id="upload-session-input" type="file" accept=".json,application/json" hidden />
                 </div>
                 <div class="buttonBar sim-http-settings" id="sim-http-container" hidden>
                     <input id="sim-http-path" type="text" value="/status" />
                     <button id="sim-http-send">GET</button>
                     <pre id="sim-http-response" class="sim-http-response">Ready</pre>
                 </div>
-                <button id="build-circuit-from-code" type="button">Build Circuit From Code</button>
             </div>
             <div class="buttonBar wiring-controls" hidden>
                 <p data-i18n="ui.wiring">Wiring:</p>
                 <button id="save" data-i18n="ui.save">Save</button>
                 <button id="restore" data-i18n="ui.load">Load</button>
                 <button id="clear-all" data-i18n="ui.clearAll">Clear All</button>
-            </div>
-            <div class="buttonBar session-controls">
-                <p>Session:</p>
-                <button id="download-session" type="button">Download</button>
-                <button id="upload-session" type="button">Upload</button>
-                <input id="upload-session-input" type="file" accept=".json,application/json" hidden />
             </div>
             <div class="buttonBar" id="editor-code-mock-container">
                 <div class="editor-tab-buttons">
@@ -142,6 +144,10 @@
                 </div>
                 <div class="editor-tab-panel active" data-editor-panel="code">
                     <div class="code-editor-shell">
+                        <div class="code-editor-actions">
+                            <button id="build-circuit-from-code" type="button" title="Build circuit from code">Auto</button>
+                            <button id="clear-code" type="button" title="Clear code">Clear</button>
+                        </div>
                         <textarea id="code-editor" rows="7" spellcheck="false" wrap="off"></textarea>
                         <div id="code-editor-resize-handle" class="code-editor-resize-handle" aria-hidden="true"></div>
                     </div>

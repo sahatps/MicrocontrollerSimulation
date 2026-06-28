@@ -116,6 +116,8 @@ export class ComponentFigure extends draw2d.shape.basic.Rectangle{
         })
         this.on("move", (_emitter: any, event: any) => {
             css(this.overlay, {top: event.y, left: event.x})
+            const canvas = this.getCanvas() as any;
+            canvas?.notifyCircuitStateChange?.(true);
         })
         this.on("click", (_emitter: any, _event: any) => {
             this.toFront()
