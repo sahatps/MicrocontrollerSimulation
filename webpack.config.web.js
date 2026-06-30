@@ -19,7 +19,9 @@ const normalizeRoutePath = (value) => {
 
 const appBasePath = normalizeBasePath(process.env.APP_BASE_PATH);
 const publicUrl = (pathSuffix) => `${appBasePath}/${pathSuffix.replace(/^\/+/, '')}`;
-const blocklyRedirectPath = routeFor(appBasePath, 'blockly');
+// Blockly is a sibling application at the domain root, not a child of the
+// simulation mount (for example, /blockly rather than /simulation/blockly).
+const blocklyRedirectPath = routeFor('', 'blockly');
 const localEmailCookieValue = 'local@hackcable.dev';
 const localHostnames = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 const hasCookie = (req, name) =>
@@ -100,12 +102,16 @@ module.exports = {
             devServer.app.get(`${appBasePath}/`, (_req, res) => {
                 res.sendFile(path.join(__dirname, 'web/shell.html'));
             });
-            devServer.app.get([
-                routeFor(appBasePath, 'blockly'),
-                routeFor(appBasePath, 'simulation'),
-            ], (_req, res) => {
-                res.sendFile(path.join(__dirname, 'web/shell.html'));
-            });
+            // Only the combined root-mounted demo owns /blockly. When the
+            // simulation is mounted at /simulation, Blockly is a sibling app.
+            if (!appBasePath) {
+                devServer.app.get([
+                    routeFor('', 'blockly'),
+                    routeFor('', 'simulation'),
+                ], (_req, res) => {
+                    res.sendFile(path.join(__dirname, 'web/shell.html'));
+                });
+            }
         },
         proxy: [
             {

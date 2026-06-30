@@ -23,7 +23,9 @@ const routeVariants = (pathSuffix = '') => {
     if (APP_BASE_PATH) routes.push(routeFor(APP_BASE_PATH, pathSuffix));
     return routes;
 };
-const BLOCKLY_REDIRECT_PATH = routeFor(APP_BASE_PATH, 'blockly');
+// Blockly is a sibling application at the domain root, not a child of the
+// simulation mount (for example, /blockly rather than /simulation/blockly).
+const BLOCKLY_REDIRECT_PATH = routeFor('', 'blockly');
 const LOCAL_EMAIL_COOKIE_VALUE = 'local@hackcable.dev';
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 const hasCookie = (req, name) =>
@@ -98,12 +100,17 @@ if (shouldServeStatic) {
     app.get(routeVariants(), (_req, res) => {
         res.sendFile(path.join(DIST_WEB_DIR, 'index.html'));
     });
-    app.get([
-        ...routeVariants('blockly'),
-        ...routeVariants('simulation'),
-    ], (_req, res) => {
-        res.sendFile(path.join(DIST_WEB_DIR, 'index.html'));
-    });
+    // The combined local demo owns both clean routes. A mounted production
+    // simulation (APP_BASE_PATH=/simulation) must leave /blockly to the
+    // separately deployed Blockly application.
+    if (!APP_BASE_PATH) {
+        app.get([
+            routeFor('', 'blockly'),
+            routeFor('', 'simulation'),
+        ], (_req, res) => {
+            res.sendFile(path.join(DIST_WEB_DIR, 'index.html'));
+        });
+    }
 }
 
 app.listen(PORT, () => {
