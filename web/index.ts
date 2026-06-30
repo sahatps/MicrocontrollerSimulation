@@ -3074,7 +3074,7 @@ initializeSidebarToggle();
 // Initialize control bar toggle functionality
 let controlBarElement: HTMLElement | null = null;
 let controlBarResizeHandle: HTMLDivElement | null = null;
-let controlBarWidth = 340;
+let controlBarWidth = 450;
 const CONTROLBAR_WIDTH_STORAGE_KEY = 'hackCable-controlbar-width';
 const CONTROLBAR_DEFAULT_WIDTH = 340;
 const CONTROLBAR_MIN_WIDTH = 220;

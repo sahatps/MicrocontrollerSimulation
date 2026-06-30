@@ -10,7 +10,7 @@ body
     padding 0
     min-height 100vh
     position relative
-    --controlbar-width 340px
+    --controlbar-width 450px
 
 header
     display none
@@ -273,14 +273,13 @@ body.controlbar-hidden #hackCable
     position fixed
     right 0
     top 0
-    bottom 20px
     width var(--controlbar-width)
     background-color #77af5a
     border-left 1px solid #5f9447
-    padding 56px 10px 10px
+    padding 10px 10px
     display flex
     flex-direction column
-    gap 6px
+    gap 1rem
     overflow-x hidden
     overflow-y auto
     -ms-overflow-style none
@@ -313,39 +312,34 @@ body.controlbar-hidden #hackCable
         display none
 
     .controlbar-topright
-        position absolute
-        top 8px
-        right 10px
         display flex
-        flex-direction column
-        align-items flex-end
-        gap 6px
-        z-index 1002
+        flex-direction row
+        gap 4px
+        width 100%
 
     .controlbar-topright-row
         width 100%
         display flex
         align-items center
-        justify-content flex-end
-        gap 8px
+        gap 6px
 
     .controlbar-select-corner
-        width auto
-        min-width 120px
-        max-width 170px
-        padding 0
-        border none
+        width 100%
+        padding 6px 8px
+        border 1px solid rgba(255, 255, 255, 0.25)
+        border-radius 8px
         outline none
-        background transparent
-        color #f4fff0
-        font-size 0.9rem
+        background rgba(0, 0, 0, 0.18)
+        color #fff
+        font-size 0.82rem
         font-weight 600
-        line-height 1.2
         cursor pointer
-        transition color 0.2s
+        transition background 0.2s, border-color 0.2s
+        min-width 0
 
         &:hover
-            color white
+            background rgba(0, 0, 0, 0.28)
+            border-color rgba(255, 255, 255, 0.4)
 
         option
             color #111
@@ -355,24 +349,21 @@ body.controlbar-hidden #hackCable
                 color #8f98a3
                 background #eef1ec
 
-    .examples-mode-corner
-        width 100%
-        min-width 0
-        max-width none
-
     .language-toggle-corner
-        width auto
-        min-width auto
-        padding 0
-        border none
+        flex-shrink 0
+        padding 6px 10px
+        border 1px solid rgba(255, 255, 255, 0.25)
+        border-radius 8px
         outline none
-        background transparent
-        color #f4fff0
-        font-size 0.9rem
+        background rgba(0, 0, 0, 0.18)
+        color #fff
+        font-size 0.82rem
         font-weight 700
-        line-height 1
         cursor pointer
-        text-align right
+        transition background 0.2s
+
+        &:hover
+            background rgba(0, 0, 0, 0.28)
         transition color 0.2s
 
         &:hover
@@ -1296,7 +1287,7 @@ body.controlbar-hidden #hackCable
     .tab-panel
         display none
         flex-direction column
-        gap 6px
+        gap 1rem
 
         &.active
             display flex
@@ -1417,21 +1408,11 @@ footer
             border-top 1px solid black
 
             .controlbar-topright
-                top 6px
-                right 8px
                 gap 4px
 
-            .controlbar-topright-row
-                gap 6px
-
             .controlbar-select-corner
-                min-width 100px
-                max-width 150px
                 font-size 11px
-
-            .examples-mode-corner
-                min-width 0
-                max-width none
+                padding 5px 7px
 
             .tab-bar
                 margin-top 0

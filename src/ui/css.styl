@@ -37,7 +37,7 @@
     cursor pointer
     transition background-color 0.2s
     font-size 13px
-    background-color #ffffff
+    background-color #77af5a
     color #263042
     height 32px
     display flex
@@ -46,21 +46,16 @@
     flex-shrink 0
 
     &:hover
-      background-color #f2f5fa
+      background-color #77af5a88
 
     &.active
-      background-color #ffffff
+      background-color #77af5a
       color #263042
 
     .toggle-icon
       font-size 16px
       line-height 1
-
-      svg
-        display block
-        width 16px
-        height 16px
-        fill currentColor
+      user-select none
 
     .toggle-label
       font-family Rubik
@@ -68,8 +63,8 @@
 
   .hackCable-catalog-overlay
     position sticky
-    top 0
-    left 0
+    top 1rem
+    left 1rem
     height 0
     z-index 800
     pointer-events none
@@ -83,7 +78,7 @@
     padding 0
     border 2px solid #8dbb6c
     border-radius 50%
-    background radial-gradient(circle at 30% 30%, #bde39e 0%, #7fb45f 100%)
+    background-color #77af5a
     color #f6fff1
     display flex
     align-items center
@@ -94,15 +89,26 @@
     pointer-events auto
 
     &:hover
-      background radial-gradient(circle at 30% 30%, #c9ecad 0%, #89be69 100%)
+      background-color #77af5a88
 
     .toggle-label
       display none
 
     .toggle-icon
-      font-size 18px
+      font-size 20px
       line-height 1
       color #f6fff1
+      user-select none
+
+    .toggle-icon-close
+      display none
+
+    &.active
+      .toggle-icon-open
+        display none
+
+      .toggle-icon-close
+        display block
 
       svg
         display block
@@ -171,7 +177,7 @@
         border 1px solid #c8cfda
         box-sizing border-box
         color black
-        font-size 12px
+        font-size 1rem
         width 100%
 
       select
@@ -188,7 +194,7 @@
         box-sizing border-box
         border 0
         color black
-        font-size 12px
+        font-size 1rem
         outline none
         padding 0 0 0 20px
         width 100%
@@ -207,6 +213,7 @@
         position absolute
         top 7px
         width 10px
+        font-size 1rem
 
         &:after
           background #6b7280
@@ -339,11 +346,8 @@
           box-sizing border-box
           margin 0
           padding 6px 8px 4px
-          font-size 0.7em
+          font-size 1rem
           color #111827
-          white-space nowrap
-          overflow hidden
-          text-overflow ellipsis
           width 100%
           min-height 27px
           background inherit
