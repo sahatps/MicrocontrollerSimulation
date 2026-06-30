@@ -100,6 +100,12 @@ module.exports = {
             devServer.app.get(`${appBasePath}/`, (_req, res) => {
                 res.sendFile(path.join(__dirname, 'web/shell.html'));
             });
+            devServer.app.get([
+                routeFor(appBasePath, 'blockly'),
+                routeFor(appBasePath, 'simulation'),
+            ], (_req, res) => {
+                res.sendFile(path.join(__dirname, 'web/shell.html'));
+            });
         },
         proxy: [
             {

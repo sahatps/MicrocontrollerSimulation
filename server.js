@@ -98,6 +98,12 @@ if (shouldServeStatic) {
     app.get(routeVariants(), (_req, res) => {
         res.sendFile(path.join(DIST_WEB_DIR, 'index.html'));
     });
+    app.get([
+        ...routeVariants('blockly'),
+        ...routeVariants('simulation'),
+    ], (_req, res) => {
+        res.sendFile(path.join(DIST_WEB_DIR, 'index.html'));
+    });
 }
 
 app.listen(PORT, () => {

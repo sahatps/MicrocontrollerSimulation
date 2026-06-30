@@ -16,6 +16,8 @@ import { convertBfarmMacroToCpp, hasBfarmMacroMarkers } from './bfarm-macro-conv
 import { installWasmCompatHarness } from './wasm-compat-runner';
 import { HANDYSENSE_REAL_BOARD_CONTROL_EVENT } from '../src/components/handysense-real-board';
 import type { HandysenseRealBoardControlDetail, HandysenseRealBoardControlName } from '../src/components/handysense-real-board';
+import { getHandysenseRealCanonicalPorts, validateHandysenseRealWiring } from '../src/editor/wiring-validator';
+import type { WiringValidationResult } from '../src/editor/wiring-validator';
 
 console.log("Running HackCable web interface")
 installWasmCompatHarness();
@@ -690,7 +692,9 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
     registerSerialDataCallback();
 
     compileButton.addEventListener("click", () => compile());
-    executeButton.addEventListener("click", () => { clearSerial(); execute(); setTimeout(startIOMonitor, 200); });
+    executeButton.addEventListener("click", () => {
+        if (execute()) setTimeout(startIOMonitor, 200);
+    });
     buildCircuitFromCodeButton?.addEventListener('click', () => buildCircuitFromCurrentCode());
     clearCodeButton?.addEventListener('click', () => {
         if (!confirm('Clear all code? This action cannot be undone.')) return;
@@ -815,11 +819,9 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
         }
     }
 
-    function execute(){
-        if ((executeButton as HTMLButtonElement).disabled) return;
-        if (runControlState === 'needs-compile' || runControlState === 'compiling') return;
-        registerSerialDataCallback();
-        beginSerialPipelineDiagnostics();
+    function execute(): boolean {
+        if ((executeButton as HTMLButtonElement).disabled) return false;
+        if (runControlState === 'needs-compile' || runControlState === 'compiling') return false;
         const rawSourceCode = getCodeEditorValue();
         const sourceCode = normalizeBfarmMacroCode(rawSourceCode);
         if (sourceCode !== rawSourceCode) {
@@ -827,12 +829,30 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
             localStorage.setItem('hackCable-webExample-inputCode', sourceCode);
         }
 
-        hackCable.emulatorManager.stop();
-
         const boardType = hackCable.editor.canvas.getBoardType();
         if (boardType) hackCable.emulatorManager.setBoardType(boardType);
 
-        if(!(hexInput instanceof HTMLTextAreaElement && codeInput instanceof HTMLTextAreaElement)) return;
+        if (normalizeBoardSelection(boardSelectEl?.value) === 'handysense-real') {
+            const validation = validateHandysenseRealWiring(sourceCode, hackCable.editor.canvas);
+            if (!validation.canExecute) {
+                hackCable.emulatorManager.stop();
+                cleanupWasmInstance();
+                stopIOMonitor();
+                setRunControlState('compiled');
+                showWiringValidationFailure(validation);
+                return false;
+            }
+            clearSerial();
+            appendWiringValidationWarnings(validation);
+        } else {
+            clearSerial();
+        }
+
+        registerSerialDataCallback();
+        beginSerialPipelineDiagnostics();
+        hackCable.emulatorManager.stop();
+
+        if(!(hexInput instanceof HTMLTextAreaElement && codeInput instanceof HTMLTextAreaElement)) return false;
         showStatus('ui.status.executing', 'info');
         resetMockRunStartTime();
         flushSerialBufferToDom(true);
@@ -843,7 +863,7 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                 appendSerial('Error: No compiled WASM. Click Compile first.\n');
                 setRunControlState('needs-compile');
                 showStatus('ui.status.compileFailed', 'error');
-                return;
+                return false;
             }
             setRunControlState('executing');
             cleanupWasmInstance();
@@ -901,6 +921,7 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
             hackCable.emulatorManager.loadCode(hexInput.value);
             hackCable.emulatorManager.run();
         }
+        return true;
     }
 
     document.addEventListener(HANDYSENSE_REAL_BOARD_CONTROL_EVENT, (event: Event) => {
@@ -909,9 +930,7 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
         if (!detail) return;
 
         if (detail.control === 'reset') {
-            clearSerial();
-            execute();
-            setTimeout(startIOMonitor, 200);
+            if (execute()) setTimeout(startIOMonitor, 200);
             return;
         }
 
@@ -6938,6 +6957,28 @@ function showPlainStatus(message: string, type: 'info' | 'success' | 'error', au
     }
 }
 
+function showWiringValidationFailure(result: WiringValidationResult): void {
+    if (!statusMessage) return;
+    statusMessage.textContent = '';
+    statusMessage.className = 'status-message status-error wiring-validation-status';
+
+    const heading = document.createElement('strong');
+    heading.textContent = 'Execute ถูกยกเลิก: กรุณาแก้การต่อสายใน Circuit';
+    statusMessage.appendChild(heading);
+
+    const list = document.createElement('ul');
+    result.errors.forEach(issue => {
+        const item = document.createElement('li');
+        item.textContent = issue.message;
+        list.appendChild(item);
+    });
+    statusMessage.appendChild(list);
+}
+
+function appendWiringValidationWarnings(result: WiringValidationResult): void {
+    result.warnings.forEach(issue => appendSerial(`Wiring warning: ${issue.message}\n`));
+}
+
 function autoWireCircuitPlanItem(
     boardMode: AutoCircuitBoardMode,
     boardFigure: ComponentFigure,
@@ -6946,18 +6987,14 @@ function autoWireCircuitPlanItem(
     warnings: string[],
 ): void {
     if (boardMode === 'handysense-real') {
+        const canonicalPorts = getHandysenseRealCanonicalPorts(item.kind, item.pin);
+        if (canonicalPorts) {
+            Object.entries(canonicalPorts).forEach(([componentPort, boardPort]) => {
+                connectPorts(componentFigure, componentPort, boardFigure, boardPort);
+            });
+            return;
+        }
         switch (item.kind) {
-            case 'misting-pump':
-                connectPorts(componentFigure, 'VCC', boardFigure, 'RELAY5V_VIN');
-                connectPorts(componentFigure, 'GND', boardFigure, 'RELAY5V_GND');
-                connectPorts(componentFigure, 'SIG', boardFigure, 'LEDR_0');
-                return;
-            case 'fan':
-            case 'water-pump':
-                connectPorts(componentFigure, 'VCC', boardFigure, 'RELAY5V_VIN');
-                connectPorts(componentFigure, 'GND', boardFigure, 'RELAY5V_GND');
-                connectPorts(componentFigure, 'SIG', boardFigure, 'LEDR_1');
-                return;
             case 'lcd1602':
             case 'lcd2004':
                 connectPorts(componentFigure, 'VCC', boardFigure, 'I2C1_VCC');
@@ -6967,23 +7004,6 @@ function autoWireCircuitPlanItem(
                 return;
             case 'ds1307':
                 connectPorts(componentFigure, '5V', boardFigure, 'I2C1_VCC');
-                connectPorts(componentFigure, 'GND', boardFigure, 'I2C1_GND');
-                connectPorts(componentFigure, 'SDA', boardFigure, 'I2C1_SDA');
-                connectPorts(componentFigure, 'SCL', boardFigure, 'I2C1_SCL');
-                return;
-            case 'rs485-ph':
-                connectPorts(componentFigure, 'VCC', boardFigure, 'RS485_24V');
-                connectPorts(componentFigure, 'GND', boardFigure, 'RS485_GND');
-                connectPorts(componentFigure, 'A+', boardFigure, 'RS485_A');
-                connectPorts(componentFigure, 'B-', boardFigure, 'RS485_B');
-                return;
-            case 'soil-moisture':
-                connectPorts(componentFigure, 'VCC', boardFigure, 'A05_1_VCC');
-                connectPorts(componentFigure, 'GND', boardFigure, 'A05_1_GND');
-                connectPorts(componentFigure, 'AO', boardFigure, 'A05_1_SIG');
-                return;
-            case 'sht31':
-                connectPorts(componentFigure, 'VCC', boardFigure, 'I2C1_VCC');
                 connectPorts(componentFigure, 'GND', boardFigure, 'I2C1_GND');
                 connectPorts(componentFigure, 'SDA', boardFigure, 'I2C1_SDA');
                 connectPorts(componentFigure, 'SCL', boardFigure, 'I2C1_SCL');

@@ -31,7 +31,7 @@
 
       function getBlocklyPath() {
         var currentPath = normalizePath(window.location.pathname);
-        var appBasePath = currentPath.replace(/\/blockly$/, '');
+        var appBasePath = currentPath.replace(/\/(?:blockly|simulation)$/, '');
         return joinPath(appBasePath, 'blockly');
       }
 
@@ -263,7 +263,7 @@
     // /blocks/...; others nest them under /blockly/blocks/... . Try both and
     // pick the first path that resolves to the expected document.
     var currentShellPath = normalizePath(window.location.pathname);
-    var shellBasePath = currentShellPath.replace(/\/blockly$/, '');
+    var shellBasePath = currentShellPath.replace(/\/(?:blockly|simulation)$/, '');
     var appPath = function(path) {
       return joinPath(shellBasePath, path);
     };
@@ -272,6 +272,9 @@
     };
     var getBlocklyPath = function() {
       return joinPath(shellBasePath, 'blockly');
+    };
+    var getSimulationPath = function() {
+      return joinPath(shellBasePath, 'simulation');
     };
     var uniquePaths = function(paths) {
       return paths.filter(function(path, index) {
@@ -331,7 +334,7 @@
     }
 
     function openBlockly() {
-      window.location.href = `${window.location.origin}${getBlocklyPath()}`;
+      switchCanvas('blocks');
     }
 
     function setControlBarBtnState(hidden) {
@@ -372,7 +375,7 @@
       });
     }
 
-    function switchCanvas(which) {
+    function switchCanvas(which, replaceHistory) {
       if (which === 'circuit') {
         hcPane.classList.remove('hidden');
         bfPane.classList.add('hidden');
@@ -387,7 +390,11 @@
         if (navActions) navActions.classList.add('hidden');
       }
       localStorage.setItem('activeCanvas', which);
-      location.hash = which;
+      var nextPath = which === 'circuit' ? getSimulationPath() : getBlocklyPath();
+      var updateHistory = replaceHistory ? 'replaceState' : 'pushState';
+      if (window.location.pathname !== nextPath || window.location.hash) {
+        window.history[updateHistory]({ canvas: which }, '', nextPath);
+      }
       notifyResize();
       if (which === 'circuit') {
         sendToHackCable({ source: 'shell', type: 'get-controlbar-state' });
@@ -435,9 +442,22 @@
     });
 
     // Initial view — support legacy hashes (hackcable, bfarm, combine) and new ones
-    var hash = location.hash.slice(1) || localStorage.getItem('activeCanvas') || 'circuit';
-    var initial = (hash === 'blocks' || hash === 'bfarm') ? 'blocks' : 'circuit';
-    switchCanvas(initial);
+    function canvasFromLocation() {
+      var path = normalizePath(window.location.pathname);
+      if (path === getBlocklyPath()) return 'blocks';
+      if (path === getSimulationPath()) return 'circuit';
+
+      // Keep old bookmarks working, then normalize them to the new clean URLs.
+      var legacyHash = location.hash.slice(1);
+      if (legacyHash === 'blocks' || legacyHash === 'bfarm') return 'blocks';
+      if (legacyHash === 'circuit' || legacyHash === 'hackcable' || legacyHash === 'combine') return 'circuit';
+      return localStorage.getItem('activeCanvas') === 'blocks' ? 'blocks' : 'circuit';
+    }
+
+    switchCanvas(canvasFromLocation(), true);
+    window.addEventListener('popstate', function() {
+      switchCanvas(canvasFromLocation(), true);
+    });
     if (frameHackCable) {
       frameHackCable.addEventListener('load', function() {
         sendToHackCable({ source: 'shell', type: 'get-controlbar-state' });
