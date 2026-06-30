@@ -4,7 +4,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HackCable + bfarm</title>
+  <title>B-Farm | Simulation</title>
+  <link rel="icon" href="https://bfarm.in.th/blockly/bfarm-icon.png" />
   <script>
     (function () {
       function hasCookie(name) {
@@ -381,8 +382,7 @@
             <path d="M20.5 14.2A8.7 8.7 0 0 1 9.8 3.5a.8.8 0 0 0-.9-1A10.1 10.1 0 1 0 21.5 15a.8.8 0 0 0-1-.8z"></path>
           </svg>
         </button>
-        <button id="btn-grid" class="cc-2" type="button" title="Hide grid" aria-label="Hide grid"
-          aria-pressed="true">
+        <button id="btn-grid" class="cc-2" type="button" title="Hide grid" aria-label="Hide grid" aria-pressed="true">
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path
               d="M4 4h4v4H4V4zm6 0h4v4h-4V4zm6 0h4v4h-4V4zM4 10h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4z">
@@ -509,7 +509,14 @@
     }
 
     function openBlockly() {
-      window.location.href = `${window.location.origin}/blockly`;
+      const webOrigin = window.location.origin;
+      if (webOrigin === 'http://localhost:3021') {
+        // If the page is loaded from a local file, use the current path as the base.
+        window.location.href = `http://localhost:3020/blockly`;
+      } else {
+        window.location.href = `${webOrigin}/blockly`;
+      }
+      // window.location.href = `${window.location.origin}/blockly`;
     }
 
     function setControlBarBtnState(hidden) {

@@ -553,36 +553,34 @@ body.controlbar-hidden #hackCable
                 fill currentColor
 
         .session-circle-btn
-            width 44px
-            min-width 44px
-            height 44px
-            padding 0
-            border none
+            font-size 1.2em
+            font-weight bold
+            outline #ffffff88 4px solid
+            border #77af5a 2px solid
+            background #ffffff
             border-radius 50%
-            outline none
-            box-shadow none
-            background-color transparent
-            color #315021
+            overflow hidden
+            height 80%
+            width 80%
+            aspect-ratio 1
             display flex
-            align-items center
             justify-content center
-            text-align center
+            align-items center
+            color #77af5a
             cursor pointer
-            flex 0 0 auto
-            transition background-color 0.2s, color 0.2s, transform 0.2s, outline-color 0.2s, border-color 0.2s
+            transition all 0.3s ease
 
-            &:hover
-                background-color #f8f8f8
-                color #77af5a
+            &:hover:not(:disabled)
+                background #77af5a
+                color #fff
+                outline: #ffffff88 4px solid
 
-            &:active
-                transform scale(0.94)
+            &:active:not(:disabled)
+                transform scale(0.95)
 
-            &:focus,
-            &:focus-visible
-                border none
-                outline none
-                box-shadow none
+            &:disabled
+                opacity 0.45
+                cursor not-allowed
 
             .session-action-icon
                 width auto
@@ -611,33 +609,27 @@ body.controlbar-hidden #hackCable
                 display none !important
 
         .run-circle-btn
-            width 44px
-            height 44px
-            min-width 44px
-            padding 0
-            border 2px solid #8c95a3
+            font-size 1.2em
+            font-weight bold
+            outline #ffffff88 4px solid
+            border #77af5a 2px solid
+            background #ffffff
             border-radius 50%
-            background-color #f8f8f8
-            color #8c95a3
-            outline 4px solid rgba(255, 255, 255, 0.55)
+            overflow hidden
+            height 80%
+            width 80%
+            aspect-ratio 1
             display flex
-            align-items center
             justify-content center
-            text-align center
-            font-size 0
-            line-height 1
-            flex 0 0 auto
-            transition background-color 0.2s, color 0.2s, transform 0.2s, outline-color 0.2s, border-color 0.2s
-
-            &::before
-                font-size 18px
-                line-height 1
-                font-weight 700
+            align-items center
+            color #77af5a
+            cursor pointer
+            transition all 0.3s ease
 
             &:hover:not(:disabled)
-                background-color #8c95a3
+                background #77af5a
                 color #fff
-                outline-color #8c95a3
+                outline: #ffffff88 4px solid
 
             &:active:not(:disabled)
                 transform scale(0.95)
@@ -647,10 +639,11 @@ body.controlbar-hidden #hackCable
                 cursor not-allowed
 
         #compile.run-circle-btn
-            border-color #60c7cd
-            background-color #6fd2d8
-            color #0f7f8a
-            outline-color rgba(172, 241, 245, 0.5)
+            border-color #77af5a
+            background-color #ffffff
+            color #77af5a    
+            outline: #ffffff88 4px solid
+
 
             &:hover:not(:disabled)
                 background-color #62c8ce
@@ -668,22 +661,22 @@ body.controlbar-hidden #hackCable
                     color #6b1717
                     outline-color rgba(255, 183, 178, 0.8)
 
-        #compile.run-circle-btn::before
-            content '\2713'
-            font-size 24px
-            font-weight 800
+        .run-circle-btn
+            .run-btn-icon
+                font-size 22px
+                line-height 1
+                user-select none
 
-        #compile.run-circle-btn.is-cancel::before
-            content '\00D7'
+        #compile.run-circle-btn
+            .icon-cancel
+                display none
 
-        #execute.run-circle-btn::before
-            content '\25B6'
+            &.is-cancel
+                .icon-default
+                    display none
 
-        #stop.run-circle-btn::before
-            content '\25A0'
-
-        #pause.run-circle-btn::before
-            content '||'
+                .icon-cancel
+                    display block
 
     #sim-http-container
         input
@@ -1568,8 +1561,6 @@ body.controlbar-resizing
                 .sim-http-settings
                     width 240px
 
-                #compile.run-circle-btn::before
-                    font-size 20px
 
 // Control bar toggle button — always fixed to right edge, independent of controlBar state
 .toggle-controlbar
