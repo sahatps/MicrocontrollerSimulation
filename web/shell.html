@@ -466,7 +466,7 @@
       return html.indexOf('HackCable shell loaded inside iframe') !== -1;
     };
     var looksLikeHackCableDocument = function (html) {
-      return html.indexOf('<title>HackCable</title>') !== -1 && html.indexOf('id="hackCable"') !== -1;
+      return html.indexOf('id="hackCable"') !== -1;
     };
     var looksLikeBlocksDocument = function (html) {
       return html.indexOf('<title>B-Farm</title>') !== -1;
