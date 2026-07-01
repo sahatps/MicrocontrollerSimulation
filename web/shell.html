@@ -345,6 +345,43 @@
     .pane.hidden {
       display: none;
     }
+    .simulation-loading {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      background: #f7f8f5;
+      color: #4e6b3d;
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+    }
+    .simulation-loading.is-hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+    .simulation-loading-spinner {
+      width: 38px;
+      height: 38px;
+      border: 4px solid rgba(119, 175, 90, 0.25);
+      border-top-color: #5f9447;
+      border-radius: 50%;
+      animation: simulation-loading-spin 0.75s linear infinite;
+    }
+    .simulation-loading-label {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+    @keyframes simulation-loading-spin {
+      to { transform: rotate(360deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .simulation-loading-spinner { animation-duration: 1.5s; }
+    }
   </style>
 </head>
 
@@ -405,6 +442,10 @@
   <div id="frames">
     <div id="pane-hackcable" class="pane">
       <iframe id="frame-hackcable" title="HackCable circuit simulator" allow="cross-origin-isolated"></iframe>
+      <div id="simulation-loading" class="simulation-loading" role="status" aria-live="polite">
+        <span class="simulation-loading-spinner" aria-hidden="true"></span>
+        <span class="simulation-loading-label">Loading simulation...</span>
+      </div>
     </div>
     <div id="pane-bfarm" class="pane hidden">
       <iframe id="frame-bfarm" title="B-Farm blocks editor"></iframe>
@@ -496,6 +537,13 @@
     var btnControlBar = document.getElementById('btn-controlbar');
     var frameHackCable = document.getElementById('frame-hackcable');
     var frameBfarm = document.getElementById('frame-bfarm');
+    var simulationLoading = document.getElementById('simulation-loading');
+
+    function hideSimulationLoading() {
+      if (!simulationLoading || simulationLoading.classList.contains('is-hidden')) return;
+      simulationLoading.classList.add('is-hidden');
+      simulationLoading.setAttribute('aria-hidden', 'true');
+    }
 
     (async function configureFrames() {
       frameHackCable.src = await resolveFramePath(frameCandidates('hackcable/index.html'), looksLikeHackCableDocument);
@@ -609,6 +657,10 @@
     // Relay HackCable messages → bfarm
     window.addEventListener('message', function (e) {
       if (!e.data || e.data.source !== 'hackcable') return;
+      if (e.data.type === 'simulation-ready') {
+        hideSimulationLoading();
+        return;
+      }
       if (e.data.type === 'code-sync') {
         var bfFrame = document.getElementById('frame-bfarm');
         if (bfFrame.contentWindow) bfFrame.contentWindow.postMessage(e.data, '*');

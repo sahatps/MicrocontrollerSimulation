@@ -29,6 +29,19 @@ const languageStorageKey = 'hackCable-webExample-language';
 localStorage.setItem(languageStorageKey, 'en_us');
 let hackCable = new HackCable(mountingDiv, 'en_us');
 
+function notifyShellWhenInitialRenderIsReady() {
+    const afterFonts = document.fonts?.ready ?? Promise.resolve();
+    afterFonts
+        .catch(() => undefined)
+        .then(() => new Promise<void>((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        }))
+        .then(() => new Promise<void>((resolve) => setTimeout(resolve, 350)))
+        .then(() => {
+            window.parent.postMessage({ source: 'hackcable', type: 'simulation-ready' }, '*');
+        });
+}
+
 // Clang/LLVM WASM state
 const clangRunner = new ClangWasmRunner();
 let lastClangResult: Uint8Array | null = null;
@@ -283,6 +296,7 @@ setTimeout(() => {
             return;
         }
     }, 1000);
+    notifyShellWhenInitialRenderIsReady();
 }, 100);
 
 const compileButton = document.getElementById('compile');
