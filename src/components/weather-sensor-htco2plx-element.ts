@@ -1,0 +1,68 @@
+import { html, svg, LitElement } from 'lit';
+import type { ElementPin } from '@wokwi/elements';
+
+export class WeatherSensorHtco2plxElement extends LitElement {
+  readonly pinInfo: ElementPin[] = [
+    { name: 'VCC', x: 75, y: 15, signals: [{ type: 'power', signal: 'VCC' }], number: 1 },
+    { name: 'GND', x: 75, y: 25, signals: [{ type: 'power', signal: 'GND' }], number: 2 },
+    { name: 'A+',  x: 75, y: 35, signals: [], number: 3 },
+    { name: 'B-',  x: 75, y: 45, signals: [], number: 4 },
+  ];
+
+  value = 0.0;
+
+  private svgContent() {
+    return svg`
+      <svg width="22mm" height="15mm" version="1.1" viewBox="0 0 80 55"
+           xmlns="http://www.w3.org/2000/svg">
+        <!-- PCB -->
+        <rect x="0" y="0" width="80" height="55" fill="#1565c0" rx="2" ry="2"/>
+        <circle cx="4" cy="4" r="1.5" fill="#333" stroke="#000" stroke-width="0.2"/>
+        <circle cx="4" cy="51" r="1.5" fill="#333" stroke="#000" stroke-width="0.2"/>
+        <circle cx="76" cy="4" r="1.5" fill="#333" stroke="#000" stroke-width="0.2"/>
+        <circle cx="76" cy="51" r="1.5" fill="#333" stroke="#000" stroke-width="0.2"/>
+
+        <text x="30" y="12" fill="#fff" font-family="Arial" font-size="5" font-weight="bold" text-anchor="middle">WEATHER</text>
+        <text x="30" y="20" fill="#ccc" font-family="Arial" font-size="3.5" text-anchor="middle">HTCO2PLX</text>
+
+        <!-- CO2+T+H sub-label -->
+        <text x="30" y="27" fill="#80cbc4" font-family="Arial" font-size="3" text-anchor="middle">CO2+T+H+Lux+P</text>
+
+        <!-- Sensor housing icon -->
+        <rect x="3" y="30" width="14" height="16" fill="#333" stroke="#555" stroke-width="0.5" rx="2"/>
+        <!-- Ventilation slots -->
+        <line x1="5" y1="33" x2="15" y2="33" stroke="#666" stroke-width="0.5"/>
+        <line x1="5" y1="36" x2="15" y2="36" stroke="#666" stroke-width="0.5"/>
+        <line x1="5" y1="39" x2="15" y2="39" stroke="#666" stroke-width="0.5"/>
+        <line x1="5" y1="42" x2="15" y2="42" stroke="#666" stroke-width="0.5"/>
+
+        <!-- MAX485 chip -->
+        <rect x="22" y="33" width="16" height="10" fill="#1a1a1a" stroke="#444" stroke-width="0.3" rx="1"/>
+        <text x="30" y="40" fill="#777" font-family="Arial" font-size="2.5" text-anchor="middle">MAX485</text>
+
+        <rect x="22" y="46" width="5" height="2.5" fill="#333"/>
+        <rect x="30" y="46" width="5" height="2.5" fill="#333"/>
+        <rect x="38" y="46" width="5" height="2.5" fill="#333"/>
+
+        <circle cx="52" cy="50" r="2" fill="#80cbc4" opacity="0.5"/>
+
+        <!-- Right 4-pin header -->
+        <rect x="67" y="8" width="10" height="40" fill="#1a1a1a" stroke="#000" stroke-width="0.3"/>
+        <circle cx="75" cy="15" r="1.5" fill="#e8e8e8"/>
+        <circle cx="75" cy="25" r="1.5" fill="#e8e8e8"/>
+        <circle cx="75" cy="35" r="1.5" fill="#e8e8e8"/>
+        <circle cx="75" cy="45" r="1.5" fill="#e8e8e8"/>
+        <text x="65" y="16" fill="#fff" font-family="Arial" font-size="2.5" text-anchor="end">VCC</text>
+        <text x="65" y="26" fill="#fff" font-family="Arial" font-size="2.5" text-anchor="end">GND</text>
+        <text x="65" y="36" fill="#fff" font-family="Arial" font-size="2.5" text-anchor="end">A+</text>
+        <text x="65" y="46" fill="#fff" font-family="Arial" font-size="2.5" text-anchor="end">B-</text>
+      </svg>
+    `;
+  }
+
+  render() {
+    return html`${this.svgContent()}`;
+  }
+}
+
+customElements.define('weather-sensor-htco2plx-element', WeatherSensorHtco2plxElement);

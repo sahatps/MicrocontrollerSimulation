@@ -2,6 +2,7 @@ import {ComponentFigure} from "./component-figure";
 import {Canvas} from "./canvas";
 import {ArduinoUnoElement, ESP32DevkitV1Element, LEDElement, PushbuttonElement} from "@wokwi/elements";
 import {CustomESP32BoardElement} from "../components/custom-esp32-board";
+import {resolveHandysensePinNumber} from "../components/handysense-board";
 import {HandysenseProBoardElement} from "../components/handysense-pro-board";
 import {MistingPumpElement} from "../components/misting-pump-element";
 import {WaterPumpElement} from "../components/water-pump-element";
@@ -169,6 +170,11 @@ export class CodeGenerator {
     }
 
     private extractPinNumber(portName: string): number {
+        const handysensePin = resolveHandysensePinNumber(portName);
+        if (handysensePin !== null) {
+            return handysensePin;
+        }
+
         // Handle ESP32 pin names (e.g., "D2", "D4", "D13")
         if (portName.startsWith('D')) {
             const espPin = portName.match(/D(\d+)/);

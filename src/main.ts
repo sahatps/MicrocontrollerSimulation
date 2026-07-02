@@ -8,8 +8,44 @@ import {MistingPumpElement} from "./components/misting-pump-element";
 import {WaterPumpElement} from "./components/water-pump-element";
 import {FanElement} from "./components/fan-element";
 import {RelayElement} from "./components/relay-element";
+import {FourChannelRelayElement} from "./components/four-channel-relay-element";
 import {CustomESP32BoardElement} from "./components/custom-esp32-board";
+import {resolveHandysensePinNumber} from "./components/handysense-board";
+import {HandysenseRealBoardElement} from "./components/handysense-real-board";
 import {HandysenseProBoardElement} from "./components/handysense-pro-board";
+import {Sht31SensorElement} from "./components/sht31-sensor-element";
+import {Bh1750SensorElement} from "./components/bh1750-sensor-element";
+import {SoilMoistureSensorElement} from "./components/soil-moisture-sensor-element";
+import {Rs485PhSensorElement} from "./components/rs485-ph-sensor-element";
+import {Rs485LightSensorElement} from "./components/rs485-light-sensor-element";
+import {Rs485RainSensorElement} from "./components/rs485-rain-sensor-element";
+import {Rs485WindSpeedSensorElement} from "./components/rs485-wind-speed-sensor-element";
+import {Rs485ParSensorElement} from "./components/rs485-par-sensor-element";
+import {WeatherSensorHtco2plxElement} from "./components/weather-sensor-htco2plx-element";
+import {CurrentLoop420mAElement} from "./components/current-loop-420ma-element";
+import {FertilizerPhSensorElement} from "./components/fertilizer-ph-sensor-element";
+import {EcSensorElement} from "./components/ec-sensor-element";
+import {FertilizerTempSensorElement} from "./components/fertilizer-temp-sensor-element";
+import {FourChannelButtonElement} from "./components/four-channel-button-element";
+import {Bfarm7in1SoilMultireadElement} from "./components/bfarm-7in1-soil-multiread-element";
+import {BfarmAmmoniaRs485Element} from "./components/bfarm-ammonia-rs485-element";
+import {BfarmSoilTempMultireadRs485Element} from "./components/bfarm-soil-temp-multiread-rs485-element";
+import {BfarmSen55AirI2cElement} from "./components/bfarm-sen55-air-i2c-element";
+import {BfarmUltrasonicRs485Element} from "./components/bfarm-ultrasonic-rs485-element";
+import {BfarmTurbidityXm3318bRs485Element} from "./components/bfarm-turbidity-xm3318b-rs485-element";
+import {BfarmTurbidityXm8518Rs485Element} from "./components/bfarm-turbidity-xm8518-rs485-element";
+import {BfarmNitrateIsfetRs485Element} from "./components/bfarm-nitrate-isfet-rs485-element";
+import {BfarmTmecTensioRs485Element} from "./components/bfarm-tmec-tensio-rs485-element";
+import {BfarmTmecAnalogElement} from "./components/bfarm-tmec-analog-element";
+import {BfarmWaterQualitySuiteRs485Element} from "./components/bfarm-water-quality-suite-rs485-element";
+import {BfarmTubularSoilProbeRs485Element} from "./components/bfarm-tubular-soil-probe-rs485-element";
+import {BfarmAirVelocitySensorSm3789Element} from "./components/bfarm-air-velocity-sensor-sm3789-element";
+import {BfarmLux120kRs485Element} from "./components/bfarm-lux120k-rs485-element";
+import {BfarmWeatherSensorRs485Element} from "./components/bfarm-weather-sensor-rs485-element";
+import {Sht31Rs485SensorElement} from "./components/sht31-rs485-sensor-element";
+import {Weight3kgRs485SensorElement} from "./components/weight-3kg-rs485-sensor-element";
+import {WindDirectionRs485SensorElement} from "./components/wind-direction-rs485-sensor-element";
+import {DtPar485SensorElement} from "./components/dt-par485-sensor-element";
 
 export {AVRRunner} from "./emulator/avr-runner";
 export {EmulatorManager} from './emulator/emulator-manager';
@@ -30,6 +66,8 @@ export class HackCable {
     private readonly _emulatorManager: EmulatorManager;
     private readonly _catalog: Catalog;
     private readonly _editor: Editor;
+    private readonly HANDYSENSE_RELAY_CONTROL_PINS = [25, 4, 12, 13];
+    private readonly esp32PinStates = new Map<number, boolean>();
 
     constructor(mountDiv: HTMLElement, language = 'en_us'){
         console.log("Mounting HackCable...");
@@ -83,7 +121,379 @@ export class HackCable {
 
     public serialDataCallback: ((data: string) => void) | null = null;
     public serialDataReceived(data: string) {
-        if (this.serialDataCallback) this.serialDataCallback(data);
+        if (this.serialDataCallback) {
+            this.serialDataCallback(data);
+            return;
+        }
+        // Fallback bridge for environments where callback wiring is temporarily missing.
+        const fallback = (globalThis as any).hackcable_serial_data;
+        if (typeof fallback === "function") {
+            fallback(data);
+        }
+    }
+
+    public async simulatedHttpGet(path: string) {
+        return this._emulatorManager.httpGet(path);
+    }
+
+    private isESP32BoardElement(element: any): boolean {
+        return element instanceof ESP32DevkitV1Element
+            || element instanceof CustomESP32BoardElement
+            || element instanceof HandysenseRealBoardElement
+            || element instanceof HandysenseProBoardElement;
+    }
+
+    private parseBoardPinNumber(pinName: string): number | null {
+        const handysensePin = resolveHandysensePinNumber(pinName);
+        if (handysensePin !== null) return handysensePin;
+
+        const ioMatch = /^IO(\d+)$/.exec(pinName);
+        if (ioMatch) return parseInt(ioMatch[1], 10);
+
+        const dMatch = /^D(\d+)$/.exec(pinName);
+        if (dMatch) return parseInt(dMatch[1], 10);
+
+        const nMatch = /^(\d+)$/.exec(pinName);
+        if (nMatch) return parseInt(nMatch[1], 10);
+
+        return null;
+    }
+
+    private getBoardPinConnectedToPort(port: any): number | null {
+        const connections = port?.getConnections?.().data ?? [];
+        for (const connection of connections) {
+            const otherPort = connection.sourcePort === port ? connection.targetPort : connection.sourcePort;
+            const otherFigure = otherPort?.getParent();
+            const otherElement = otherFigure?.componentElement;
+            if (!otherElement || !this.isESP32BoardElement(otherElement)) continue;
+
+            const pinName = otherPort?.getLocator?.().portId ?? '';
+            const pinNumber = this.parseBoardPinNumber(pinName);
+            if (pinNumber !== null) return pinNumber;
+        }
+        return null;
+    }
+
+    private isActuatorControlPort(element: any, portId: string): boolean {
+        if (element instanceof MistingPumpElement ||
+            element instanceof WaterPumpElement ||
+            element instanceof FanElement) {
+            return portId === 'SIG';
+        }
+        if (element instanceof RelayElement) {
+            return portId === 'IN';
+        }
+        if (element instanceof FourChannelRelayElement) {
+            return /^IN[1-4]$/.test(portId);
+        }
+        return false;
+    }
+
+    public getSupportedBoardPins(): number[] {
+        const pins = new Set<number>();
+        const figures = this._editor.canvas.getAllFigures();
+        figures.forEach((figure: any) => {
+            const el = figure.componentElement;
+            if (!this.isESP32BoardElement(el)) return;
+            const pinInfo: any[] = el?.pinInfo || [];
+            pinInfo.forEach((pin) => {
+                const pinNumber = this.parseBoardPinNumber(pin?.name ?? '');
+                if (pinNumber !== null) pins.add(pinNumber);
+            });
+        });
+        return Array.from(pins).sort((a, b) => a - b);
+    }
+
+    public getConnectedActuatorControlPins(): number[] {
+        const pins = new Set<number>();
+        const figures = this._editor.canvas.getAllFigures();
+        figures.forEach((figure: any) => {
+            const element = figure.componentElement;
+            if (!element) return;
+
+            const ports = figure.getPorts().data;
+            ports.forEach((figurePort: any) => {
+                const portId = figurePort.getLocator()?.portId ?? '';
+                if (!this.isActuatorControlPort(element, portId)) return;
+                const pinNumber = this.getBoardPinConnectedToPort(figurePort);
+                if (pinNumber !== null) pins.add(pinNumber);
+            });
+        });
+        this.getHandySenseRelayLoadPins().forEach((pin) => pins.add(pin));
+        return Array.from(pins).sort((a, b) => a - b);
+    }
+
+    public hasActuatorControlPin(pin: number): boolean {
+        return this.getConnectedActuatorControlPins().includes(pin);
+    }
+
+    private readonly HANDYSENSE_REAL_LED_PINS = [2, 5, 18, 19, 21, 22, 23, 27];
+
+    private getPortName(port: any): string {
+        return port?.getLocator?.().portId ?? '';
+    }
+
+    private getPortParentFigure(port: any): any {
+        return port?.getParent?.() ?? null;
+    }
+
+    private getPortPinInfo(port: any): any | null {
+        const figure = this.getPortParentFigure(port);
+        const pinName = this.getPortName(port);
+        const pinInfo = figure?.componentElement?.pinInfo;
+        if (!Array.isArray(pinInfo)) return null;
+        return pinInfo.find((entry: any) => entry?.name === pinName) ?? null;
+    }
+
+    private isBoardPowerPort(port: any, signal: 'VCC' | 'GND'): boolean {
+        const figure = this.getPortParentFigure(port);
+        const element = figure?.componentElement;
+        if (!element || !this.isESP32BoardElement(element)) return false;
+        const pinInfo = this.getPortPinInfo(port);
+        if (!pinInfo || !Array.isArray(pinInfo.signals)) return false;
+        return pinInfo.signals.some((entry: any) => entry?.type === 'power' && entry?.signal === signal);
+    }
+
+    private isBoardHighSourcePort(port: any): boolean {
+        const figure = this.getPortParentFigure(port);
+        const element = figure?.componentElement;
+        if (!element || !this.isESP32BoardElement(element)) return false;
+
+        const pinNumber = this.parseBoardPinNumber(this.getPortName(port));
+        if (pinNumber === null) return false;
+        return this.esp32PinStates.get(pinNumber) === true;
+    }
+
+    private getPortKey(port: any): string {
+        const figure = this.getPortParentFigure(port);
+        const figureId = figure?.getId?.() ?? 'unknown';
+        return `${figureId}:${this.getPortName(port)}`;
+    }
+
+    private getWireNeighbors(port: any): any[] {
+        return (port?.getConnections?.().data ?? [])
+            .map((connection: any) => connection.sourcePort === port ? connection.targetPort : connection.sourcePort)
+            .filter((neighbor: any) => !!neighbor);
+    }
+
+    private getSwitchedRelayNeighbors(port: any): any[] {
+        const figure = this.getPortParentFigure(port);
+        const element = figure?.componentElement;
+
+        if (element instanceof HandysenseProBoardElement) {
+            const match = /^R([1-4])_(COM|NC|NO)$/.exec(this.getPortName(port));
+            if (!match) return [];
+
+            const relayIndex = parseInt(match[1], 10) - 1;
+            const relayPin = this.HANDYSENSE_RELAY_CONTROL_PINS[relayIndex];
+            const relayOn = this.esp32PinStates.get(relayPin) === true;
+            const suffix = match[2];
+            const linkedPortName = relayOn
+                ? (suffix === 'COM' ? `R${relayIndex + 1}_NO` : suffix === 'NO' ? `R${relayIndex + 1}_COM` : '')
+                : (suffix === 'COM' ? `R${relayIndex + 1}_NC` : suffix === 'NC' ? `R${relayIndex + 1}_COM` : '');
+
+            if (!linkedPortName) return [];
+            const linkedPort = figure.getPortByName?.(linkedPortName);
+            return linkedPort ? [linkedPort] : [];
+        }
+
+        if (element instanceof RelayElement) {
+            const suffix = this.getPortName(port);
+            if (!['COM', 'NC', 'NO'].includes(suffix)) return [];
+
+            const relayOn = element.isOn === true;
+            const linkedPortName = relayOn
+                ? (suffix === 'COM' ? 'NO' : suffix === 'NO' ? 'COM' : '')
+                : (suffix === 'COM' ? 'NC' : suffix === 'NC' ? 'COM' : '');
+
+            if (!linkedPortName) return [];
+            const linkedPort = figure.getPortByName?.(linkedPortName);
+            return linkedPort ? [linkedPort] : [];
+        }
+
+        if (element instanceof FourChannelRelayElement) {
+            const match = /^R([1-4])_(COM|NC|NO)$/.exec(this.getPortName(port));
+            if (!match) return [];
+
+            const relayIndex = parseInt(match[1], 10);
+            const relayOn = relayIndex === 1 ? element.ch1
+                : relayIndex === 2 ? element.ch2
+                : relayIndex === 3 ? element.ch3
+                : element.ch4;
+            const suffix = match[2];
+            const linkedPortName = relayOn
+                ? (suffix === 'COM' ? `R${relayIndex}_NO` : suffix === 'NO' ? `R${relayIndex}_COM` : '')
+                : (suffix === 'COM' ? `R${relayIndex}_NC` : suffix === 'NC' ? `R${relayIndex}_COM` : '');
+
+            if (!linkedPortName) return [];
+            const linkedPort = figure.getPortByName?.(linkedPortName);
+            return linkedPort ? [linkedPort] : [];
+        }
+
+        return [];
+    }
+
+    private collectElectricallyConnectedPorts(startPort: any): any[] {
+        if (!startPort) return [];
+
+        const visited = new Set<string>();
+        const queue: any[] = [startPort];
+        const connected: any[] = [];
+
+        while (queue.length > 0) {
+            const port = queue.shift();
+            if (!port) continue;
+
+            const key = this.getPortKey(port);
+            if (visited.has(key)) continue;
+            visited.add(key);
+            connected.push(port);
+
+            const neighbors = [
+                ...this.getWireNeighbors(port),
+                ...this.getSwitchedRelayNeighbors(port),
+            ];
+            neighbors.forEach((neighbor) => {
+                const neighborKey = this.getPortKey(neighbor);
+                if (!visited.has(neighborKey)) queue.push(neighbor);
+            });
+        }
+
+        return connected;
+    }
+
+    private portHasActiveSource(port: any): boolean {
+        return this.collectElectricallyConnectedPorts(port).some((candidate) => {
+            return this.isBoardPowerPort(candidate, 'VCC') || this.isBoardHighSourcePort(candidate);
+        });
+    }
+
+    private portHasGround(port: any): boolean {
+        return this.collectElectricallyConnectedPorts(port).some((candidate) => {
+            return this.isBoardPowerPort(candidate, 'GND');
+        });
+    }
+
+    private getHandySenseRelayLoadPins(): number[] {
+        const pins = new Set<number>();
+        const figures = this._editor.canvas.getAllFigures();
+
+        figures.forEach((figure: any) => {
+            const element = figure.componentElement;
+            if (!(element instanceof HandysenseProBoardElement)) return;
+
+            this.HANDYSENSE_RELAY_CONTROL_PINS.forEach((pin, index) => {
+                const relayPorts = ['COM', 'NC', 'NO']
+                    .map((suffix) => figure.getPortByName?.(`R${index + 1}_${suffix}`))
+                    .filter((port: any) => !!port);
+
+                if (relayPorts.some((port: any) => (port.getConnections?.().data ?? []).length > 0)) {
+                    pins.add(pin);
+                }
+            });
+        });
+
+        return Array.from(pins);
+    }
+
+    private syncHandySenseRelayVisuals(): void {
+        const figures = this._editor.canvas.getAllFigures();
+        figures.forEach((figure: any) => {
+            const element = figure.componentElement;
+            if (!(element instanceof HandysenseProBoardElement)) return;
+
+            element.relay1On = this.esp32PinStates.get(25) === true;
+            element.relay2On = this.esp32PinStates.get(4) === true;
+            element.relay3On = this.esp32PinStates.get(12) === true;
+            element.relay4On = this.esp32PinStates.get(13) === true;
+            element.requestUpdate();
+        });
+    }
+
+    private syncHandySenseRealLedVisuals(): void {
+        const figures = this._editor.canvas.getAllFigures();
+        figures.forEach((figure: any) => {
+            const element = figure.componentElement;
+            if (!(element instanceof HandysenseRealBoardElement)) return;
+
+            this.HANDYSENSE_REAL_LED_PINS.forEach((pin, index) => {
+                element.setLedState(index, this.esp32PinStates.get(pin) === true);
+            });
+        });
+    }
+
+    private updateRelayComponentStates(): void {
+        const figures = this._editor.canvas.getAllFigures();
+        figures.forEach((figure: any) => {
+            const element = figure.componentElement;
+            if (!element) return;
+
+            if (element instanceof RelayElement) {
+                const inPort = figure.getPortByName?.('IN');
+                const nextValue = Boolean(inPort && this.portHasActiveSource(inPort));
+                if (element.isOn !== nextValue) {
+                    element.isOn = nextValue;
+                    element.requestUpdate();
+                }
+                return;
+            }
+
+            if (element instanceof FourChannelRelayElement) {
+                const nextCh1 = Boolean(figure.getPortByName?.('IN1') && this.portHasActiveSource(figure.getPortByName('IN1')));
+                const nextCh2 = Boolean(figure.getPortByName?.('IN2') && this.portHasActiveSource(figure.getPortByName('IN2')));
+                const nextCh3 = Boolean(figure.getPortByName?.('IN3') && this.portHasActiveSource(figure.getPortByName('IN3')));
+                const nextCh4 = Boolean(figure.getPortByName?.('IN4') && this.portHasActiveSource(figure.getPortByName('IN4')));
+
+                if (element.ch1 !== nextCh1 || element.ch2 !== nextCh2 || element.ch3 !== nextCh3 || element.ch4 !== nextCh4) {
+                    element.ch1 = nextCh1;
+                    element.ch2 = nextCh2;
+                    element.ch3 = nextCh3;
+                    element.ch4 = nextCh4;
+                    element.requestUpdate();
+                }
+            }
+        });
+    }
+
+    private recomputeESP32DrivenComponents(): void {
+        this.syncHandySenseRelayVisuals();
+        this.syncHandySenseRealLedVisuals();
+        this.updateRelayComponentStates();
+
+        const figures = this._editor.canvas.getAllFigures();
+        figures.forEach((figure: any) => {
+            const element = figure.componentElement;
+            if (!element) return;
+
+            if (element instanceof LEDElement) {
+                const anodePort = figure.getPortByName?.('A');
+                const cathodePort = figure.getPortByName?.('C');
+                const nextValue = Boolean(
+                    (anodePort && this.portHasActiveSource(anodePort) && (!cathodePort || this.portHasGround(cathodePort))) ||
+                    (anodePort && this.isBoardHighSourcePort(anodePort)) ||
+                    (cathodePort && this.isBoardHighSourcePort(cathodePort))
+                );
+
+                if (element.value !== nextValue) {
+                    element.value = nextValue;
+                    element.requestUpdate();
+                }
+                return;
+            }
+
+            if (element instanceof MistingPumpElement ||
+                element instanceof WaterPumpElement ||
+                element instanceof FanElement) {
+                const sigPort = figure.getPortByName?.('SIG');
+                const nextValue = Boolean(sigPort && this.portHasActiveSource(sigPort));
+                if (element.isOn !== nextValue || element.ledPower !== nextValue) {
+                    element.isOn = nextValue;
+                    element.ledPower = nextValue;
+                    element.requestUpdate();
+                }
+                return;
+            }
+        });
     }
 
     private updateLEDs(port: avr8js.AVRIOPort, pinMap: {[key: string]: number}) {
@@ -192,143 +602,122 @@ export class HackCable {
 
     public esp32PinUpdate(pin: number, value: boolean) {
         console.log(`[esp32PinUpdate] ESP32 Pin ${pin} update triggered, value: ${value}`);
+        this.esp32PinStates.set(pin, value);
+        this.recomputeESP32DrivenComponents();
+    }
 
-        // Update all LED elements on the canvas based on ESP32 pin states
+    private readonly BFARM_SENSOR_TYPES = [
+        Sht31SensorElement, Bh1750SensorElement, SoilMoistureSensorElement,
+        Rs485PhSensorElement, Rs485LightSensorElement, Rs485RainSensorElement,
+        Rs485WindSpeedSensorElement, Rs485ParSensorElement,
+        WeatherSensorHtco2plxElement, CurrentLoop420mAElement,
+        FertilizerPhSensorElement, EcSensorElement,
+        FertilizerTempSensorElement, FourChannelButtonElement,
+        Bfarm7in1SoilMultireadElement,
+        BfarmAmmoniaRs485Element,
+        BfarmSoilTempMultireadRs485Element,
+        BfarmSen55AirI2cElement,
+        BfarmUltrasonicRs485Element,
+        BfarmTurbidityXm3318bRs485Element,
+        BfarmTurbidityXm8518Rs485Element,
+        BfarmNitrateIsfetRs485Element,
+        BfarmTmecTensioRs485Element,
+        BfarmTmecAnalogElement,
+        BfarmWaterQualitySuiteRs485Element,
+        BfarmTubularSoilProbeRs485Element,
+        BfarmAirVelocitySensorSm3789Element,
+        BfarmLux120kRs485Element,
+        BfarmWeatherSensorRs485Element,
+        Sht31Rs485SensorElement,
+        Weight3kgRs485SensorElement,
+        WindDirectionRs485SensorElement,
+        DtPar485SensorElement,
+    ];
+
+    public activateSensorComponent(busType: string, pin1: number, pin2: number) {
+        console.log(`[activateSensorComponent] busType=${busType} pin1=${pin1} pin2=${pin2}`);
         const figures = this._editor.canvas.getAllFigures();
-        console.log(`[esp32PinUpdate] Found ${figures.length} figures on canvas`);
-
         figures.forEach(figure => {
             const element = figure.componentElement;
+            const isSensor = this.BFARM_SENSOR_TYPES.some(T => element instanceof T);
+            if (!isSensor) return;
 
-            // Check if this is an LED element
-            if (element instanceof LEDElement) {
-                console.log('[esp32PinUpdate] Found LED element');
-                // Find which ESP32 pin this LED is connected to
-                const connections = figure.getPorts().data;
-
-                connections.forEach((figurePort: any) => {
-                    const portConnections = figurePort.getConnections().data;
-
-                    portConnections.forEach((connection: any) => {
-                        const otherPort = connection.sourcePort === figurePort ? connection.targetPort : connection.sourcePort;
-                        const otherFigure = otherPort?.getParent();
-
-                        if (otherFigure) {
-                            const otherElement = otherFigure.componentElement;
-
-                            // Check if connected to ESP32
-                            if (otherElement instanceof ESP32DevkitV1Element ||
-                                otherElement instanceof CustomESP32BoardElement ||
-                                otherElement instanceof HandysenseProBoardElement) {
-                                const pinName = otherPort.getLocator().portId;
-                                console.log(`[esp32PinUpdate] LED connected to ESP32 pin ${pinName}`);
-
-                                // Convert D-format pins to numbers (e.g., "D2" -> 2, "IO25" -> 25)
-                                let pinNumber = -1;
-                                if (pinName.startsWith('D')) {
-                                    pinNumber = parseInt(pinName.substring(1));
-                                } else if (pinName.startsWith('IO')) {
-                                    pinNumber = parseInt(pinName.substring(2));
-                                } else if (!isNaN(parseInt(pinName))) {
-                                    pinNumber = parseInt(pinName);
-                                }
-
-                                console.log(`[esp32PinUpdate] Comparing pin ${pinNumber} with ${pin}`);
-
-                                // Check if this is the pin that changed
-                                if (pinNumber === pin) {
-                                    console.log(`[esp32PinUpdate] Updating LED on pin ${pin} to ${value}`);
-                                    element.value = value;
-                                    element.requestUpdate();
-                                }
-                            }
-                        }
-                    });
+            // Check if any port on this sensor connects to the board on a matching pin
+            const ports = figure.getPorts().data;
+            let matched = false;
+            ports.forEach((figurePort: any) => {
+                figurePort.getConnections().data.forEach((conn: any) => {
+                    const otherPort = conn.sourcePort === figurePort ? conn.targetPort : conn.sourcePort;
+                    const otherFigure = otherPort?.getParent();
+                    if (!otherFigure) return;
+                    const otherEl = otherFigure.componentElement;
+                    if (!this.isESP32BoardElement(otherEl)) return;
+                    const pinName: string = otherPort.getLocator().portId;
+                    const pinNumber = this.parseBoardPinNumber(pinName) ?? -1;
+                    if (pinNumber === pin1 || pinNumber === pin2) matched = true;
                 });
-            }
+            });
 
-            // Check if this is an actuator element (Misting Pump, Water Pump, or Fan)
+            if (matched) {
+                (element as any).isOn = true;
+                element.requestUpdate();
+                console.log(`[activateSensorComponent] Activated ${element.constructor.name}`);
+            }
+        });
+    }
+
+    public deactivateAllSensors() {
+        const figures = this._editor.canvas.getAllFigures();
+        figures.forEach(figure => {
+            const element = figure.componentElement;
+            const isSensor = this.BFARM_SENSOR_TYPES.some(T => element instanceof T);
+            if (isSensor && (element as any).isOn !== undefined) {
+                (element as any).isOn = false;
+                element.requestUpdate();
+            }
+        });
+    }
+
+    public deactivateAllActuators() {
+        this.esp32PinStates.clear();
+        const figures = this._editor.canvas.getAllFigures();
+        figures.forEach((figure: any) => {
+            const element = figure.componentElement;
+            if (!element) return;
+
             if (element instanceof MistingPumpElement ||
                 element instanceof WaterPumpElement ||
                 element instanceof FanElement) {
-                const actuatorType = element.constructor.name;
-                console.log(`[esp32PinUpdate] Found ${actuatorType}`);
-
-                // Find which ESP32 pin this actuator is connected to
-                const connections = figure.getPorts().data;
-
-                connections.forEach((figurePort: any) => {
-                    const portConnections = figurePort.getConnections().data;
-
-                    portConnections.forEach((connection: any) => {
-                        const otherPort = connection.sourcePort === figurePort ? connection.targetPort : connection.sourcePort;
-                        const otherFigure = otherPort?.getParent();
-
-                        if (otherFigure) {
-                            const otherElement = otherFigure.componentElement;
-
-                            // Check if connected to ESP32
-                            if (otherElement instanceof ESP32DevkitV1Element ||
-                                otherElement instanceof CustomESP32BoardElement ||
-                                otherElement instanceof HandysenseProBoardElement) {
-                                const pinName = otherPort.getLocator().portId;
-                                console.log(`[esp32PinUpdate] ${actuatorType} connected to ESP32 pin ${pinName}`);
-
-                                // Convert pin formats to numbers
-                                let pinNumber = -1;
-                                if (pinName.startsWith('D')) {
-                                    pinNumber = parseInt(pinName.substring(1));
-                                } else if (pinName.startsWith('IO')) {
-                                    pinNumber = parseInt(pinName.substring(2));
-                                } else if (!isNaN(parseInt(pinName))) {
-                                    pinNumber = parseInt(pinName);
-                                }
-
-                                console.log(`[esp32PinUpdate] Comparing pin ${pinNumber} with ${pin}`);
-
-                                // Check if this is the pin that changed
-                                if (pinNumber === pin) {
-                                    console.log(`[esp32PinUpdate] Updating ${actuatorType} on pin ${pin} to ${value}`);
-                                    element.isOn = value;
-                                    element.ledPower = value;
-                                    element.requestUpdate();
-                                }
-                            }
-                        }
-                    });
-                });
+                element.isOn = false;
+                element.ledPower = false;
+                element.requestUpdate();
+                return;
             }
 
-            // Check if this is a Relay element
             if (element instanceof RelayElement) {
-                const connections = figure.getPorts().data;
-                connections.forEach((figurePort: any) => {
-                    const portConnections = figurePort.getConnections().data;
-                    portConnections.forEach((connection: any) => {
-                        const otherPort = connection.sourcePort === figurePort ? connection.targetPort : connection.sourcePort;
-                        const otherFigure = otherPort?.getParent();
-                        if (otherFigure) {
-                            const otherElement = otherFigure.componentElement;
-                            if (otherElement instanceof ESP32DevkitV1Element ||
-                                otherElement instanceof CustomESP32BoardElement ||
-                                otherElement instanceof HandysenseProBoardElement) {
-                                const pinName = otherPort.getLocator().portId;
-                                let pinNumber = -1;
-                                if (pinName.startsWith('IO')) {
-                                    pinNumber = parseInt(pinName.substring(2));
-                                } else if (pinName.startsWith('D')) {
-                                    pinNumber = parseInt(pinName.substring(1));
-                                } else if (!isNaN(parseInt(pinName))) {
-                                    pinNumber = parseInt(pinName);
-                                }
-                                if (pinNumber === pin) {
-                                    element.isOn = value;
-                                    element.requestUpdate();
-                                }
-                            }
-                        }
-                    });
-                });
+                element.isOn = false;
+                element.requestUpdate();
+                return;
+            }
+
+            if (element instanceof FourChannelRelayElement) {
+                element.ch1 = false;
+                element.ch2 = false;
+                element.ch3 = false;
+                element.ch4 = false;
+                element.requestUpdate();
+                return;
+            }
+
+            if (element instanceof HandysenseProBoardElement) {
+                element.relay1On = false;
+                element.relay2On = false;
+                element.relay3On = false;
+                element.relay4On = false;
+                if (element instanceof HandysenseRealBoardElement) {
+                    this.HANDYSENSE_REAL_LED_PINS.forEach((_pin, index) => element.setLedState(index, false));
+                }
+                element.requestUpdate();
             }
         });
     }
@@ -342,13 +731,10 @@ export class HackCable {
             return;
         }
 
-        // Default visible — hide only if user previously closed it
-        const isCatalogHidden = localStorage.getItem('hackCable-catalog-visible') === 'false';
-        if (isCatalogHidden) {
-            bar.classList.add('hidden');
-        } else {
-            toggleBtn.classList.add('active');
-        }
+        // Always start with catalog visible by default.
+        bar.classList.remove('hidden');
+        toggleBtn.classList.add('active');
+        localStorage.setItem('hackCable-catalog-visible', 'true');
 
         // Handle toggle button click
         toggleBtn.addEventListener('click', () => {

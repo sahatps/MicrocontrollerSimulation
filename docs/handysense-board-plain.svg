@@ -1,0 +1,231 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="63mm" height="74mm" version="1.1" viewBox="0 0 240 280">
+<defs>
+<linearGradient id="handysense-board-fill" x1="0%" y1="0%" x2="100%" y2="100%">
+<stop offset="0%" stop-color="#229650" />
+<stop offset="55%" stop-color="#137c42" />
+<stop offset="100%" stop-color="#0d6838" />
+</linearGradient>
+<filter id="handysense-shadow" x="-20%" y="-20%" width="140%" height="140%">
+<feDropShadow dx="0.2" dy="1.1" stdDeviation="0.9" flood-color="#0a331c" flood-opacity="0.3" />
+</filter>
+</defs>
+<g id="board_base">
+<rect x="0" y="0" width="240" height="280" rx="5" ry="5" fill="url(#handysense-board-fill)" stroke="#084a28" stroke-width="0.75" />
+<circle cx="8" cy="8" r="4.1" fill="#ececeb" stroke="#7d848a" stroke-width="0.4" />
+<circle cx="232" cy="8" r="4.1" fill="#ececeb" stroke="#7d848a" stroke-width="0.4" />
+<circle cx="8" cy="272" r="4.1" fill="#ececeb" stroke="#7d848a" stroke-width="0.4" />
+<circle cx="232" cy="272" r="4.1" fill="#ececeb" stroke="#7d848a" stroke-width="0.4" />
+</g>
+<g id="rs485">
+<g transform="matrix(1 0 0 1 -9.33333 -10)">
+<rect x="25" y="12" width="30" height="16" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
+<rect x="26.5" y="13.4" width="27" height="13.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
+<text x="40" y="9" fill="#eef7ee" font-family="Arial" font-size="2.6" text-anchor="middle" font-weight="normal">B A GND +24V</text>
+<text x="40" y="6" fill="#f3fbf3" font-family="Arial" font-size="3.2" text-anchor="middle" font-weight="bold">RS485</text>
+</g>
+</g>
+<g id="i2c_top">
+<g transform="translate(-32 -9.33333)">
+<rect x="83" y="12" width="30" height="16" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
+<rect x="84.5" y="13.4" width="27" height="13.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
+<rect x="115.6666669845581" y="11.333333373069763" width="30" height="16" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
+<rect x="117.1666669845581" y="12.733333373069764" width="27" height="13.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
+<rect x="116" y="46.333333253860474" width="30" height="16" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
+<rect x="117.5" y="47.73333325386047" width="27" height="13.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
+<text x="120" y="6" fill="#f3fbf3" font-family="Arial" font-size="3.2" text-anchor="middle" font-weight="bold">I2C</text>
+<text x="120" y="10" fill="#eef7ee" font-family="Arial" font-size="2.6" text-anchor="middle" font-weight="normal">SCL SDA GND +5V</text>
+<rect x="74" y="29.666666746139526" width="17" height="14" rx="1.2" ry="1.2" fill="#1f2430" stroke="#0f151d" stroke-width="0.45" />
+<rect x="95.33333337306976" y="30.333333492279053" width="17" height="14" rx="1.2" ry="1.2" fill="#1f2430" stroke="#0f151d" stroke-width="0.45" />
+<rect x="118.00000047683716" y="30.333333373069763" width="17" height="14" rx="1.2" ry="1.2" fill="#1f2430" stroke="#0f151d" stroke-width="0.45" />
+<rect x="53.4938850402832" y="29.67165756225586" width="17" height="14" rx="1.2" ry="1.2" fill="#1f2430" stroke="#0f151d" stroke-width="0.45" />
+</g>
+</g>
+<g id="esp32_module">
+<g filter="url(#handysense-shadow)">
+<rect x="153" y="12" width="44" height="60" rx="3.6" ry="3.6" fill="#2a2f3b" stroke="#b5bec8" stroke-width="0.5" />
+<rect x="160" y="21" width="30" height="30" fill="#aeb3b7" stroke="#6a717a" stroke-width="0.3" />
+<rect x="163" y="24" width="24" height="24" fill="#494d55" />
+<path d="M 178 12 h 16 v 18 h -16" fill="none" stroke="#e1ba4a" stroke-width="1.5" />
+<path d="M 181 20 h 10 M 181 25 h 10 M 181 30 h 10" fill="none" stroke="#e1ba4a" stroke-width="0.95" />
+<text x="175" y="39" fill="#ffffff" font-family="Arial" font-size="5.2" text-anchor="middle" font-weight="bold">ESP32</text>
+</g>
+<text x="168" y="81" fill="#eef7ee" font-family="Arial" font-size="2.7" text-anchor="middle" font-weight="normal">RESET</text>
+<text x="185" y="81" fill="#eef7ee" font-family="Arial" font-size="2.7" text-anchor="middle" font-weight="normal">BOOT</text>
+<circle cx="160" cy="82" r="4.5" fill="#20252f" stroke="#cbd1d6" stroke-width="0.32" />
+<circle cx="177" cy="82" r="4.5" fill="#20252f" stroke="#cbd1d6" stroke-width="0.32" />
+<text x="146" y="95" fill="#eef7ee" font-family="Arial" font-size="2.2" text-anchor="start" font-weight="normal">U15</text>
+<rect x="140" y="98" width="20" height="16" rx="1.2" ry="1.2" fill="#1f2430" stroke="#0f151d" stroke-width="0.45" />
+<rect x="165" y="101" width="18" height="12" rx="1.2" ry="1.2" fill="#1f2430" stroke="#0f151d" stroke-width="0.45" />
+<rect x="132" y="118" width="34" height="16" rx="1.2" ry="1.2" fill="#1f2430" stroke="#0f151d" stroke-width="0.45" />
+</g>
+<g id="programming_port">
+<text x="207" y="6" fill="#f3fbf3" font-family="Arial" font-size="3.1" text-anchor="middle" font-weight="bold">Programming</text>
+<text x="207" y="10" fill="#eef7ee" font-family="Arial" font-size="2.5" text-anchor="middle" font-weight="normal">TX RX GND +5V</text>
+<rect x="198" y="18" width="25" height="26" rx="3" ry="3" fill="#eef2f6" stroke="#919ba7" stroke-width="0.42" />
+<rect x="204" y="26" width="13" height="9" rx="1.3" ry="1.3" fill="#dde3ea" stroke="#7d8791" stroke-width="0.22" />
+<text x="210" y="48" fill="#d9eddc" font-family="Arial" font-size="2.2" text-anchor="middle" font-weight="normal">Micro USB</text>
+</g>
+<g id="microsd">
+<rect x="195" y="56" width="31" height="49" rx="3.1" ry="3.1" fill="#d9dde6" stroke="#818a96" stroke-width="0.45" />
+<rect x="200" y="67" width="20" height="17" rx="1.2" ry="1.2" fill="#f4f5f7" stroke="#98a1ab" stroke-width="0.24" />
+<line x1="220" y1="64" x2="220" y2="99" stroke="#8a94a0" stroke-width="0.8" />
+<text x="210" y="109" fill="#eef7ee" font-family="Arial" font-size="2.5" text-anchor="middle" font-weight="bold">MicroSD</text>
+</g>
+<g id="analog_0_5v">
+<rect x="4" y="52" width="12" height="24" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
+<rect x="5.5" y="53.4" width="9" height="21.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
+<rect x="4" y="81" width="12" height="24" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
+<rect x="5.5" y="82.4" width="9" height="21.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
+<text x="19" y="58" fill="#f3fbf3" font-family="Arial" font-size="3.1" text-anchor="start" font-weight="bold">Analog 0-5V</text>
+<text x="19" y="63" fill="#eef7ee" font-family="Arial" font-size="2.4" text-anchor="start" font-weight="normal">V SIG GND</text>
+<text x="19" y="70" fill="#eef7ee" font-family="Arial" font-size="2.3" text-anchor="start" font-weight="normal">A1 / A2 / A3</text>
+</g>
+<g id="analog_4_20ma">
+<rect x="4" y="114" width="12" height="24" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
+<rect x="5.5" y="115.4" width="9" height="21.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
+<rect x="4" y="143" width="12" height="24" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
+<rect x="5.5" y="144.4" width="9" height="21.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
+<text x="19" y="120" fill="#f3fbf3" font-family="Arial" font-size="3.1" text-anchor="start" font-weight="bold">Analog 4-20mA</text>
+<text x="19" y="125" fill="#eef7ee" font-family="Arial" font-size="2.4" text-anchor="start" font-weight="normal">V SIG GND</text>
+<text x="19" y="132" fill="#eef7ee" font-family="Arial" font-size="2.3" text-anchor="start" font-weight="normal">I1 / I2 / I3</text>
+</g>
+<g id="mid_left_chips">
+<rect x="35" y="58" width="12" height="18" rx="1.2" ry="1.2" fill="#1f2430" stroke="#0f151d" stroke-width="0.45" />
+<rect x="34" y="113" width="12" height="18" rx="1.2" ry="1.2" fill="#1f2430" stroke="#0f151d" stroke-width="0.45" />
+<rect x="52" y="103" width="19" height="12" rx="1.2" ry="1.2" fill="#1f2430" stroke="#0f151d" stroke-width="0.45" />
+<rect x="74" y="104" width="14" height="14" rx="1.2" ry="1.2" fill="#1f2430" stroke="#0f151d" stroke-width="0.45" />
+</g>
+<g id="buzzer">
+<circle cx="108" cy="110" r="15.5" fill="#d7dce3" stroke="#7b8390" stroke-width="0.52" />
+<circle cx="101" cy="104" r="1.8" fill="#9aa2ad" />
+<circle cx="115" cy="118" r="1.8" fill="#9aa2ad" />
+<text x="108" y="114" fill="#4b5561" font-family="Arial" font-size="3.8" text-anchor="middle" font-weight="bold">Buzzer</text>
+<text x="95" y="95" fill="#eef7ee" font-family="Arial" font-size="2.2" text-anchor="start" font-weight="normal">LS1</text>
+</g>
+<g id="rtc">
+<circle cx="79" cy="146" r="13" fill="#d2d6dc" stroke="#7b8390" stroke-width="0.52" />
+<circle cx="79" cy="146" r="10" fill="#bcc2ca" />
+<text x="79" y="144" fill="#4b5561" font-family="Arial" font-size="3.6" text-anchor="middle" font-weight="bold">RTC</text>
+<text x="79" y="150" fill="#58626f" font-family="Arial" font-size="2.5" text-anchor="middle" font-weight="normal">CR1220</text>
+<text x="79" y="159" fill="#d7ecda" font-family="Arial" font-size="2.1" text-anchor="middle" font-weight="normal">Battery Holder for CR1220</text>
+</g>
+<g id="board_markings">
+<text x="96" y="152" fill="#eef7ee" font-family="Arial" font-size="2.2" text-anchor="middle" font-weight="normal">POWER</text>
+<text x="110" y="152" fill="#eef7ee" font-family="Arial" font-size="2.2" text-anchor="middle" font-weight="normal">STATUS</text>
+<circle cx="96" cy="157" r="1.8" fill="#72ff73" opacity="0.9" />
+<circle cx="110" cy="157" r="1.8" fill="#6eacf8" opacity="0.86" />
+<text x="106" y="150" fill="#edf7ee" font-family="Arial" font-size="6.1" text-anchor="start" font-weight="bold">HandySense</text>
+<text x="134" y="156" fill="#d7ecda" font-family="Arial" font-size="2.6" text-anchor="middle" font-weight="normal">Version 3.0.0</text>
+</g>
+<g id="led_status">
+<rect x="144" y="148" width="40" height="12" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
+<rect x="145.5" y="149.4" width="37" height="9.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
+<rect x="178" y="148" width="40" height="12" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
+<rect x="179.5" y="149.4" width="37" height="9.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
+<text x="164" y="144" fill="#eef7ee" font-family="Arial" font-size="2.5" text-anchor="middle" font-weight="normal">+5V LED Status 0-3</text>
+<text x="198" y="144" fill="#eef7ee" font-family="Arial" font-size="2.5" text-anchor="middle" font-weight="normal">+5V LED Status 4-7</text>
+</g>
+<g id="local_buttons">
+<text x="104" y="171" fill="#eef7ee" font-family="Arial" font-size="2.2" text-anchor="middle" font-weight="normal">Button0</text>
+<text x="129" y="171" fill="#eef7ee" font-family="Arial" font-size="2.2" text-anchor="middle" font-weight="normal">Button1</text>
+<text x="154" y="171" fill="#eef7ee" font-family="Arial" font-size="2.2" text-anchor="middle" font-weight="normal">Button2</text>
+<text x="179" y="171" fill="#eef7ee" font-family="Arial" font-size="2.2" text-anchor="middle" font-weight="normal">Button3</text>
+<circle cx="104" cy="177" r="5" fill="#1f2430" stroke="#ced5dc" stroke-width="0.34" />
+<circle cx="129" cy="177" r="5" fill="#1f2430" stroke="#ced5dc" stroke-width="0.34" />
+<circle cx="154" cy="177" r="5" fill="#1f2430" stroke="#ced5dc" stroke-width="0.34" />
+<circle cx="179" cy="177" r="5" fill="#1f2430" stroke="#ced5dc" stroke-width="0.34" />
+<rect x="98" y="187" width="12" height="10" rx="1.2" ry="1.2" fill="#1f2430" stroke="#0f151d" stroke-width="0.45" />
+<rect x="123" y="187" width="12" height="10" rx="1.2" ry="1.2" fill="#1f2430" stroke="#0f151d" stroke-width="0.45" />
+<rect x="148" y="187" width="12" height="10" rx="1.2" ry="1.2" fill="#1f2430" stroke="#0f151d" stroke-width="0.45" />
+<rect x="173" y="187" width="12" height="10" rx="1.2" ry="1.2" fill="#1f2430" stroke="#0f151d" stroke-width="0.45" />
+</g>
+<g id="spi_block">
+<rect x="224" y="90" width="12" height="40" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
+<rect x="225.5" y="91.4" width="9" height="37.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
+<text x="208" y="87" fill="#f3fbf3" font-family="Arial" font-size="3.6" text-anchor="end" font-weight="bold">SPI</text>
+<text x="208" y="92" fill="#eef7ee" font-family="Arial" font-size="2.3" text-anchor="end" font-weight="normal">MOSI MISO CLK CS GND</text>
+</g>
+<g id="button_block">
+<rect x="224" y="139" width="12" height="40" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
+<rect x="225.5" y="140.4" width="9" height="37.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
+<text x="208" y="159" fill="#f3fbf3" font-family="Arial" font-size="3.6" text-anchor="end" font-weight="bold">Button</text>
+<text x="208" y="164" fill="#eef7ee" font-family="Arial" font-size="2.3" text-anchor="end" font-weight="normal">B0 B1 B2 B3 GND</text>
+</g>
+<g id="led_relay_block">
+<rect x="224" y="188" width="12" height="40" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
+<rect x="225.5" y="189.4" width="9" height="37.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
+<text x="208" y="208" fill="#f3fbf3" font-family="Arial" font-size="3.6" text-anchor="end" font-weight="bold">LED Relay</text>
+<text x="208" y="213" fill="#eef7ee" font-family="Arial" font-size="2.3" text-anchor="end" font-weight="normal">R1 R2 R3 R4 +5V</text>
+</g>
+<g id="power_area">
+<rect x="18" y="225" width="16" height="16" rx="1.2" ry="1.2" fill="#1f2430" stroke="#0f151d" stroke-width="0.45" />
+<rect x="38" y="225" width="16" height="16" rx="1.2" ry="1.2" fill="#1f2430" stroke="#0f151d" stroke-width="0.45" />
+<circle cx="26" cy="208" r="7.3" fill="#6c89d8" stroke="#39558f" stroke-width="0.42" />
+<circle cx="49" cy="208" r="7.3" fill="#9aa7b3" stroke="#56606e" stroke-width="0.42" />
+<circle cx="16" cy="238" r="4.8" fill="#e2e4e6" stroke="#838b95" stroke-width="0.34" />
+</g>
+<g id="power_supply">
+<rect x="4" y="245" width="12" height="24" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
+<rect x="5.5" y="246.4" width="9" height="21.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
+<text x="5" y="240" fill="#eef7ee" font-family="Arial" font-size="2.1" text-anchor="start" font-weight="normal">POWER</text>
+<text x="5" y="243" fill="#eef7ee" font-family="Arial" font-size="2.1" text-anchor="start" font-weight="normal">SUPPLY</text>
+<text x="4" y="276" fill="#eef7ee" font-family="Arial" font-size="2.4" text-anchor="start" font-weight="normal">VIN 24VDC</text>
+</g>
+<g id="power_relay">
+<rect x="71" y="257" width="20" height="14" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
+<rect x="72.5" y="258.4" width="17" height="11.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
+<text x="81" y="255" fill="#eef7ee" font-family="Arial" font-size="2.3" text-anchor="middle" font-weight="normal">VIN RELAY 5VDC</text>
+</g>
+<g id="relay_1">
+<g filter="url(#handysense-shadow)">
+<rect x="98" y="206" width="26" height="35" rx="1.9" ry="1.9" fill="#11171d" stroke="#000" stroke-width="0.42" />
+<rect x="101" y="209" width="20" height="18" fill="#222c38" stroke="#465261" stroke-width="0.28" />
+<text x="111" y="220" fill="#e6e9ed" font-family="Arial" font-size="4.6" text-anchor="middle" font-weight="bold">K1</text>
+</g>
+</g>
+<g id="relay_2">
+<g filter="url(#handysense-shadow)">
+<rect x="130" y="206" width="26" height="35" rx="1.9" ry="1.9" fill="#11171d" stroke="#000" stroke-width="0.42" />
+<rect x="133" y="209" width="20" height="18" fill="#222c38" stroke="#465261" stroke-width="0.28" />
+<text x="143" y="220" fill="#e6e9ed" font-family="Arial" font-size="4.6" text-anchor="middle" font-weight="bold">K2</text>
+</g>
+</g>
+<g id="relay_3">
+<g filter="url(#handysense-shadow)">
+<rect x="162" y="206" width="26" height="35" rx="1.9" ry="1.9" fill="#11171d" stroke="#000" stroke-width="0.42" />
+<rect x="165" y="209" width="20" height="18" fill="#222c38" stroke="#465261" stroke-width="0.28" />
+<text x="175" y="220" fill="#e6e9ed" font-family="Arial" font-size="4.6" text-anchor="middle" font-weight="bold">K3</text>
+</g>
+</g>
+<g id="relay_4">
+<g filter="url(#handysense-shadow)">
+<rect x="194" y="206" width="26" height="35" rx="1.9" ry="1.9" fill="#11171d" stroke="#000" stroke-width="0.42" />
+<rect x="197" y="209" width="20" height="18" fill="#222c38" stroke="#465261" stroke-width="0.28" />
+<text x="207" y="220" fill="#e6e9ed" font-family="Arial" font-size="4.6" text-anchor="middle" font-weight="bold">K4</text>
+</g>
+</g>
+<g id="relay_terminal_1">
+<rect x="98" y="254" width="24" height="16" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
+<rect x="99.5" y="255.4" width="21" height="13.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
+<line x1="103" y1="264" x2="110" y2="264" stroke="#f0f1f2" stroke-width="1.2" stroke-linecap="round" />
+<text x="110" y="251" fill="#eef7ee" font-family="Arial" font-size="2.2" text-anchor="middle" font-weight="normal">NO COM NC</text>
+</g>
+<g id="relay_terminal_2">
+<rect x="130" y="254" width="24" height="16" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
+<rect x="131.5" y="255.4" width="21" height="13.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
+<line x1="135" y1="264" x2="142" y2="264" stroke="#f0f1f2" stroke-width="1.2" stroke-linecap="round" />
+<text x="142" y="251" fill="#eef7ee" font-family="Arial" font-size="2.2" text-anchor="middle" font-weight="normal">NO COM NC</text>
+</g>
+<g id="relay_terminal_3">
+<rect x="162" y="254" width="24" height="16" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
+<rect x="163.5" y="255.4" width="21" height="13.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
+<line x1="167" y1="264" x2="174" y2="264" stroke="#f0f1f2" stroke-width="1.2" stroke-linecap="round" />
+<text x="174" y="251" fill="#eef7ee" font-family="Arial" font-size="2.2" text-anchor="middle" font-weight="normal">NO COM NC</text>
+</g>
+<g id="relay_terminal_4">
+<rect x="194" y="254" width="24" height="16" rx="2.4" ry="2.4" fill="#67bd56" stroke="#2c6630" stroke-width="0.45" />
+<rect x="195.5" y="255.4" width="21" height="13.2" rx="1.6" ry="1.6" fill="rgba(255,255,255,0.08)" />
+<line x1="199" y1="264" x2="206" y2="264" stroke="#f0f1f2" stroke-width="1.2" stroke-linecap="round" />
+<text x="206" y="251" fill="#eef7ee" font-family="Arial" font-size="2.2" text-anchor="middle" font-weight="normal">NO COM NC</text>
+</g>
+</svg>

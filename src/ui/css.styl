@@ -20,8 +20,8 @@
   .hackCable-header
     height 44px
     width 100%
-    background-color #30343F
-    border-bottom 1px solid black
+    background-color transparent
+    border-bottom none
     display flex
     align-items center
     padding 0 10px
@@ -31,14 +31,14 @@
     z-index 200
 
   .hackCable-toggle-catalog
-    border none
+    border 1px solid #d3d8e2
     border-radius 5px
     padding 6px 12px
     cursor pointer
     transition background-color 0.2s
     font-size 13px
-    background-color #424B5A
-    color #c9c9c9
+    background-color #77af5a
+    color #263042
     height 32px
     display flex
     align-items center
@@ -46,83 +46,246 @@
     flex-shrink 0
 
     &:hover
-      background-color #4e5768
+      background-color #77af5a88
 
     &.active
-      background-color #5a6478
-      color white
+      background-color #77af5a
+      color #263042
 
     .toggle-icon
       font-size 16px
       line-height 1
+      user-select none
 
     .toggle-label
       font-family Rubik
       font-size 13px
 
+  .hackCable-catalog-overlay
+    position sticky
+    top 1rem
+    left 1rem
+    height 0
+    z-index 800
+    pointer-events none
+
+  .hackCable-toggle-catalog-floating
+    position absolute
+    top 0
+    left 0
+    width 36px
+    height 36px
+    padding 0
+    border 2px solid #8dbb6c
+    border-radius 50%
+    background-color #77af5a
+    color #f6fff1
+    display flex
+    align-items center
+    justify-content center
+    z-index 810
+    box-shadow 0 2px 8px rgba(0, 0, 0, 0.18)
+    transition box-shadow 0.2s ease
+    pointer-events auto
+
+    &:hover
+      background-color #77af5a88
+
+    .toggle-label
+      display none
+
+    .toggle-icon
+      font-size 20px
+      line-height 1
+      color #f6fff1
+      user-select none
+
+    .toggle-icon-close
+      display none
+
+    &.active
+      .toggle-icon-open
+        display none
+
+      .toggle-icon-close
+        display block
+
+      svg
+        display block
+        width 20px
+        height 20px
+        fill currentColor
+
+    &.active
+      top 0
+      left 0
+      z-index 811
+
   .hackCable-catalog-bar
-    width 100%
-    background-color #383d4a
-    border-bottom 1px solid #222
+    position absolute
+    top 0
+    left 0
+    right auto
+    width 168px
+    background-color rgba(255, 255, 255, 0.96)
+    border 1px solid #d4dbe6
+    border-radius 0
+    box-shadow 0 4px 14px rgba(0, 0, 0, 0.1)
     flex-shrink 0
     overflow hidden
-    max-height 140px
-    transition max-height 0.3s ease
+    max-height 100vh
+    transition max-height 0.3s ease, opacity 0.2s ease
+    z-index 800
+    pointer-events auto
 
     &.hidden
       max-height 0
-      border-bottom none
+      border none
+      opacity 0
+      pointer-events none
 
     .hackCable-catalog-bar-inner
       display flex
-      flex-direction row
+      flex-direction column
       align-items stretch
-      height 140px
-      padding 6px 8px
+      height 100vh
+      padding 52px 8px 8px
       gap 8px
       box-sizing border-box
 
+  .hackCable-toggle-catalog-floating.active + .hackCable-catalog-bar
+    max-height 100vh
+
+    .hackCable-catalog-bar-inner
+      height 100vh
+      padding 52px 8px 8px
+
     .hackCable-catalog-actions
       display flex
-      align-items center
+      flex-direction column
+      align-items stretch
       flex-shrink 0
-      padding-right 8px
-      border-right 1px solid #555
+      gap 6px
+      padding-bottom 8px
+      border-bottom 1px solid #d6dbe3
+
+      select,
+      .hackCable-catalog-search-wrap
+        padding 4px 24px 4px 6px
+        background-color #ffffff
+        border-radius 3px
+        border 1px solid #c8cfda
+        box-sizing border-box
+        color black
+        font-size 1rem
+        width 100%
 
       select
-        padding 4px 6px
-        background-color #f5f5f5
-        border-radius 3px
-        border none
-        color black
-        font-size 12px
         cursor pointer
-        width 120px
+        text-align right
+        text-align-last right
 
         option
           color black
           background-color white
+          text-align right
+
+      input
+        box-sizing border-box
+        border 0
+        color black
+        font-size 1rem
+        outline none
+        padding 0 0 0 20px
+        width 100%
+
+      .hackCable-catalog-search-wrap
+        box-sizing border-box
+        padding 4px 6px
+        position relative
+
+      .hackCable-catalog-search-icon
+        border 2px solid #6b7280
+        border-radius 50%
+        box-sizing border-box
+        height 10px
+        left 8px
+        position absolute
+        top 7px
+        width 10px
+        font-size 1rem
+
+        &:after
+          background #6b7280
+          content ""
+          height 2px
+          left 7px
+          position absolute
+          top 7px
+          transform rotate(45deg)
+          transform-origin left center
+          width 6px
 
     .hackCable-catalog-list
       display flex
-      flex-direction row
-      align-items center
+      flex-direction column
+      align-items stretch
       gap 8px
-      overflow-x auto
-      overflow-y hidden
+      overflow-x hidden
+      overflow-y auto
       flex 1
+      min-width 0
+      min-height 0
       scrollbar-width thin
-      padding-bottom 4px
+      padding-right 2px
 
+    .hackCable-catalog-scroll
+      align-self stretch
+      background #ffffff
+      border 1px solid #c8cfda
+      border-radius 5px
+      cursor pointer
+      flex 0 0 28px
+      position relative
+      transition background 0.18s ease, border-color 0.18s ease, opacity 0.18s ease
+
+      &:hover:not(:disabled)
+        background #f6f8fc
+        border-color #9aa7ba
+
+      &:disabled
+        cursor default
+        opacity 0.36
+
+      span
+        border-color #334155
+        border-style solid
+        border-width 0 2px 2px 0
+        display block
+        height 8px
+        left 50%
+        position absolute
+        top 50%
+        width 8px
+
+    .hackCable-catalog-scroll-left
+      span
+        transform translate(-50%, -35%) rotate(-135deg)
+
+    .hackCable-catalog-scroll-right
+      span
+        transform translate(-50%, -65%) rotate(45deg)
+
+    .hackCable-catalog-list
       .hackCable-catalog-section
         display flex
-        flex-direction row
-        align-items center
+        flex-direction column
+        align-items stretch
         gap 8px
         flex-shrink 0
 
         .hackCable-catalog-section-header
-          background #30343F
+          background #eef2f7
           padding 6px 10px
           cursor pointer
           border-radius 5px
@@ -137,7 +300,7 @@
           flex-shrink 0
 
           &:hover
-            background #3a444f
+            background #e2e8f2
 
           .hackCable-section-toggle-icon
             font-size 0.75em
@@ -145,39 +308,49 @@
 
           span
             font-weight 500
-            color #c9c9c9
+            color #1f2937
             font-size 0.8em
 
         .hackCable-catalog-section-content
           display flex
-          flex-direction row
+          flex-direction column
           gap 8px
 
       .hackCable-catalog-element
         display flex
         flex-direction column
         align-items center
-        justify-content center
+        justify-content flex-start
+        position relative
         border-radius 5px
-        background #30343F
-        padding 6px 8px
+        background #ffffff
+        border 1px solid #d7dde8
+        padding 28px 8px 6px
         cursor pointer
-        transition background 0.2s ease
+        transition background 0.2s ease, border-color 0.2s ease
         flex-shrink 0
-        width 80px
-        height 110px
+        width 100%
+        height 104px
+        box-sizing border-box
         overflow hidden
 
         &:hover
-          background #3a444f
+          background #f6f8fc
+          border-color #c7d1e2
 
         h3
-          margin 4px 0 0 0
-          font-size 0.7em
-          white-space nowrap
-          overflow hidden
-          text-overflow ellipsis
+          position absolute
+          top 0
+          left 0
+          z-index 2
+          box-sizing border-box
+          margin 0
+          padding 6px 8px 4px
+          font-size 1rem
+          color #111827
           width 100%
+          min-height 27px
+          background inherit
           text-align center
 
   .hackCable-content-wrapper
@@ -191,8 +364,56 @@
     width 100%
     flex 1
     overflow auto
-    scrollbar-width thin
+    scrollbar-width none
+    -ms-overflow-style none
     position relative
+    transition background-color 0.2s ease
+
+    &::-webkit-scrollbar
+      width 0
+      height 0
+
+    &.is-panning
+      cursor grabbing
+      user-select none
+
+    &.canvas-grid-hidden
+      #hackCable-canvas
+        .hackCable-canvas-overlay-container
+          background-image none
+
+    &.canvas-dark-mode
+      background-color #101722
+
+      #hackCable-canvas
+        background-color #101722
+
+        .hackCable-canvas-overlay-container
+          background-color #101722
+          background-image linear-gradient(to right, rgba(140, 166, 205, 0.18) 1px, transparent 1px), linear-gradient(rgba(140, 166, 205, 0.18) 1px, transparent 1px)
+
+      .hackCable-canvas-toolbar
+        .hackCable-toolbar-btn
+          background-color rgba(19, 28, 42, 0.92)
+          border-color rgba(149, 167, 196, 0.38)
+
+          svg
+            color #d9e5f7
+
+          &:hover:not(:disabled)
+            background-color rgba(36, 50, 72, 0.96)
+            border-color rgba(184, 204, 238, 0.55)
+
+        .hackCable-toolbar-bin
+          background-color rgba(32, 44, 63, 0.86)
+
+          svg
+            color #d9e5f7
+
+    &.canvas-dark-mode.canvas-grid-hidden
+      #hackCable-canvas
+        .hackCable-canvas-overlay-container
+          background-image none
 
     #hackCable-canvas
       width 100%
@@ -200,6 +421,8 @@
       height 100%
       min-height 600px
       position relative
+      background-color #ffffff
+      transition background-color 0.2s ease
 
       .hackCable-canvas-overlay-container
         height 100%
@@ -208,17 +431,81 @@
         overflow hidden
         transform-origin left top
 
-        background-color rgba(0, 0, 0, 0)
+        background-color #ffffff
         background-position 0 0, 0 0
         background-repeat repeat, repeat
         background-attachment scroll, scroll
-        background-image linear-gradient(to right, rgb(240, 240, 240) 1px, transparent 1px), linear-gradient(rgb(240, 240, 240) 1px, rgb(255, 255, 255) 1px)
+        background-image linear-gradient(to right, rgb(240, 240, 240) 1px, transparent 1px), linear-gradient(rgb(240, 240, 240) 1px, transparent 1px)
         background-clip border-box, border-box
         background-size 20px 20px
+        transition background-color 0.2s ease, background-image 0.2s ease
 
         *
           position absolute
           transform-origin left top
+
+        .hackCable-component-placement-preview
+          opacity .72
+          pointer-events none
+          filter drop-shadow(0 10px 18px rgba(15, 23, 42, 0.24))
+
+    .hackCable-canvas-view-controls
+      position sticky
+      top 10px
+      left calc(100% - 94px)
+      z-index 1305
+      display flex
+      flex-direction row
+      gap 8px
+      width max-content
+      height 0
+      pointer-events none
+
+      .hackCable-canvas-view-btn
+        width 38px
+        height 38px
+        border 1px solid rgba(148, 163, 184, 0.45)
+        border-radius 12px
+        background-color rgba(255, 255, 255, 0.9)
+        color #334155
+        box-shadow 0 8px 24px rgba(15, 23, 42, 0.14)
+        display flex
+        align-items center
+        justify-content center
+        cursor pointer
+        pointer-events auto
+        transition background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease
+
+        &:hover
+          background-color #ffffff
+          border-color rgba(71, 85, 105, 0.55)
+          transform translateY(-1px)
+          box-shadow 0 10px 28px rgba(15, 23, 42, 0.18)
+
+        &:active
+          transform translateY(0)
+
+        &.active
+          background-color #1f6feb
+          border-color #1f6feb
+          color #ffffff
+
+    &.canvas-dark-mode
+      .hackCable-canvas-view-controls
+        .hackCable-canvas-view-btn
+          background-color rgba(15, 23, 42, 0.92)
+          border-color rgba(148, 163, 184, 0.32)
+          color #dbeafe
+          box-shadow 0 10px 28px rgba(0, 0, 0, 0.32)
+
+          &:hover
+            background-color rgba(30, 41, 59, 0.98)
+            border-color rgba(191, 219, 254, 0.52)
+
+          &.active
+            background-color #38bdf8
+            border-color #7dd3fc
+            color #082f49
 
     // Canvas Toolbar styles
     .hackCable-canvas-toolbar
@@ -321,14 +608,14 @@
 @media screen and (max-width: 768px)
   .hackCable-root
     .hackCable-catalog-bar
-      max-height 120px
+      width 150px
+      max-height 100vh
 
       .hackCable-catalog-bar-inner
-        height 120px
+        height 100vh
 
       .hackCable-catalog-list
         .hackCable-catalog-element
-          width 70px
           height 90px
 
     .hackCable-editor
@@ -343,10 +630,11 @@
 @media screen and (max-width: 480px)
   .hackCable-root
     .hackCable-catalog-bar
-      max-height 110px
+      width 140px
+      max-height 100vh
 
       .hackCable-catalog-bar-inner
-        height 110px
+        height 100vh
 
     .hackCable-editor
       height 65vh
@@ -355,5 +643,52 @@
         min-width 400px
         min-height 300px
 
+.handysense-real-board-controls
+  position fixed
+  inset 0
+  pointer-events none
+  z-index 9998
 
+  .handysense-real-board-control
+    position fixed
+    display flex
+    align-items center
+    justify-content center
+    border-radius 999px
+    border 1px solid #baf0c3
+    background-color #4f9b62
+    color #eef8ef
+    font-family Arial, sans-serif
+    font-weight 700
+    line-height 1
+    padding 0
+    cursor pointer
+    user-select none
+    pointer-events auto
+    box-shadow 0 1px 4px rgba(0, 0, 0, 0.25)
+    transition background-color 0.12s ease, transform 0.08s ease, box-shadow 0.12s ease
 
+    &:hover
+      box-shadow 0 2px 7px rgba(0, 0, 0, 0.33)
+
+    &:active
+      transform scale(0.97)
+
+    &.pressed
+      background-color #69c77f
+      border-color #7bf38f
+      color #ffffff
+
+    &--reset
+      background-color #cf5a49
+      border-color #ffb0a4
+
+      &.pressed
+        background-color #f06d59
+        border-color #ff8c7a
+
+.hackCable-is-placing-component
+  .hackCable-editor,
+  #hackCable-canvas,
+  .hackCable-canvas-overlay-container
+    cursor crosshair

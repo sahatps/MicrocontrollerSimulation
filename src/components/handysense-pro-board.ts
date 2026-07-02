@@ -12,6 +12,11 @@ import type { ElementPin } from '@wokwi/elements';
  */
 
 export class HandysenseProBoardElement extends LitElement {
+  relay1On = false;
+  relay2On = false;
+  relay3On = false;
+  relay4On = false;
+
   // Pin information based on actual Gerber drill file
   // Coordinates scaled from 120mm×140mm to SVG viewBox 240×280 (2:1 scale)
   readonly pinInfo: ElementPin[] = [
@@ -43,6 +48,20 @@ export class HandysenseProBoardElement extends LitElement {
     { name: 'IO4', x: 88, y: 208, signals: [] },
     { name: 'IO12', x: 138, y: 208, signals: [] },
     { name: 'IO13', x: 188, y: 208, signals: [] },
+
+    // Relay output terminals (bottom screw terminals)
+    { name: 'R1_COM', x: 26, y: 265, signals: [] },
+    { name: 'R1_NC', x: 38, y: 265, signals: [] },
+    { name: 'R1_NO', x: 50, y: 265, signals: [] },
+    { name: 'R2_COM', x: 76, y: 265, signals: [] },
+    { name: 'R2_NC', x: 88, y: 265, signals: [] },
+    { name: 'R2_NO', x: 100, y: 265, signals: [] },
+    { name: 'R3_COM', x: 126, y: 265, signals: [] },
+    { name: 'R3_NC', x: 138, y: 265, signals: [] },
+    { name: 'R3_NO', x: 150, y: 265, signals: [] },
+    { name: 'R4_COM', x: 176, y: 265, signals: [] },
+    { name: 'R4_NC', x: 188, y: 265, signals: [] },
+    { name: 'R4_NO', x: 200, y: 265, signals: [] },
 
     // Right side pins (aligned 1:1 with SVG circles/rectangles at X=230, terminal block center)
     { name: 'SCL_1', x: 230, y: 25, signals: [{ type: 'i2c', signal: 'SCL', bus: 0 }] },
@@ -197,11 +216,13 @@ export class HandysenseProBoardElement extends LitElement {
 
         <!-- Bottom Terminal Blocks (green screw terminals for relay outputs) -->
         <g id="bottom-relay-terminals">
-          ${[0,1,2,3].map(i => svg`
+          ${[this.relay1On, this.relay2On, this.relay3On, this.relay4On].map((relayOn, i) => svg`
             <rect x="${18 + i*50}" y="255" width="40" height="20" fill="#5cb85c" stroke="#2d6d2d" stroke-width="0.4" />
-            ${[0,1,2].map(j => svg`
-              <circle cx="${26 + i*50 + j*12}" cy="265" r="3.5" fill="#333" stroke="#000" stroke-width="0.3" />
-            `)}
+            <line x1="${26 + i*50}" y1="265" x2="${relayOn ? 50 + i*50 : 38 + i*50}" y2="265"
+                  stroke="${relayOn ? '#ff9800' : '#ddd'}" stroke-width="1.2" stroke-linecap="round" />
+            <circle cx="${26 + i*50}" cy="265" r="3" fill="#e8e8e8" stroke="#999" stroke-width="0.5" />
+            <circle cx="${38 + i*50}" cy="265" r="3" fill="#e8e8e8" stroke="#999" stroke-width="0.5" />
+            <circle cx="${50 + i*50}" cy="265" r="3" fill="#e8e8e8" stroke="#999" stroke-width="0.5" />
             <text x="${38 + i*50}" y="262" fill="#fff" font-family="Arial" font-size="3.5" text-anchor="middle" font-weight="bold">COM  NC  NO</text>
           `)}
         </g>
