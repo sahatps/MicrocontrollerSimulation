@@ -182,6 +182,30 @@
       /* color: #ffffff; */
     }
 
+    .docs-link-btn {
+      height: 80%;
+      padding: 0 16px;
+      border: 2px solid #77af5a;
+      outline: #ffffff88 4px solid;
+      border-radius: 999px;
+      background: #ffffff;
+      color: #4e6b3d;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: 'Prompt', sans-serif;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+    }
+
+    .docs-link-btn:hover {
+      background: #77af5a;
+      color: #ffffff;
+    }
+
     .logo-img {
       height: 100%;
       aspect-ratio: 3.5;
@@ -413,6 +437,10 @@
       <!-- <div class="sep"></div> -->
       <!-- <button id="btn-circuit" onclick="switchCanvas('circuit')">Simulation</button> -->
       <div id="nav-actions" class="nav-group">
+        <a id="btn-docs" class="docs-link-btn" href="/simulation/docs" target="_blank" rel="noopener noreferrer"
+          title="Open docs in new tab" aria-label="Open docs in new tab">
+          Docs
+        </a>
         <button id="btn-darkmode" class="cc-2" type="button" title="Switch to dark canvas"
           aria-label="Switch to dark canvas" aria-pressed="false">
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -491,6 +519,9 @@
     };
     var getSimulationPath = function () {
       return joinPath(shellBasePath, 'simulation');
+    };
+    var getDocsPath = function () {
+      return joinPath(getSimulationPath(), 'docs');
     };
     var uniquePaths = function (paths) {
       return paths.filter(function (path, index) {

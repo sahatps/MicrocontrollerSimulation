@@ -19,6 +19,9 @@ const normalizeRoutePath = (value) => {
 
 const appBasePath = normalizeBasePath(process.env.APP_BASE_PATH);
 const publicUrl = (pathSuffix) => `${appBasePath}/${pathSuffix.replace(/^\/+/, '')}`;
+const docsPublicPath = appBasePath
+    ? publicUrl('docs')
+    : routeFor('', 'simulation/docs');
 // Blockly is a sibling application at the domain root, not a child of the
 // simulation mount (for example, /blockly rather than /simulation/blockly).
 const blocklyRedirectPath = routeFor('', 'blockly');
@@ -58,6 +61,10 @@ module.exports = {
         compress: true,
         port: 3000,
         static: [
+            {
+                directory: path.join(__dirname, 'dist/web/docs'),
+                publicPath: docsPublicPath
+            },
             {
                 directory: path.join(__dirname, 'blocks-app/dist'),
                 publicPath: publicUrl('blocks')

@@ -6,6 +6,7 @@ const app = express();
 const shouldServeStatic = process.env.SERVE_STATIC === '1';
 const PORT = Number(process.env.PORT || (shouldServeStatic ? 3000 : 3001));
 const DIST_WEB_DIR = path.join(__dirname, 'dist', 'web');
+const DIST_DOCS_DIR = path.join(DIST_WEB_DIR, 'docs');
 const normalizeBasePath = (value) => {
     const trimmed = String(value || '').trim();
     if (!trimmed || trimmed === '/') return '';
@@ -14,6 +15,9 @@ const normalizeBasePath = (value) => {
 const APP_BASE_PATH = normalizeBasePath(process.env.APP_BASE_PATH);
 const routeFor = (basePath, pathSuffix = '') =>
     `${basePath}/${String(pathSuffix).replace(/^\/+/, '')}`;
+const DOCS_BASE_PATH = APP_BASE_PATH
+    ? routeFor(APP_BASE_PATH, 'docs')
+    : routeFor('', 'simulation/docs');
 const normalizeRoutePath = (value) => {
     const trimmed = String(value || '').replace(/\/index\.html$/, '').replace(/\/+$/, '');
     return trimmed || '';
@@ -92,6 +96,16 @@ if (shouldServeStatic) {
             next();
         });
     }
+
+    app.use((req, res, next) => {
+        if (req.path === DOCS_BASE_PATH) {
+            res.redirect(308, `${DOCS_BASE_PATH}/`);
+            return;
+        }
+        next();
+    });
+
+    app.use(DOCS_BASE_PATH, express.static(DIST_DOCS_DIR));
 
     for (const route of routeVariants()) {
         app.use(route, express.static(DIST_WEB_DIR));
