@@ -1,7 +1,7 @@
 ---
 id: mock-sensors
 title: Mock Sensors / การทดสอบค่าเซ็นเซอร์
-sidebar_position: 4
+sidebar_position: 5
 ---
 
 `Mock Sensors` ใช้สำหรับใส่ค่าจำลองให้ sensor เพื่อทดสอบว่าโค้ดและ logic ของระบบตอบสนองถูกหรือไม่

@@ -10,6 +10,7 @@ const sidebars = {
         'getting-started',
         'screen-layout',
         'simulation-workflow',
+        'components',
         'mock-sensors',
         'usage-examples',
       ],

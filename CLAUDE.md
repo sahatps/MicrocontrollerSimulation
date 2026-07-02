@@ -23,21 +23,17 @@
 | Server | Port | Start command |
 |--------|------|---------------|
 | Webpack dev server (web app) | 3000 | `npm run serve:web` |
-| Lightweight backend/static server | 3001 | `npm run serve:backend` |
-| Both together | — | `npm run dev` |
+| Dev entrypoint | — | `npm run dev` |
 
 Access the app at **http://localhost:3000**
-
-The webpack dev server proxies `/api` to `http://localhost:3001`.
 
 The webpack dev server serves `/wasm-clang` directly from `web/wasm-clang/`.
 
 ## Key npm Scripts
 
 ```bash
-npm run dev             # Start both servers concurrently (recommended for development)
+npm run dev             # Start the local web app
 npm run serve:web       # Webpack dev server only
-npm run serve:backend   # Node.js Emscripten backend only
 npm run build:web       # Production build of the web app
 npm run build:src       # Production build of the library
 npm run build:all       # web + bfarm + copy bfarm dist
@@ -63,9 +59,9 @@ web/
   clang-runner.ts
   wasm-clang/       # Self-hosted Clang/LLVM WASM toolchain assets
 
-server.js           # Express backend for health/static routes (port 3001)
-webpack.config.js           # Library bundle config
-webpack.config.web.js       # Web app bundle config
+scripts/serve-static.js # Built-in Node static server for production artifacts
+webpack.config.js       # Library bundle config
+webpack.config.web.js   # Web app bundle config
 ```
 
 ## Important Notes

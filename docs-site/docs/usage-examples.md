@@ -1,7 +1,7 @@
 ---
 id: usage-examples
 title: ตัวอย่างการใช้งาน
-sidebar_position: 5
+sidebar_position: 6
 ---
 
 หน้านี้รวม example ที่เหมาะกับการลองระบบเร็ว ๆ โดยเลือกจากรายการ example แล้วทดลองปรับค่าจำลองใน `Mock Sensors`

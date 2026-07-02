@@ -21,7 +21,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/server.js ./server.js
+COPY --from=builder /app/scripts/serve-static.js ./scripts/serve-static.js
 
 ENV NODE_ENV=production
 ENV SERVE_STATIC=1
@@ -30,4 +30,4 @@ ENV APP_BASE_PATH=${APP_BASE_PATH}
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["node", "scripts/serve-static.js"]

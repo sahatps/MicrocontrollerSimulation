@@ -43,7 +43,6 @@ Build or start the live server of the web page that use the library
 
 This repository can run in Docker for local development, including:
 - the web app on `http://localhost:3000`
-- the lightweight backend/static server on `http://localhost:3001`
 
 Start it with:
 

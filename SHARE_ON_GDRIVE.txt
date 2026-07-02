@@ -23,8 +23,7 @@ For receiver:
 
 Notes:
 - This package uses one public port: 3000
-- This shared image includes native `clang` support for backend compilation
-- Emscripten is not included in the shared image, to reduce size
+- Compilation is browser-side in the shared image
 - If port 3000 is busy, use:
 
    docker run -p 3001:3000 hackcable:latest

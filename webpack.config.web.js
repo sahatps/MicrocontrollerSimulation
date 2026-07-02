@@ -119,24 +119,7 @@ module.exports = {
                     res.sendFile(path.join(__dirname, 'web/shell.html'));
                 });
             }
-        },
-        proxy: [
-            {
-                context: [publicUrl('api')],
-                target: 'http://localhost:3001',
-                changeOrigin: true,
-                ...(appBasePath ? {
-                    pathRewrite: { [`^${appBasePath}`]: '' },
-                } : {}),
-                onError: (err, req, res) => {
-                    res.writeHead(503, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({
-                        error: 'Backend server not running',
-                        code: 'BACKEND_UNAVAILABLE'
-                    }));
-                }
-            }
-        ]
+        }
     },
 
     optimization: {
