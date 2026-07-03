@@ -36,7 +36,7 @@ npm run dev             # Start the local web app
 npm run serve:web       # Webpack dev server only
 npm run build:web       # Production build of the web app
 npm run build:src       # Production build of the library
-npm run build:all       # web + bfarm + copy bfarm dist
+npm run build:all       # simulation web app and docs
 npm run type-check      # TypeScript type checking (no emit)
 ```
 
@@ -68,7 +68,7 @@ webpack.config.web.js   # Web app bundle config
 
 - **Class name preservation**: TerserPlugin is configured with `keep_classnames: true` and `keep_fnames: true` — do not remove this; component detection uses `instanceof` checks that rely on stable class names.
 - **Cross-Origin headers**: The dev server sets `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: credentialless` so browser-side `wasm-clang` can use `SharedArrayBuffer`.
-- The `bfarm/` subdirectory has its own `package.json` and build step (`npm run build:bfarm`).
+- Blockly is deployed separately at the sibling `/blockly` route and is not built by this branch.
 
 ## Branch Convention
 

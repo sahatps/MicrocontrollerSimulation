@@ -4,14 +4,6 @@
   "framework": null,
   "rewrites": [
     {
-      "source": "/blockly",
-      "destination": "/"
-    },
-    {
-      "source": "/blockly/:path*",
-      "destination": "/:path*"
-    },
-    {
       "source": "/simulation",
       "destination": "/"
     },

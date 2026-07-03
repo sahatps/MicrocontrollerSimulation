@@ -1009,9 +1009,9 @@ Weather register map:
 - For parser/emulator tests, preserving the original code shape from `generators_*.js` is more important than making every snippet perfectly idiomatic.
 # Legacy `#blocks` sensor components added to Circuit
 
-The following register maps come directly from the generators currently loaded by
-`blocks-app/src/blockly/generate/index_generate.jsx`. These components belong to the
-Circuit `Sensor` dropdown (`ComponentType.BFARM`).
+The following register maps came from the Blockly generators before that application
+was split into its own deployment. These components belong to the Circuit `Sensor`
+dropdown (`ComponentType.BFARM`).
 
 ## SHT31 RS485
 

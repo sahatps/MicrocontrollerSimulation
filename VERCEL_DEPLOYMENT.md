@@ -55,7 +55,7 @@ The project is configured with the necessary Vercel settings in `vercel.json`:
 - **Output Directory**: `dist/web`
 - **Headers**: Cross-Origin headers are configured for browser-side `wasm-clang`
 
-`npm run build:web` builds the HackCable web bundle, builds the tracked `blocks-app/` web app, and copies that output into `dist/web/blocks` so the shell's `/blocks/index.html` iframe route is present in production.
+`npm run build:web` builds the simulation shell, HackCable web bundle, and documentation site. Blockly is deployed separately and is reached through the sibling `/blockly` route.
 
 ### Important Headers
 
@@ -69,7 +69,6 @@ The build process creates the following files in `dist/web/`:
 - `index.html` - Main HTML file
 - `bundle.js` - Compiled JavaScript bundle
 - `assets/` - Static assets (icons, SVG files)
-- `blocks/` - Embedded Blocks app build
 - `wasm-clang/` - Self-hosted Clang/LLVM WASM toolchain assets
 
 ## Verification

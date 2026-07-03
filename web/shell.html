@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>B-Farm | Simulation</title>
-  <link rel="icon" href="https://bfarm.in.th/blockly/bfarm-icon.png" />
+  <link rel="icon" href="./hackcable/assets/icon.png" />
   <script>
     (function () {
       function hasCookie(name) {
@@ -49,7 +49,10 @@
         var currentPath = normalizePath(window.location.pathname);
         var blocklyPath = normalizePath(getBlocklyPath());
         var appBasePath = normalizePath(blocklyPath.replace(/\/blockly$/, ''));
-        return currentPath === appBasePath || currentPath === `${appBasePath}/index.html`.replace(/\/{2,}/g, '/');
+        var simulationPath = joinPath(appBasePath, 'simulation');
+        return currentPath === appBasePath ||
+          currentPath === simulationPath ||
+          currentPath === `${appBasePath}/index.html`.replace(/\/{2,}/g, '/');
       }
 
       if (!hasCookie('email') && isLocalUrl()) {
@@ -416,18 +419,16 @@
         <!-- <span class="title">
           <img src="./hackcable/assets/farmblock-logo.png" alt="B-Farm" />
         </span> -->
-        <img class="logo-img" src="https://bfarm.in.th/blockly/BFarmFullIcon.png" alt="B-Farm" />
+        <img class="logo-img" src="./hackcable/assets/BFarmFullIcon.png" alt="B-Farm" />
         <div class="sep"></div>
-        <!-- <button id="btn-blocks" type="button" onclick="openBlockly()" title="Open Blockly" aria-label="Open Blockly">
-        <span class="material-symbols-rounded" aria-hidden="true">toys_and_games</span>
-      </button> -->
         <div class="cc-3""
           style="display: flex; align-items: center; background: #e5e7eb; border-radius: 999px;">
-          <div class="cc-3-n" style="color: #555; padding: 0 14px; font-size: 13px; font-weight: 500;
-            cursor: pointer; user-select: none; height: 100%; display: flex; align-items: center;"
-            onclick="openBlockly()">
+          <a class="cc-3-n" href="/blockly" style="color: #555; padding: 0 14px; font-size: 13px; font-weight: 500;
+            cursor: pointer; user-select: none; height: 100%; display: flex; align-items: center;
+            border: 0; background: transparent; font-family: inherit; text-decoration: none;"
+            aria-label="Open Blockly">
             Blockly
-          </div>
+          </a>
           <div style="background: #65a744; color: #fff; padding: 0 14px; font-size: 13px; font-weight: 600;
           user-select: none; height: 100%; display: flex; align-items: center;">
             Simulation
@@ -435,7 +436,6 @@
         </div>
       </div>
       <!-- <div class="sep"></div> -->
-      <!-- <button id="btn-circuit" onclick="switchCanvas('circuit')">Simulation</button> -->
       <div id="nav-actions" class="nav-group">
         <a id="btn-docs" class="docs-link-btn" href="/simulation/docs" target="_blank" rel="noopener noreferrer"
           title="Open docs in new tab" aria-label="Open docs in new tab">
@@ -475,20 +475,16 @@
         <span class="simulation-loading-label">Loading simulation...</span>
       </div>
     </div>
-    <div id="pane-bfarm" class="pane hidden">
-      <iframe id="frame-bfarm" title="B-Farm blocks editor"></iframe>
-    </div>
   </div>
 
   <script>
     // Guard against accidental recursive embedding.
-    // If /blocks/index.html (or another route) resolves to this shell page,
-    // loading it inside an iframe can create infinite shell-in-shell nesting.
+    // Loading the shell inside its own simulation iframe would recurse forever.
     if (window.top !== window.self) {
       document.body.innerHTML = [
         '<div style="padding:16px;font-family:sans-serif;color:#fff;background:#30343F;">',
-        '<strong>Blocks view is unavailable.</strong><br/>',
-        'The shell page was loaded inside an iframe, which indicates a deploy/path issue for <code>/blocks/index.html</code>.',
+        '<strong>Simulation view is unavailable.</strong><br/>',
+        'The shell page was loaded inside an iframe, which indicates a deploy/path issue for <code>/hackcable/index.html</code>.',
         '</div>'
       ].join('');
       throw new Error('HackCable shell loaded inside iframe');
@@ -503,9 +499,7 @@
       return `${normalizePath(basePath)}/${String(path).replace(/^\/+/, '')}`.replace(/\/{2,}/g, '/');
     }
 
-    // Some deploys expose the shell at /blockly while the assets still live at
-    // /blocks/...; others nest them under /blockly/blocks/... . Try both and
-    // pick the first path that resolves to the expected document.
+    // Resolve the simulation document for both root and mounted deployments.
     var currentShellPath = normalizePath(window.location.pathname);
     var shellBasePath = currentShellPath.replace(/\/(?:blockly|simulation)$/, '');
     var appPath = function (path) {
@@ -513,15 +507,6 @@
     };
     var shellRelativePath = function (path) {
       return joinPath(currentShellPath, path);
-    };
-    var getBlocklyPath = function () {
-      return joinPath(shellBasePath, 'blockly');
-    };
-    var getSimulationPath = function () {
-      return joinPath(shellBasePath, 'simulation');
-    };
-    var getDocsPath = function () {
-      return joinPath(getSimulationPath(), 'docs');
     };
     var uniquePaths = function (paths) {
       return paths.filter(function (path, index) {
@@ -540,9 +525,6 @@
     var looksLikeHackCableDocument = function (html) {
       return html.indexOf('id="hackCable"') !== -1;
     };
-    var looksLikeBlocksDocument = function (html) {
-      return html.indexOf('<title>B-Farm</title>') !== -1;
-    };
     var resolveFramePath = async function (paths, validator) {
       for (var i = 0; i < paths.length; i++) {
         var candidate = paths[i];
@@ -558,16 +540,10 @@
       return paths[0];
     };
 
-    var hcPane = document.getElementById('pane-hackcable');
-    var bfPane = document.getElementById('pane-bfarm');
-    var btnCircuit = document.getElementById('btn-circuit');
-    var btnBlocks = document.getElementById('btn-blocks');
-    var navActions = document.getElementById('nav-actions');
     var btnDarkMode = document.getElementById('btn-darkmode');
     var btnGrid = document.getElementById('btn-grid');
     var btnControlBar = document.getElementById('btn-controlbar');
     var frameHackCable = document.getElementById('frame-hackcable');
-    var frameBfarm = document.getElementById('frame-bfarm');
     var simulationLoading = document.getElementById('simulation-loading');
 
     function hideSimulationLoading() {
@@ -578,24 +554,12 @@
 
     (async function configureFrames() {
       frameHackCable.src = await resolveFramePath(frameCandidates('hackcable/index.html'), looksLikeHackCableDocument);
-      frameBfarm.src = await resolveFramePath(frameCandidates('blocks/index.html'), looksLikeBlocksDocument);
     })();
 
     function sendToHackCable(message) {
       if (frameHackCable && frameHackCable.contentWindow) {
         frameHackCable.contentWindow.postMessage(message, '*');
       }
-    }
-
-    function openBlockly() {
-      const webOrigin = window.location.origin;
-      if (webOrigin === 'http://localhost:3021') {
-        // If the page is loaded from a local file, use the current path as the base.
-        window.location.href = `http://localhost:3020/blockly`;
-      } else {
-        window.location.href = `${webOrigin}/blockly`;
-      }
-      // window.location.href = `${window.location.origin}/blockly`;
     }
 
     function setControlBarBtnState(hidden) {
@@ -636,65 +600,16 @@
       });
     }
 
-    function switchCanvas(which, replaceHistory) {
-      if (which === 'circuit') {
-        hcPane.classList.remove('hidden');
-        bfPane.classList.add('hidden');
-        btnCircuit.classList.add('active');
-        btnBlocks.classList.remove('active');
-        if (navActions) navActions.classList.remove('hidden');
-      } else {
-        hcPane.classList.add('hidden');
-        bfPane.classList.remove('hidden');
-        btnBlocks.classList.add('active');
-        btnCircuit.classList.remove('active');
-        if (navActions) navActions.classList.add('hidden');
-      }
-      localStorage.setItem('activeCanvas', which);
-      var nextPath = which === 'circuit' ? getSimulationPath() : getBlocklyPath();
-      var updateHistory = replaceHistory ? 'replaceState' : 'pushState';
-      if (window.location.pathname !== nextPath || window.location.hash) {
-        window.history[updateHistory]({ canvas: which }, '', nextPath);
-      }
-      notifyResize();
-      if (which === 'circuit') {
-        sendToHackCable({ source: 'shell', type: 'get-controlbar-state' });
-        sendToHackCable({ source: 'shell', type: 'get-canvas-view-state' });
-      }
-    }
-
     function notifyResize() {
       var msg = { source: 'shell', type: 'resize' };
       var hcFrame = document.getElementById('frame-hackcable');
-      var bfFrame = document.getElementById('frame-bfarm');
       if (hcFrame.contentWindow) hcFrame.contentWindow.postMessage(msg, '*');
-      if (bfFrame.contentWindow) bfFrame.contentWindow.postMessage(msg, '*');
     }
 
-    // Relay bfarm messages → HackCable
-    window.addEventListener('message', function (e) {
-      if (!e.data || e.data.source !== 'bfarm') return;
-      if (e.data.type !== 'code-sync' && e.data.type !== 'add-component') return;
-
-      // Adding a component: switch to circuit so the canvas is visible
-      if (e.data.type === 'add-component') {
-        switchCanvas('circuit');
-      }
-
-      var hcFrame = document.getElementById('frame-hackcable');
-      if (hcFrame.contentWindow) hcFrame.contentWindow.postMessage(e.data, '*');
-    });
-
-    // Relay HackCable messages → bfarm
     window.addEventListener('message', function (e) {
       if (!e.data || e.data.source !== 'hackcable') return;
       if (e.data.type === 'simulation-ready') {
         hideSimulationLoading();
-        return;
-      }
-      if (e.data.type === 'code-sync') {
-        var bfFrame = document.getElementById('frame-bfarm');
-        if (bfFrame.contentWindow) bfFrame.contentWindow.postMessage(e.data, '*');
         return;
       }
       if (e.data.type === 'controlbar-state') {
@@ -706,23 +621,7 @@
       }
     });
 
-    // Initial view — support legacy hashes (hackcable, bfarm, combine) and new ones
-    function canvasFromLocation() {
-      var path = normalizePath(window.location.pathname);
-      if (path === getBlocklyPath()) return 'blocks';
-      if (path === getSimulationPath()) return 'circuit';
-
-      // Keep old bookmarks working, then normalize them to the new clean URLs.
-      var legacyHash = location.hash.slice(1);
-      if (legacyHash === 'blocks' || legacyHash === 'bfarm') return 'blocks';
-      if (legacyHash === 'circuit' || legacyHash === 'hackcable' || legacyHash === 'combine') return 'circuit';
-      return localStorage.getItem('activeCanvas') === 'blocks' ? 'blocks' : 'circuit';
-    }
-
-    switchCanvas(canvasFromLocation(), true);
-    window.addEventListener('popstate', function () {
-      switchCanvas(canvasFromLocation(), true);
-    });
+    window.addEventListener('resize', notifyResize);
     if (frameHackCable) {
       frameHackCable.addEventListener('load', function () {
         sendToHackCable({ source: 'shell', type: 'get-controlbar-state' });

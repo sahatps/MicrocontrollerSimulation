@@ -32,8 +32,6 @@ const hasCookie = (req, name) =>
         .split(';')
         .some((cookie) => cookie.trim().split('=')[0] === name);
 const isLocalRequest = (req) => localHostnames.has(req.hostname);
-const isBlocklyRedirectPath = (req) =>
-    req.path === blocklyRedirectPath || req.path.startsWith(`${blocklyRedirectPath}/`);
 const rootEntryPaths = new Set([
     normalizeRoutePath(routeFor('', '')),
     normalizeRoutePath(routeFor('', 'index.html')),
@@ -66,10 +64,6 @@ module.exports = {
                 publicPath: docsPublicPath
             },
             {
-                directory: path.join(__dirname, 'blocks-app/dist'),
-                publicPath: publicUrl('blocks')
-            },
-            {
                 directory: path.join(__dirname, 'web/wasm-clang'),
                 publicPath: publicUrl('wasm-clang')
             }
@@ -81,7 +75,7 @@ module.exports = {
         },
         onBeforeSetupMiddleware: (devServer) => {
             devServer.app.use((req, res, next) => {
-                if (!isBlocklyRedirectPath(req) && isRootEntryRequest(req) && !hasCookie(req, 'email')) {
+                if (isRootEntryRequest(req) && !hasCookie(req, 'email')) {
                     if (isLocalRequest(req)) {
                         res.cookie('email', localEmailCookieValue, {
                             path: '/',
@@ -109,13 +103,8 @@ module.exports = {
             devServer.app.get(`${appBasePath}/`, (_req, res) => {
                 res.sendFile(path.join(__dirname, 'web/shell.html'));
             });
-            // Only the combined root-mounted demo owns /blockly. When the
-            // simulation is mounted at /simulation, Blockly is a sibling app.
             if (!appBasePath) {
-                devServer.app.get([
-                    routeFor('', 'blockly'),
-                    routeFor('', 'simulation'),
-                ], (_req, res) => {
+                devServer.app.get(routeFor('', 'simulation'), (_req, res) => {
                     res.sendFile(path.join(__dirname, 'web/shell.html'));
                 });
             }

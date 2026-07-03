@@ -89,7 +89,7 @@ const ROOT_ENTRY_PATHS = new Set([
     normalizeRoutePath(routeFor(APP_BASE_PATH, '/index.html')),
 ]);
 const SHELL_ROUTES = new Set(
-    ['/', '/blockly', '/simulation', APP_BASE_PATH || '/'].map((value) => normalizeRoutePath(value)),
+    ['/', '/simulation', APP_BASE_PATH || '/'].map((value) => normalizeRoutePath(value)),
 );
 
 const writeHeaders = (res, extraHeaders = {}) => {
