@@ -49,6 +49,7 @@ export const ARDUINO_H = `
 typedef bool boolean;
 typedef uint8_t byte;
 typedef unsigned int word;
+typedef void* TaskHandle_t;
 
 class String {
 private:
@@ -68,6 +69,15 @@ public:
     int length() const { return (int)strlen(_value); }
     int toInt() const { return 0; }
     float toFloat() const { return 0.0f; }
+    String substring(int /*from*/) const { return String(""); }
+    String substring(int /*from*/, int /*to*/) const { return String(""); }
+    void toCharArray(char* buffer, unsigned int len) const {
+        if (!buffer || len == 0) return;
+        size_t copyLen = strlen(_value);
+        if (copyLen >= len) copyLen = len - 1;
+        memcpy(buffer, _value, copyLen);
+        buffer[copyLen] = '\\0';
+    }
     operator const char*() const { return _value; }
     String& operator=(const char* value) { _value = value ? value : ""; return *this; }
     String& operator+=(const String& /*other*/) { return *this; }
@@ -362,39 +372,125 @@ export const WIRE_H = `
 export const HANDYSENSE_H = `
 #pragma once
 #include <Arduino.h>
+#include <RTClib.h>
 
-static int const_relay_pin[4] = {25, 4, 12, 13};
+#define OPEN 1
+#define CLOSE 0
+#define cannotConnect 0
+#define wifiConnected 1
+#define serverConnected 2
+#define editDeviceWifi 3
 
-inline void setPin_Relay(int r1, int r2, int r3, int r4) {
-    const_relay_pin[0] = r1; const_relay_pin[1] = r2;
-    const_relay_pin[2] = r3; const_relay_pin[3] = r4;
-    pinMode(r1, OUTPUT); pinMode(r2, OUTPUT);
-    pinMode(r3, OUTPUT); pinMode(r4, OUTPUT);
-}
-inline void setPin_SW(int s1, int s2, int s3, int s4) {
-    pinMode(s1, INPUT); pinMode(s2, INPUT);
-    pinMode(s3, INPUT); pinMode(s4, INPUT);
-}
-inline void setPin_ErrorSensor(int e1, int e2, int e3) {
-    pinMode(e1, OUTPUT); pinMode(e2, OUTPUT); pinMode(e3, OUTPUT);
-}
+static int type_RTC = 1;
+static int state_fristTime = 0;
+static RTC_DS1307 rtc_HandySense;
+static RTC_DS1307 rtc;
+static DateTime _now;
+static int curentTimer = 0;
+static int dayofweek = 0;
+
 static int RelayStatus[4] = {0, 0, 0, 0};
 static int ErrorSensor_Status[4] = {0, 0, 0, 0};
-static int eventInterval = 0;
-static int eventInterval_brightness = 0;
-static int eventInterval_publishData = 0;
+static int relay_pin[4] = {0, 0, 0, 0};
+static int switch_pin[4] = {0, 0, 0, 0};
+static int ErrorSensor_pin[4] = {0, 0, 0, 0};
+static int sw_onboard[4] = {36, 39, 34, 35};
+static int const_relay_pin[4] = {32, 33, 25, 26};
+
+static int LED_WIFI = 2;
+static int LED_SERVER = 12;
+static unsigned long eventInterval = 2UL * 1000UL;
+static unsigned long eventInterval_brightness = 2UL * 1000UL;
+static unsigned long eventInterval_publishData = 60UL * 1000UL;
 static int check_sendData_status = 0;
-static int LED_WIFI = 0;
-static int LED_SERVER = 0;
-static int type_RTC = 0;
-inline void setup_HandySense() {}
-inline void loop_HandySense(int /*soil*/, int /*light*/, int /*temp*/, int /*hum*/) {}
+static int check_sendData_toWeb = 0;
+static int check_sendData_SoilMinMax = 0;
+static int check_sendData_tempMinMax = 0;
+static int tpye_lux = 0;
+static int buff_count_LED_serverConnected = 0;
+static int connectWifiStatus = cannotConnect;
+static int check_SetThreshold = 200;
+static int ActivethresholdRalay[2] = {0, 1};
+static int dayofweekformblock[8] = {0, 1, 2, 3, 4, 5, 6, 7};
+static int old_time = 0;
+
+static float temp_from_Sensor = 0.0f;
+static float humidity_from_Sensor = 0.0f;
+static float lux_from_Sensor = 0.0f;
+static float soil_from_Sensor = 0.0f;
+static float Max_Soil[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+static float Min_Soil[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+static float Max_Temp[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+static float Min_Temp[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+
+static unsigned int time_open[4][7][3] = {{{0}}};
+static unsigned int time_close[4][7][3] = {{{0}}};
+static unsigned int statusTimer_open[4] = {1, 1, 1, 1};
+static unsigned int statusTimer_close[4] = {1, 1, 1, 1};
+static unsigned int status_manual[4] = {0, 0, 0, 0};
+static unsigned int statusSoil[4] = {0, 0, 0, 0};
+static unsigned int statusTemp[4] = {0, 0, 0, 0};
+
+inline void setPin_Relay(int r1, int r2, int r3, int r4) {
+    relay_pin[0] = r1; relay_pin[1] = r2; relay_pin[2] = r3; relay_pin[3] = r4;
+    for (int i = 0; i < 4; ++i) {
+        pinMode(relay_pin[i], OUTPUT);
+        digitalWrite(relay_pin[i], LOW);
+    }
+}
+inline void setPin_SW(int s1, int s2, int s3, int s4) {
+    switch_pin[0] = s1; switch_pin[1] = s2; switch_pin[2] = s3; switch_pin[3] = s4;
+    for (int i = 0; i < 4; ++i) {
+        pinMode(switch_pin[i], INPUT);
+    }
+}
+inline void setPin_ErrorSensor(int e1, int e2, int e3) {
+    ErrorSensor_pin[0] = e1; ErrorSensor_pin[1] = e2; ErrorSensor_pin[2] = e3;
+    for (int i = 0; i < 3; ++i) {
+        pinMode(ErrorSensor_pin[i], OUTPUT);
+    }
+}
+inline void setup_HandySense() {
+    rtc.begin();
+    rtc_HandySense.begin();
+}
+inline void loop_HandySense(int soil, int light, int temp, int hum) {
+    soil_from_Sensor = (float)soil;
+    lux_from_Sensor = (float)light;
+    temp_from_Sensor = (float)temp;
+    humidity_from_Sensor = (float)hum;
+}
+inline void read_RTC(int /*RTC_ch*/) {
+    _now = rtc.now();
+    curentTimer = (_now.hour() * 60) + _now.minute();
+    dayofweek = _now.dayOfTheWeek() - 1;
+    if (dayofweek < 0) dayofweek = 0;
+}
+inline int get_curentTimer() {
+    read_RTC(type_RTC);
+    return curentTimer;
+}
 inline int analog_to_percent(int raw) { return map(raw, 0, 4095, 0, 100); }
+inline void sent_dataTimer(String /*topic*/, String /*message*/) {}
+inline void UpdateData_To_Server() {}
+inline void sendStatus_RelaytoWeb() {}
+inline void send_soilMinMax() {}
+inline void send_tempMinMax() {}
 inline void Open_relay(int ch) {
-    if (ch >= 0 && ch < 4) { RelayStatus[ch] = 1; digitalWrite(const_relay_pin[ch], HIGH); }
+    if (ch >= 0 && ch < 4) {
+        RelayStatus[ch] = OPEN;
+        const int pin = relay_pin[ch] != 0 ? relay_pin[ch] : const_relay_pin[ch];
+        digitalWrite(pin, HIGH);
+        check_sendData_status = 1;
+    }
 }
 inline void Close_relay(int ch) {
-    if (ch >= 0 && ch < 4) { RelayStatus[ch] = 0; digitalWrite(const_relay_pin[ch], LOW); }
+    if (ch >= 0 && ch < 4) {
+        RelayStatus[ch] = CLOSE;
+        const int pin = relay_pin[ch] != 0 ? relay_pin[ch] : const_relay_pin[ch];
+        digitalWrite(pin, LOW);
+        check_sendData_status = 1;
+    }
 }
 `;
 
@@ -491,6 +587,7 @@ public:
     int day() const { return 1; }
     int month() const { return 1; }
     int year() const { return 2026; }
+    int dayOfTheWeek() const { return 1; }
 };
 
 class RTC_DS1307 {
@@ -855,7 +952,20 @@ struct tm {
     int tm_mday;
     int tm_mon;
     int tm_year;
+    int tm_wday;
 };
+inline void configTime(long /*gmtOffset*/, int /*dstOffset*/, const char* /*server1*/, const char* /*server2*/ = 0) {}
+inline bool getLocalTime(struct tm* info) {
+    if (!info) return false;
+    info->tm_sec = 0;
+    info->tm_min = 0;
+    info->tm_hour = 0;
+    info->tm_mday = 1;
+    info->tm_mon = 0;
+    info->tm_year = 126;
+    info->tm_wday = 1;
+    return true;
+}
 `;
 
 export const SOC_H = `
