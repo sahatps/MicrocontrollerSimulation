@@ -14,8 +14,14 @@ export type SensorCallback = () => number;
 export type IndexedSensorCallback = (index: number) => number;
 export type AnalogReadCallback = (pin: number) => number;
 
-type ScheduledPinEvent = {
+type QueuedPinEvent = {
     atMs: number;
+    pin: number;
+    value: boolean;
+};
+
+type PendingPinEvent = {
+    dueAtMs: number;
     pin: number;
     value: boolean;
 };
@@ -28,8 +34,8 @@ export class ArduinoWasmShim {
     private startTimeMs = performance.now();
     private loopTimelineActive = false;
     private loopTimelineMs = 0;
-    private scheduledPinEvents: ScheduledPinEvent[] = [];
-    private scheduledPinTimeouts: ReturnType<typeof setTimeout>[] = [];
+    private scheduledPinEvents: QueuedPinEvent[] = [];
+    private pendingPinEvents: PendingPinEvent[] = [];
     private loopDelayUntilMs = 0;
 
     constructor(
@@ -70,34 +76,46 @@ export class ArduinoWasmShim {
         this.loopTimelineActive = false;
         this.loopTimelineMs = 0;
         this.scheduledPinEvents = [];
-        this.clearScheduledPinEvents();
 
         const now = performance.now();
-        if (events.length === 0) {
-            this.loopDelayUntilMs = durationMs > 0 ? now + Math.max(0, durationMs) : 0;
-            return durationMs;
-        }
-
-        for (const event of events) {
-            const timeout = setTimeout(() => {
-                this.pinStates.set(event.pin, event.value);
-                this.onPinChange(event.pin, event.value);
-            }, Math.max(0, event.atMs));
-            this.scheduledPinTimeouts.push(timeout);
-        }
+        this.pendingPinEvents = events
+            .map((event) => ({
+                dueAtMs: now + Math.max(0, event.atMs),
+                pin: event.pin,
+                value: event.value,
+            }))
+            .sort((left, right) => left.dueAtMs - right.dueAtMs);
         this.loopDelayUntilMs = now + Math.max(0, durationMs);
+        this.flushDuePinEvents(now);
         return durationMs;
     }
 
     isLoopDelayActive(): boolean {
-        return performance.now() < this.loopDelayUntilMs;
+        const now = performance.now();
+        this.flushDuePinEvents(now);
+        if (now < this.loopDelayUntilMs) {
+            return true;
+        }
+
+        if (this.pendingPinEvents.length === 0) {
+            this.loopDelayUntilMs = 0;
+            return false;
+        }
+
+        const lastPendingDueAt = this.pendingPinEvents[this.pendingPinEvents.length - 1].dueAtMs;
+        if (lastPendingDueAt > now) {
+            this.loopDelayUntilMs = lastPendingDueAt;
+            return true;
+        }
+
+        this.flushDuePinEvents(now);
+        this.loopDelayUntilMs = 0;
+        return false;
     }
 
     clearScheduledPinEvents(): void {
-        for (const timeout of this.scheduledPinTimeouts) {
-            clearTimeout(timeout);
-        }
-        this.scheduledPinTimeouts = [];
+        this.scheduledPinEvents = [];
+        this.pendingPinEvents = [];
         this.loopDelayUntilMs = 0;
     }
 
@@ -158,7 +176,9 @@ export class ArduinoWasmShim {
                 micros(): number {
                     return Math.floor((performance.now() - self.startTimeMs) * 1000);
                 },
-                delayMicroseconds(_us: number) {},
+                delayMicroseconds(us: number) {
+                    self.advanceDelay(us / 1000);
+                },
                 pulseIn(_pin: number, _value: number, _timeout: number): number {
                     return 0;
                 },
@@ -250,6 +270,14 @@ export class ArduinoWasmShim {
         if (!Number.isFinite(ms) || ms <= 0) return;
         if (this.loopTimelineActive) {
             this.loopTimelineMs += Math.min(ms, 60000);
+        }
+    }
+
+    private flushDuePinEvents(now: number): void {
+        while (this.pendingPinEvents.length > 0 && this.pendingPinEvents[0].dueAtMs <= now) {
+            const event = this.pendingPinEvents.shift()!;
+            this.pinStates.set(event.pin, event.value);
+            this.onPinChange(event.pin, event.value);
         }
     }
 

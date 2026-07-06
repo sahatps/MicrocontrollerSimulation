@@ -21,7 +21,7 @@ type RequiredPortMap = Record<string, string>;
 interface StaticWiringProfile {
     key: string;
     label: string;
-    className: string;
+    className: string | string[];
     patterns: RegExp[];
     ports: RequiredPortMap;
 }
@@ -29,7 +29,7 @@ interface StaticWiringProfile {
 interface WiringRequirement {
     key: string;
     label: string;
-    className: string;
+    className: string | string[];
     ports: RequiredPortMap;
 }
 
@@ -151,7 +151,7 @@ const STATIC_PROFILES: StaticWiringProfile[] = [
         patterns: [/Wind Speed Sensor/i, /\bModbusMaster\s+rs485_winds\b/], ports: RS485_PORTS,
     },
     {
-        key: 'dt-par485', label: 'DT-Par485 Sensor', className: 'DtPar485SensorElement',
+        key: 'dt-par485', label: 'DT-Par485 Sensor', className: ['DtPar485SensorElement', 'Rs485LightSensorElement'],
         patterns: [/DT-Par485 Sensor Test/i, /\bModbusMaster\s+rs485_pair\b/], ports: RS485_PORTS,
     },
 ];
@@ -161,6 +161,17 @@ const ONBOARD_LED_PINS = new Set([2, 5, 18, 19, 21, 22, 23, 27]);
 const ONBOARD_RELAY_PINS = new Set([25, 4, 12, 13]);
 const ONBOARD_MCP23008_PINS = new Set([0, 1, 2, 3, 4, 5, 6, 7]);
 const ACTUATOR_BOARD_PORTS: Record<number, string> = { 25: 'LEDR_0', 4: 'LEDR_1', 12: 'LEDR_2', 13: 'LEDR_3' };
+
+function hasSamePorts(actual: RequiredPortMap, expected: RequiredPortMap): boolean {
+    const actualEntries = Object.entries(actual);
+    const expectedEntries = Object.entries(expected);
+    return actualEntries.length === expectedEntries.length
+        && actualEntries.every(([port, boardPort]) => expected[port] === boardPort);
+}
+
+function isRs485Requirement(requirement: WiringRequirement): boolean {
+    return hasSamePorts(requirement.ports, RS485_PORTS);
+}
 
 export function getHandysenseRealCanonicalPorts(kind: string, pin?: number): Readonly<Record<string, string>> | null {
     switch (kind) {
@@ -276,6 +287,15 @@ function extractRequirements(source: string): { requirements: WiringRequirement[
     const mcp23008Instances = parseMcp23008Instances(source);
     addActuatorRequirements(source, constants, requirements, errors);
 
+    if (/\bModbusMaster\b/.test(source) && !requirements.some(isRs485Requirement)) {
+        requirements.push({
+            key: 'generic-rs485',
+            label: 'RS485 Sensor',
+            className: [],
+            ports: RS485_PORTS,
+        });
+    }
+
     const hardwareUsage = /\b(?:digitalRead|digitalWrite|analogRead|analogWrite|Wire\.begin|Serial2\.begin|ModbusMaster)\b/.test(source);
     const hardwarePins = collectHardwarePinUsage(source, constants, mcp23008Instances);
     const onlyOnboardEspPins = [...hardwarePins.espPins].every(pin =>
@@ -316,6 +336,10 @@ function getConnectedBoardPorts(componentPort: any): string[] {
     return [...names];
 }
 
+function getRequirementClassNames(requirement: WiringRequirement): string[] {
+    return Array.isArray(requirement.className) ? requirement.className : [requirement.className];
+}
+
 function scoreFigure(figure: any, ports: RequiredPortMap): number {
     return Object.entries(ports).reduce((score, [componentPort, boardPort]) => {
         const port = figure?.getPortByName?.(componentPort);
@@ -323,8 +347,23 @@ function scoreFigure(figure: any, ports: RequiredPortMap): number {
     }, 0);
 }
 
+function figureHasPorts(figure: any, ports: RequiredPortMap): boolean {
+    return Object.keys(ports).every((portName) => Boolean(figure?.getPortByName?.(portName)));
+}
+
+function getRequirementCandidates(requirement: WiringRequirement, figures: any[]): any[] {
+    const acceptedClassNames = new Set(getRequirementClassNames(requirement));
+    const exactMatches = figures.filter(figure => acceptedClassNames.has(figure?.componentElement?.constructor?.name ?? ''));
+    if (exactMatches.length > 0) return exactMatches;
+    if (!isRs485Requirement(requirement)) return exactMatches;
+    return figures.filter((figure) =>
+        figure?.componentElement?.constructor?.name !== 'HandysenseRealBoardElement'
+        && figureHasPorts(figure, RS485_PORTS)
+    );
+}
+
 function validateRequirement(requirement: WiringRequirement, figures: any[], errors: WiringValidationIssue[]): void {
-    const candidates = figures.filter(figure => figure?.componentElement?.constructor?.name === requirement.className);
+    const candidates = getRequirementCandidates(requirement, figures);
     if (candidates.length === 0) {
         errors.push({
             severity: 'error', code: 'component-missing', component: requirement.label,
