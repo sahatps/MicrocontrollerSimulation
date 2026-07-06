@@ -500,6 +500,7 @@ export const MCP23008_H = `
 
 class MCP23008 {
 private:
+    static const int _LED_PINS[8];
     static const int _RELAY_PINS[4];
     uint8_t _addr;
 public:
@@ -507,13 +508,15 @@ public:
     void begin() {}
     void pinMode8(uint8_t /*mode*/) {}
     void digitalWrite(uint8_t pin, uint8_t val) {
+        if (pin < 8) ::digitalWrite(_LED_PINS[pin], val);
         if (pin < 4) ::digitalWrite(_RELAY_PINS[pin], val);
     }
     uint8_t digitalRead(uint8_t pin) {
-        return (pin < 4) ? (uint8_t)::digitalRead(_RELAY_PINS[pin]) : 0;
+        return (pin < 8) ? (uint8_t)::digitalRead(_LED_PINS[pin]) : 0;
     }
     void write(uint8_t pin, uint8_t val) { digitalWrite(pin, val); }
 };
+const int MCP23008::_LED_PINS[8] = {2, 5, 18, 19, 21, 22, 23, 27};
 const int MCP23008::_RELAY_PINS[4] = {25, 4, 12, 13};
 `;
 

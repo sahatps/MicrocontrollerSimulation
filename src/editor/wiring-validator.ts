@@ -159,6 +159,7 @@ const STATIC_PROFILES: StaticWiringProfile[] = [
 const ONBOARD_INPUT_PINS = new Set([0, 15, 32, 33, 39]);
 const ONBOARD_LED_PINS = new Set([2, 5, 18, 19, 21, 22, 23, 27]);
 const ONBOARD_RELAY_PINS = new Set([25, 4, 12, 13]);
+const ONBOARD_MCP23008_PINS = new Set([0, 1, 2, 3, 4, 5, 6, 7]);
 const ACTUATOR_BOARD_PORTS: Record<number, string> = { 25: 'LEDR_0', 4: 'LEDR_1', 12: 'LEDR_2', 13: 'LEDR_3' };
 
 export function getHandysenseRealCanonicalPorts(kind: string, pin?: number): Readonly<Record<string, string>> | null {
@@ -191,6 +192,35 @@ function parsePinConstants(source: string): Map<string, number> {
     while ((match = declaration.exec(source)) !== null) constants.set(match[1], Number.parseInt(match[2], 10));
     while ((match = define.exec(source)) !== null) constants.set(match[1], Number.parseInt(match[2], 10));
     return constants;
+}
+
+function parseMcp23008Instances(source: string): Set<string> {
+    const instances = new Set<string>();
+    const declaration = /\bMCP23008\s+([A-Za-z_]\w*)\s*(?:\([^;]*\))?\s*;/g;
+    let match: RegExpExecArray | null;
+    while ((match = declaration.exec(source)) !== null) instances.add(match[1]);
+    return instances;
+}
+
+function resolvePinReference(token: string, constants: PinConstants): number | undefined {
+    return /^\d+$/.test(token) ? Number.parseInt(token, 10) : constants.get(token);
+}
+
+function collectHardwarePinUsage(source: string, constants: PinConstants, mcp23008Instances: Set<string>): { espPins: Set<number>; mcpPins: Set<number> } {
+    const espPins = new Set<number>();
+    const mcpPins = new Set<number>();
+    const call = /\b(?:([A-Za-z_]\w*)\s*\.\s*)?(digitalRead|digitalWrite|analogRead|analogWrite|pinMode)\s*\(\s*([A-Za-z_]\w*|\d+)/g;
+    let match: RegExpExecArray | null;
+    while ((match = call.exec(source)) !== null) {
+        const pin = resolvePinReference(match[3], constants);
+        if (pin === undefined) continue;
+        if (match[1] && mcp23008Instances.has(match[1]) && (match[2] === 'digitalRead' || match[2] === 'digitalWrite')) {
+            mcpPins.add(pin);
+            continue;
+        }
+        espPins.add(pin);
+    }
+    return { espPins, mcpPins };
 }
 
 function sourceUsesPin(source: string, symbol: string): boolean {
@@ -243,20 +273,23 @@ function extractRequirements(source: string): { requirements: WiringRequirement[
     }
 
     const constants = parsePinConstants(source);
+    const mcp23008Instances = parseMcp23008Instances(source);
     addActuatorRequirements(source, constants, requirements, errors);
 
     const hardwareUsage = /\b(?:digitalRead|digitalWrite|analogRead|analogWrite|Wire\.begin|Serial2\.begin|ModbusMaster)\b/.test(source);
-    const allReferencedPins = new Set<number>();
-    const call = /\b(?:digitalRead|digitalWrite|analogRead|analogWrite|pinMode)\s*\(\s*([A-Za-z_]\w*|\d+)/g;
-    let match: RegExpExecArray | null;
-    while ((match = call.exec(source)) !== null) {
-        const pin = /^\d+$/.test(match[1]) ? Number.parseInt(match[1], 10) : constants.get(match[1]);
-        if (pin !== undefined) allReferencedPins.add(pin);
-    }
-    const onlyOnboardPins = allReferencedPins.size > 0 && [...allReferencedPins].every(pin =>
+    const hardwarePins = collectHardwarePinUsage(source, constants, mcp23008Instances);
+    const onlyOnboardEspPins = [...hardwarePins.espPins].every(pin =>
         ONBOARD_INPUT_PINS.has(pin) || ONBOARD_LED_PINS.has(pin) || ONBOARD_RELAY_PINS.has(pin)
     );
-    if (hardwareUsage && requirements.length === 0 && errors.length === 0 && !onlyOnboardPins) {
+    const onlyOnboardMcpPins = [...hardwarePins.mcpPins].every(pin => ONBOARD_MCP23008_PINS.has(pin));
+    const usesHandySenseHelpers = /\b(?:setPin_Relay|setPin_SW|setPin_ErrorSensor|setup_HandySense|loop_HandySense|Open_relay|Close_relay)\b/.test(source);
+    const onlyOnboardPins = (hardwarePins.espPins.size > 0 || hardwarePins.mcpPins.size > 0) && onlyOnboardEspPins && onlyOnboardMcpPins;
+    const onlyBuiltInHandySenseHardware =
+        !/\bModbusMaster\b/.test(source) &&
+        (usesHandySenseHelpers || mcp23008Instances.size > 0) &&
+        onlyOnboardEspPins &&
+        onlyOnboardMcpPins;
+    if (hardwareUsage && requirements.length === 0 && errors.length === 0 && !onlyOnboardPins && !onlyBuiltInHandySenseHardware) {
         warnings.push({
             severity: 'warning', code: 'unverified-code',
             message: 'ตรวจพบโค้ด hardware ที่ยังระบุชนิดอุปกรณ์หรือ wiring profile ไม่ได้ จึงอนุญาตให้ Execute ต่อ',

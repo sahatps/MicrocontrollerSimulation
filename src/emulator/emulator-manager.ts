@@ -857,15 +857,19 @@ export class EmulatorManager {
         // Inject MCP23008 mock for HandySense/I2C relay control
         if (usesMCP23008) {
             pythonCode += [
-                '# MCP23008 mock - maps I2C expander to ESP32 relay GPIO',
+                '# MCP23008 mock - maps GP0..GP7 to HandySense real LED GPIO',
+                '# and mirrors GP0..GP3 to relay GPIO 25/4/12/13',
                 'class MCP23008:',
-                '    _RELAY_PINS = [25, 4, 12, 13]  # GP0=IO25(R1), GP1=IO4(R2), GP2=IO12(R3), GP3=IO13(R4)',
+                '    _LED_PINS = [2, 5, 18, 19, 21, 22, 23, 27]',
+                '    _RELAY_PINS = [25, 4, 12, 13]',
                 '    def __init__(self, addr):',
-                '        self._pins = [Pin(p, Pin.OUT) for p in self._RELAY_PINS]',
+                '        self._led_pins = [Pin(p, Pin.OUT) for p in self._LED_PINS]',
+                '        self._relay_pins = [Pin(p, Pin.OUT) for p in self._RELAY_PINS]',
                 '    def begin(self): pass',
                 '    def pinMode8(self, mode): pass',
                 '    def write(self, pin, val):',
-                '        if pin < len(self._pins): self._pins[pin].value(val)',
+                '        if pin < len(self._led_pins): self._led_pins[pin].value(val)',
+                '        if pin < len(self._relay_pins): self._relay_pins[pin].value(val)',
                 'MCP = MCP23008(0x24)',
                 '',
             ].join('\n');
