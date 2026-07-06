@@ -442,6 +442,7 @@ inline void setPin_SW(int s1, int s2, int s3, int s4) {
     switch_pin[0] = s1; switch_pin[1] = s2; switch_pin[2] = s3; switch_pin[3] = s4;
     for (int i = 0; i < 4; ++i) {
         pinMode(switch_pin[i], INPUT);
+        digitalWrite(switch_pin[i], HIGH);
     }
 }
 inline void setPin_ErrorSensor(int e1, int e2, int e3) {

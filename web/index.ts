@@ -314,13 +314,21 @@ const EXAMPLE_SELECTION_STORAGE_KEY = 'hackCable-webExample-selected';
 
 const compilerModeSelect = document.getElementById('compiler-mode') as HTMLSelectElement;
 const boardSelectEl = document.getElementById('board-select') as HTMLSelectElement;
-const HANDYSENSE_REAL_RUNTIME_INPUT_PINS: Record<Exclude<HandysenseRealBoardControlName, 'reset'>, number> = {
+const HANDYSENSE_REAL_RUNTIME_INPUT_PINS_LEGACY: Record<Exclude<HandysenseRealBoardControlName, 'reset'>, number> = {
     boot: 0,
     button0: 32,
     button1: 33,
     button2: 15,
     button3: 39,
 };
+const HANDYSENSE_REAL_RUNTIME_INPUT_PINS_SW_ONBOARD: Record<Exclude<HandysenseRealBoardControlName, 'reset'>, number> = {
+    boot: 0,
+    button0: 36,
+    button1: 39,
+    button2: 34,
+    button3: 35,
+};
+let activeHandysenseRealRuntimeInputPins = HANDYSENSE_REAL_RUNTIME_INPUT_PINS_LEGACY;
 
 type MockSource = 'text' | 'timeline';
 type SensorKey = 'humidity' | 'temperature' | 'ph' | 'lux' | 'soil' | 'co2' | 'pressure' | 'ec' | 'nitrogen' | 'phosphorus' | 'potassium' | 'ammonia' | 'pm1' | 'pm25' | 'pm4' | 'pm10' | 'voc' | 'nox' | 'distance' | 'turbidity' | 'nitrate_vout' | 'nitrate_vout_temp' | 'nitrate_sample' | 'nitrate_error' | 'nitrate_r_square' | 'nitrate_sensitivity' | 'nitrate_std1' | 'nitrate_std2' | 'nitrate_std3' | 'voltage' | 'tmec_analog_uv' | 'water_level' | 'water_temperature' | 'dissolved_oxygen' | 'do_temperature' | 'ammonia_temperature' | 'tubular_moisture_10' | 'tubular_temperature_10' | 'tubular_moisture_20' | 'tubular_temperature_20' | 'tubular_moisture_30' | 'tubular_temperature_30' | 'tubular_moisture_40' | 'tubular_temperature_40' | 'tubular_moisture_50' | 'tubular_temperature_50' | 'air_velocity' | 'noise' | 'weight' | 'wind_direction' | 'wind_speed' | 'rain' | 'par';
@@ -536,6 +544,22 @@ const CODE_EDITOR_MIN_HEIGHT = 220;
 function setEsp32RuntimeInputPin(pin: number, value: boolean): void {
     hackCable.emulatorManager.setInputPin(pin, value);
     activeClangShim?.setInputPin(pin, value);
+}
+
+function inferHandysenseRealRuntimeInputPins(sourceCode: string): Record<Exclude<HandysenseRealBoardControlName, 'reset'>, number> {
+    if (
+        /\bsw_onboard\s*\[/.test(sourceCode)
+        || /\bsetPin_SW\s*\(\s*36\s*,\s*39\s*,\s*34\s*,\s*35\s*\)/.test(sourceCode)
+    ) {
+        return HANDYSENSE_REAL_RUNTIME_INPUT_PINS_SW_ONBOARD;
+    }
+    return HANDYSENSE_REAL_RUNTIME_INPUT_PINS_LEGACY;
+}
+
+function primeHandysenseRealRuntimeInputs(sourceCode: string): void {
+    activeHandysenseRealRuntimeInputPins = inferHandysenseRealRuntimeInputPins(sourceCode);
+    const pins = new Set<number>(Object.values(activeHandysenseRealRuntimeInputPins));
+    pins.forEach((pin) => setEsp32RuntimeInputPin(pin, true));
 }
 
 function getCodeEditorInput(): HTMLTextAreaElement | null {
@@ -865,6 +889,9 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
         registerSerialDataCallback();
         beginSerialPipelineDiagnostics();
         hackCable.emulatorManager.stop();
+        if (normalizeBoardSelection(boardSelectEl?.value) === 'handysense-real') {
+            activeHandysenseRealRuntimeInputPins = inferHandysenseRealRuntimeInputPins(sourceCode);
+        }
 
         if(!(hexInput instanceof HTMLTextAreaElement && codeInput instanceof HTMLTextAreaElement)) return false;
         showStatus('ui.status.executing', 'info');
@@ -892,6 +919,9 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                 (pin) => readBridgeNumber('hackcable_analog_read', [pin], 0),
             );
             activeClangShim = shim;
+            if (normalizeBoardSelection(boardSelectEl?.value) === 'handysense-real') {
+                primeHandysenseRealRuntimeInputs(sourceCode);
+            }
             WebAssembly.instantiate(lastClangResult, shim.buildImports())
                 .then(({ instance }) => {
                     const exp = instance.exports as any;
@@ -948,7 +978,7 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
             return;
         }
 
-        const pin = HANDYSENSE_REAL_RUNTIME_INPUT_PINS[detail.control];
+        const pin = activeHandysenseRealRuntimeInputPins[detail.control];
         setEsp32RuntimeInputPin(pin, detail.pressed ? false : true);
     });
 }

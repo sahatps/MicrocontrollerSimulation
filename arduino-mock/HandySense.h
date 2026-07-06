@@ -48,6 +48,7 @@ inline void setPin_SW(int s1, int s2, int s3, int s4) {
     switch_pin[3] = s4;
     for (int i = 0; i < 4; ++i) {
         pinMode(switch_pin[i], INPUT);
+        digitalWrite(switch_pin[i], HIGH);
     }
 }
 
