@@ -31,7 +31,11 @@ let hackCable = new HackCable(mountingDiv, 'en_us');
 
 function notifyShellWhenInitialRenderIsReady() {
     const afterFonts = document.fonts?.ready ?? Promise.resolve();
-    afterFonts
+    const fontReadyOrTimeout = Promise.race([
+        afterFonts.catch(() => undefined),
+        new Promise<void>((resolve) => setTimeout(resolve, 1000)),
+    ]);
+    fontReadyOrTimeout
         .catch(() => undefined)
         .then(() => new Promise<void>((resolve) => {
             requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
@@ -332,6 +336,7 @@ let activeHandysenseRealRuntimeInputPins = HANDYSENSE_REAL_RUNTIME_INPUT_PINS_LE
 
 type MockSource = 'text' | 'timeline';
 type SensorKey = 'humidity' | 'temperature' | 'ph' | 'lux' | 'soil' | 'co2' | 'pressure' | 'ec' | 'nitrogen' | 'phosphorus' | 'potassium' | 'ammonia' | 'pm1' | 'pm25' | 'pm4' | 'pm10' | 'voc' | 'nox' | 'distance' | 'turbidity' | 'nitrate_vout' | 'nitrate_vout_temp' | 'nitrate_sample' | 'nitrate_error' | 'nitrate_r_square' | 'nitrate_sensitivity' | 'nitrate_std1' | 'nitrate_std2' | 'nitrate_std3' | 'voltage' | 'tmec_analog_uv' | 'water_level' | 'water_temperature' | 'dissolved_oxygen' | 'do_temperature' | 'ammonia_temperature' | 'tubular_moisture_10' | 'tubular_temperature_10' | 'tubular_moisture_20' | 'tubular_temperature_20' | 'tubular_moisture_30' | 'tubular_temperature_30' | 'tubular_moisture_40' | 'tubular_temperature_40' | 'tubular_moisture_50' | 'tubular_temperature_50' | 'air_velocity' | 'noise' | 'weight' | 'wind_direction' | 'wind_speed' | 'rain' | 'par';
+type ModbusMockProfile = 'sensor-weather-htco2plx' | 'sensor-ph-rs485' | 'sensor-rain-rs485' | 'sensor-wind-pair-rs485' | 'sensor-wind-speed-rs485' | 'sensor-sht31-rs485' | 'sensor-weight-3kg-rs485' | 'sensor-wind-direction-rs485' | 'sensor-dt-par485' | 'bfarm-7in1-soil' | 'bfarm-ammonia-rs485' | 'bfarm-soil-temp-multiread-rs485' | 'bfarm-ultrasonic-rs485' | 'bfarm-turbidity-xm3318b-rs485' | 'bfarm-turbidity-xm8518-rs485' | 'bfarm-nitrate-isfet-rs485' | 'bfarm-tmec-tensio-rs485' | 'bfarm-water-quality-suite-rs485' | 'bfarm-tubular-soil-probe-rs485' | 'bfarm-air-velocity-sm3789' | 'bfarm-lux120k-rs485' | 'bfarm-weather-sensor-rs485' | 'default-weather';
 type MockSegment = { startSec: number; endSec: number; value: number };
 type MockTimelineConfig = { durationSec: number; tracks: Record<SensorKey, MockSegment[]> };
 type GraphPoint = { tSec: number; value: number };
@@ -483,6 +488,31 @@ const SENSOR_LABEL_KEYS: Record<SensorKey, string> = {
     rain: 'ui.mock.sensor.rain',
     par: 'ui.mock.sensor.par',
 };
+const MODBUS_MOCK_PROFILE_SENSOR_KEYS: Record<ModbusMockProfile, SensorKey[]> = {
+    'sensor-weather-htco2plx': ['humidity', 'temperature', 'co2', 'pressure', 'lux'],
+    'sensor-ph-rs485': ['temperature', 'ph'],
+    'sensor-rain-rs485': ['rain'],
+    'sensor-wind-pair-rs485': ['wind_direction', 'wind_speed'],
+    'sensor-wind-speed-rs485': ['wind_speed'],
+    'sensor-sht31-rs485': ['temperature', 'humidity'],
+    'sensor-weight-3kg-rs485': ['weight'],
+    'sensor-wind-direction-rs485': ['wind_direction'],
+    'sensor-dt-par485': ['par'],
+    'bfarm-7in1-soil': ['soil', 'temperature', 'ec', 'ph', 'nitrogen', 'phosphorus', 'potassium'],
+    'bfarm-ammonia-rs485': ['ammonia', 'ph', 'temperature'],
+    'bfarm-soil-temp-multiread-rs485': ['soil', 'temperature'],
+    'bfarm-ultrasonic-rs485': ['distance'],
+    'bfarm-turbidity-xm3318b-rs485': ['turbidity'],
+    'bfarm-turbidity-xm8518-rs485': ['turbidity'],
+    'bfarm-nitrate-isfet-rs485': ['nitrate_vout', 'nitrate_vout_temp', 'nitrate_sample', 'temperature', 'nitrate_error', 'nitrate_r_square', 'nitrate_sensitivity', 'nitrate_std1', 'nitrate_std2', 'nitrate_std3'],
+    'bfarm-tmec-tensio-rs485': ['temperature', 'humidity', 'lux', 'voltage'],
+    'bfarm-water-quality-suite-rs485': ['water_level', 'water_temperature', 'ph', 'dissolved_oxygen', 'do_temperature', 'ec', 'ammonia', 'ammonia_temperature'],
+    'bfarm-tubular-soil-probe-rs485': ['tubular_moisture_10', 'tubular_temperature_10', 'tubular_moisture_20', 'tubular_temperature_20', 'tubular_moisture_30', 'tubular_temperature_30', 'tubular_moisture_40', 'tubular_temperature_40', 'tubular_moisture_50', 'tubular_temperature_50'],
+    'bfarm-air-velocity-sm3789': ['air_velocity'],
+    'bfarm-lux120k-rs485': ['lux'],
+    'bfarm-weather-sensor-rs485': ['humidity', 'temperature', 'noise', 'co2', 'pressure', 'lux'],
+    'default-weather': ['temperature', 'humidity', 'co2', 'pressure', 'ph'],
+};
 const MOCK_SOURCE_STORAGE_KEY = 'hackCable-mock-source';
 const MOCK_TIMELINE_STORAGE_KEY = 'hackCable-mock-timeline';
 const MOCK_GRAPH_UI_STORAGE_KEY = 'hackCable-mock-graph-ui';
@@ -509,6 +539,8 @@ const mockGraphCanvas = document.getElementById('mock-graph-canvas') as HTMLCanv
 const mockTimelineTracksContainer = document.getElementById('mock-timeline-tracks') as HTMLDivElement | null;
 const mockTimelineError = document.getElementById('mock-timeline-error') as HTMLDivElement | null;
 const mockTextInput = document.getElementById('sensor-mock-input') as HTMLTextAreaElement | null;
+const mockTextToggleButton = document.getElementById('mock-text-toggle') as HTMLButtonElement | null;
+const mockTextSliders = document.getElementById('mock-text-sliders') as HTMLDivElement | null;
 const downloadSessionButton = document.getElementById('download-session') as HTMLButtonElement | null;
 const uploadSessionButton = document.getElementById('upload-session') as HTMLButtonElement | null;
 const uploadSessionInput = document.getElementById('upload-session-input') as HTMLInputElement | null;
@@ -520,6 +552,8 @@ let mockTimelineErrorKey: string | null = null;
 let activeMockEditorMode: MockEditorMode = 'graph';
 let activeGraphSensor: SensorKey = 'ph';
 let graphRangeOverrides: Partial<Record<SensorKey, SensorRange>> = {};
+let compiledMockSensorKeys: Set<SensorKey> | null = null;
+let isMockTextInputVisible = false;
 let selectedGraphPointIndex: number | null = null;
 let graphDragPointIndex: number | null = null;
 let graphDidDrag = false;
@@ -688,6 +722,10 @@ function updateCompileButtonMode(isCancel: boolean) {
 
 function markCompileStale() {
     if (isCompilingCode) return;
+    if (compiledMockSensorKeys !== null) {
+        compiledMockSensorKeys = null;
+        renderMockTextSliders();
+    }
     setRunControlState('needs-compile');
 }
 
@@ -778,6 +816,7 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
             if (!isCurrentCompile()) return;
             isCompilingCode = false;
             activeCompileCancel = null;
+            setCompiledMockSensorFilter(sourceCode);
             setRunControlState('compiled');
             showStatus('ui.status.compileComplete', 'success');
         };
@@ -785,6 +824,8 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
             if (!isCurrentCompile()) return;
             isCompilingCode = false;
             activeCompileCancel = null;
+            compiledMockSensorKeys = null;
+            renderMockTextSliders();
             setRunControlState('needs-compile');
             showStatus('ui.status.compileFailed', 'error');
         };
@@ -792,6 +833,8 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
             if (!isCurrentCompile()) return;
             isCompilingCode = false;
             activeCompileCancel = null;
+            compiledMockSensorKeys = null;
+            renderMockTextSliders();
             setRunControlState('needs-compile');
             hexInput.value = '// Clang/LLVM compile cancelled. Click Compile to try again.';
             showStatus('ui.status.compileCancelled', 'info');
@@ -1005,6 +1048,11 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 type EditorTabName = 'code' | 'mock';
 
 function switchEditorTab(tabName: EditorTabName) {
+    if (tabName === 'mock') {
+        setActiveMockSource('text', false);
+        setMockTextInputVisible(false);
+    }
+
     document.querySelectorAll('.editor-tab-btn').forEach((btn) => {
         const isActive = (btn as HTMLElement).dataset.editorTab === tabName;
         btn.classList.toggle('active', isActive);
@@ -1261,13 +1309,219 @@ function getMockTextValue(): string {
     return mockTextInput?.value ?? '';
 }
 
-function setMockTextValue(nextText: string): void {
+function setMockTextValue(nextText: string, syncSliders = true): void {
     if (!mockTextInput) return;
     mockTextInput.value = nextText;
+    if (syncSliders) renderMockTextSliders();
 }
 
 function saveMockTextValue(): void {
     localStorage.setItem(MOCK_TEXT_STORAGE_KEY, getMockTextValue());
+}
+
+function updateMockTextInputVisibility(): void {
+    if (mockTextInput) {
+        mockTextInput.hidden = !isMockTextInputVisible;
+    }
+    if (mockTextToggleButton) {
+        mockTextToggleButton.textContent = isMockTextInputVisible ? 'Hide Text' : 'Show Text';
+        mockTextToggleButton.setAttribute('aria-expanded', String(isMockTextInputVisible));
+    }
+}
+
+function setMockTextInputVisible(isVisible: boolean): void {
+    isMockTextInputVisible = isVisible;
+    updateMockTextInputVisibility();
+}
+
+const MOCK_TEXT_VALUE_LINE_RE = /^(\s*)(\w+)(\s*=\s*)([+-]?(?:\d+\.?\d*|\.\d+))(\s*)$/;
+
+type MockTextSensorEntry = {
+    key: SensorKey;
+    value: number;
+    lineIndex: number;
+};
+
+function getDecimalPlaces(value: number): number {
+    const text = String(value);
+    if (text.includes('e-')) {
+        const exponent = Number(text.split('e-')[1]);
+        return Number.isFinite(exponent) ? exponent : 0;
+    }
+    const decimal = text.split('.')[1];
+    return decimal ? decimal.length : 0;
+}
+
+function getMockTextSliderStep(sensorKey: SensorKey, currentValue: number): number {
+    const range = getDefaultSensorRange(sensorKey);
+    const span = range.max - range.min;
+    let step = span <= 2 ? 0.01 : span <= 100 ? 0.1 : 1;
+    const currentPrecision = getDecimalPlaces(currentValue);
+    if (currentPrecision > 0) {
+        step = Math.min(step, Math.pow(10, -Math.min(currentPrecision, 3)));
+    }
+    return step;
+}
+
+function formatMockTextNumber(value: number, step: number): string {
+    const precision = step < 1 ? Math.min(3, getDecimalPlaces(step)) : 0;
+    const rounded = precision > 0 ? Number(value.toFixed(precision)) : Math.round(value);
+    return String(rounded);
+}
+
+function getEditableMockTextNumber(input: HTMLInputElement): number | null {
+    const text = input.value.trim();
+    if (!text || text === '-' || text === '+' || text === '.' || text === '-.' || text === '+.') return null;
+    return asFiniteNumber(text);
+}
+
+function parseMockTextSensorEntries(text: string): MockTextSensorEntry[] {
+    const entries = new Map<SensorKey, MockTextSensorEntry>();
+    text.split('\n').forEach((line, lineIndex) => {
+        const match = line.match(MOCK_TEXT_VALUE_LINE_RE);
+        if (!match) return;
+        const key = match[2].toLowerCase();
+        if (!isSensorKey(key)) return;
+        const value = Number(match[4]);
+        if (!Number.isFinite(value)) return;
+        entries.set(key, { key, value, lineIndex });
+    });
+    return [...entries.values()].sort((a, b) => a.lineIndex - b.lineIndex);
+}
+
+function replaceMockTextSensorValue(sensorKey: SensorKey, nextValueText: string, lineIndex: number): void {
+    const lines = getMockTextValue().split('\n');
+    let targetIndex = -1;
+
+    if (lineIndex >= 0 && lineIndex < lines.length) {
+        const match = lines[lineIndex].match(MOCK_TEXT_VALUE_LINE_RE);
+        if (match && match[2].toLowerCase() === sensorKey) targetIndex = lineIndex;
+    }
+
+    if (targetIndex < 0) {
+        lines.forEach((line, index) => {
+            const match = line.match(MOCK_TEXT_VALUE_LINE_RE);
+            if (match && match[2].toLowerCase() === sensorKey) targetIndex = index;
+        });
+    }
+
+    if (targetIndex >= 0) {
+        lines[targetIndex] = lines[targetIndex].replace(MOCK_TEXT_VALUE_LINE_RE, (_line, before, key, equals, _value, after) => {
+            return `${before}${key}${equals}${nextValueText}${after}`;
+        });
+    } else {
+        lines.push(`${sensorKey} = ${nextValueText}`);
+    }
+
+    setMockTextValue(lines.join('\n'), false);
+    saveMockTextValue();
+}
+
+function addMockSensorKeys(target: Set<SensorKey>, keys: SensorKey[]): void {
+    keys.forEach((key) => target.add(key));
+}
+
+function inferMockSensorKeysFromCode(code: string): Set<SensorKey> {
+    const keys = new Set<SensorKey>();
+    const hasModbusRead = /ModbusMaster|Serial2|readHoldingRegisters|getResponseBuffer/.test(code);
+
+    SENSOR_KEYS.forEach((key) => {
+        const pattern = new RegExp(`\\b${key}\\b`, 'i');
+        if (pattern.test(code)) keys.add(key);
+    });
+
+    if (/SHT31/i.test(code)) addMockSensorKeys(keys, ['temperature', 'humidity']);
+    if (/BH1750/i.test(code)) keys.add('lux');
+    if (/SensirionI2CSen5x|sen5x/i.test(code)) {
+        addMockSensorKeys(keys, ['pm1', 'pm25', 'pm4', 'pm10', 'humidity', 'temperature', 'voc', 'nox']);
+    }
+    if (/ReadAnalog_(?:from_)?MPC3424/i.test(code)) keys.add('tmec_analog_uv');
+    if (/analogRead\s*\(/i.test(code)) {
+        if (/ph[_\s-]*sensor|pH/i.test(code)) keys.add('ph');
+        if (/humidity[_\s-]*sensor/i.test(code)) keys.add('humidity');
+        if (/soil|moisture/i.test(code)) keys.add('soil');
+    }
+    if (hasModbusRead) {
+        addMockSensorKeys(keys, MODBUS_MOCK_PROFILE_SENSOR_KEYS[getActiveModbusMockProfile()]);
+    }
+
+    return keys;
+}
+
+function setCompiledMockSensorFilter(sourceCode: string): void {
+    compiledMockSensorKeys = inferMockSensorKeysFromCode(sourceCode);
+    renderMockTextSliders();
+}
+
+function renderMockTextSliders(): void {
+    if (!mockTextSliders) return;
+    mockTextSliders.innerHTML = '';
+    const entries = parseMockTextSensorEntries(getMockTextValue())
+        .filter((entry) => !compiledMockSensorKeys || compiledMockSensorKeys.has(entry.key));
+    mockTextSliders.hidden = entries.length === 0;
+
+    entries.forEach((entry) => {
+        const range = getDefaultSensorRange(entry.key);
+        const min = Math.min(range.min, entry.value);
+        const max = Math.max(range.max, entry.value);
+        const step = getMockTextSliderStep(entry.key, entry.value);
+        const valueText = formatMockTextNumber(entry.value, step);
+
+        const row = document.createElement('label');
+        row.className = 'mock-text-slider-row';
+
+        const header = document.createElement('span');
+        header.className = 'mock-text-slider-header';
+
+        const name = document.createElement('span');
+        name.className = 'mock-text-slider-name';
+        name.textContent = translateUi(SENSOR_LABEL_KEYS[entry.key]);
+
+        const value = document.createElement('input');
+        value.type = 'number';
+        value.className = 'mock-text-slider-value';
+        value.value = valueText;
+        value.min = String(min);
+        value.max = String(max);
+        value.step = String(step);
+        value.setAttribute('aria-label', `${translateUi(SENSOR_LABEL_KEYS[entry.key])} value`);
+
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.min = String(min);
+        slider.max = String(max);
+        slider.step = String(step);
+        slider.value = String(entry.value);
+
+        slider.addEventListener('input', () => {
+            const nextValue = asFiniteNumber(slider.value);
+            if (nextValue === null) return;
+            const nextText = formatMockTextNumber(nextValue, step);
+            value.value = nextText;
+            replaceMockTextSensorValue(entry.key, nextText, entry.lineIndex);
+        });
+
+        value.addEventListener('input', () => {
+            const nextValue = getEditableMockTextNumber(value);
+            if (nextValue === null) return;
+            slider.value = String(nextValue);
+            replaceMockTextSensorValue(entry.key, value.value.trim(), entry.lineIndex);
+        });
+
+        value.addEventListener('change', () => {
+            const nextValue = getEditableMockTextNumber(value);
+            if (nextValue === null) {
+                value.value = valueText;
+                return;
+            }
+            replaceMockTextSensorValue(entry.key, value.value.trim(), entry.lineIndex);
+            renderMockTextSliders();
+        });
+
+        header.append(name, value);
+        row.append(header, slider);
+        mockTextSliders.append(row);
+    });
 }
 
 function getCircuitSessionSnapshot(): CircuitSessionFile {
@@ -1514,6 +1768,7 @@ function setActiveMockSource(source: MockSource, persist = true) {
         requestAnimationFrame(() => renderMockGraphEditor());
     } else {
         graphDragPointIndex = null;
+        renderMockTextSliders();
     }
     if (persist) saveMockSource();
 }
@@ -1909,6 +2164,7 @@ function renderMockGraphEditor() {
 }
 
 function renderMockEditors() {
+    renderMockTextSliders();
     renderMockTimelineTracks();
     populateMockGraphSensorOptions();
     renderMockGraphEditor();
@@ -1937,6 +2193,7 @@ function initializeMockControls() {
     }
 
     loadMockGraphUiPrefs();
+    setMockTextInputVisible(false);
     setActiveMockSource(activeMockSource, false);
     setActiveGraphSensor(activeGraphSensor, false);
     setActiveMockEditorMode(activeMockEditorMode, false);
@@ -1947,6 +2204,11 @@ function initializeMockControls() {
 
 mockTextInput?.addEventListener('input', () => {
     saveMockTextValue();
+    renderMockTextSliders();
+});
+
+mockTextToggleButton?.addEventListener('click', () => {
+    setMockTextInputVisible(!isMockTextInputVisible);
 });
 
 mockSourceButtons.forEach((button) => {
@@ -2693,12 +2955,10 @@ simHttpPathInput?.addEventListener('keydown', (event) => {
 (window as any).hackcable_serial_data = (text: string) => { routeIncomingSerialData(text, 'internal'); };
 // Sensor mock input parser
 function parseMockValues(): Record<string, number> {
-    const el = document.getElementById('sensor-mock-input') as HTMLTextAreaElement | null;
-    if (!el) return {};
     const result: Record<string, number> = {};
-    for (const line of el.value.split('\n')) {
-        const m = line.match(/^\s*(\w+)\s*=\s*([+-]?\d+\.?\d*)\s*$/);
-        if (m) result[m[1].toLowerCase()] = parseFloat(m[2]);
+    for (const line of getMockTextValue().split('\n')) {
+        const match = line.match(MOCK_TEXT_VALUE_LINE_RE);
+        if (match) result[match[2].toLowerCase()] = Number(match[4]);
     }
     return result;
 }
@@ -2756,7 +3016,7 @@ function circuitHasComponent(componentId: number): boolean {
 
 let windBlocklyReadPhase = 0;
 
-function getActiveModbusMockProfile(): 'sensor-weather-htco2plx' | 'sensor-ph-rs485' | 'sensor-rain-rs485' | 'sensor-wind-pair-rs485' | 'sensor-wind-speed-rs485' | 'sensor-sht31-rs485' | 'sensor-weight-3kg-rs485' | 'sensor-wind-direction-rs485' | 'sensor-dt-par485' | 'bfarm-7in1-soil' | 'bfarm-ammonia-rs485' | 'bfarm-soil-temp-multiread-rs485' | 'bfarm-ultrasonic-rs485' | 'bfarm-turbidity-xm3318b-rs485' | 'bfarm-turbidity-xm8518-rs485' | 'bfarm-nitrate-isfet-rs485' | 'bfarm-tmec-tensio-rs485' | 'bfarm-water-quality-suite-rs485' | 'bfarm-tubular-soil-probe-rs485' | 'bfarm-air-velocity-sm3789' | 'bfarm-lux120k-rs485' | 'bfarm-weather-sensor-rs485' | 'default-weather' {
+function getActiveModbusMockProfile(): ModbusMockProfile {
     const selectedExample = getSelectedExampleKey();
     if (selectedExample === 'handysense_real_sensor_weather_htco2plx_test' || selectedExample === 'pressure' || circuitHasComponent(40)) {
         return 'sensor-weather-htco2plx';

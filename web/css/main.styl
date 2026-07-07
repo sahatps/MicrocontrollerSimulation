@@ -890,13 +890,114 @@ body.controlbar-hidden #hackCable
                     &[hidden]
                         display none !important
 
-                .mock-source-panel[data-mock-source-panel="text"] textarea
-                    margin-top 0
-                    border-radius 6px
-                    min-height 150px
-                    background-color #13161d
-                    color #f9fafb
-                    border 1px solid #2f3644
+                .mock-source-panel[data-mock-source-panel="text"]
+                    .mock-text-toolbar
+                        display flex
+                        justify-content flex-end
+
+                    .mock-text-toggle
+                        border 1px solid #cfdac7
+                        border-radius 999px
+                        background-color #ffffff
+                        color #5f9e43
+                        padding 5px 12px
+                        font-size 0.8rem
+                        font-weight 700
+                        cursor pointer
+
+                        &:hover
+                            background-color #eef6e8
+
+                        &:focus
+                            outline 2px solid rgba(168, 205, 139, 0.45)
+                            outline-offset 2px
+
+                    .mock-text-layout
+                        display grid
+                        grid-template-columns repeat(auto-fit, minmax(240px, 1fr))
+                        gap 10px
+                        align-items stretch
+
+                    textarea
+                        margin-top 0
+                        border-radius 6px
+                        min-height 150px
+                        background-color #13161d
+                        color #f9fafb
+                        border 1px solid #2f3644
+                        resize vertical
+
+                        &[hidden]
+                            display none !important
+
+                    .mock-text-sliders
+                        max-height 342px
+                        overflow-y auto
+                        border 1px solid #2f3644
+                        border-radius 6px
+                        background-color #151922
+                        padding 8px
+                        display flex
+                        flex-direction column
+                        gap 8px
+
+                        &[hidden]
+                            display none !important
+
+                    .mock-text-slider-row
+                        display flex
+                        flex-direction column
+                        gap 5px
+                        border 1px solid #273041
+                        border-radius 6px
+                        background-color #10141c
+                        padding 7px 8px
+
+                    .mock-text-slider-header
+                        display flex
+                        justify-content space-between
+                        align-items center
+                        gap 8px
+                        color #e5e7eb
+                        font-size 0.82rem
+                        font-weight 600
+
+                    .mock-text-slider-name
+                        min-width 0
+                        overflow hidden
+                        text-overflow ellipsis
+                        white-space nowrap
+
+                    .mock-text-slider-value
+                        flex-shrink 0
+                        min-width 44px
+                        width 64px
+                        border 1px solid transparent
+                        border-radius 4px
+                        background-color #20283a
+                        color #d7f3c5
+                        padding 2px 6px
+                        text-align right
+                        font-family monospace
+                        font-size 0.82rem
+                        outline none
+
+                        &:focus
+                            border-color #a8cd8b
+                            box-shadow 0 0 0 2px rgba(168, 205, 139, 0.18)
+
+                        &::-webkit-outer-spin-button,
+                        &::-webkit-inner-spin-button
+                            -webkit-appearance none
+                            margin 0
+
+                        &[type="number"]
+                            -moz-appearance textfield
+
+                    .mock-text-slider-row input[type="range"]
+                        width 100%
+                        accent-color #a8cd8b
+                        cursor pointer
 
                 .mock-timeline-toolbar
                     display flex
@@ -1426,6 +1527,14 @@ footer
             textarea
                 min-height 80px
                 font-size 12px
+
+            .editor-tab-panel[data-editor-panel="mock"]
+                .mock-source-panel[data-mock-source-panel="text"]
+                    .mock-text-layout
+                        grid-template-columns 1fr
+
+                    .mock-text-sliders
+                        max-height 220px
 
             .buttonBar
                 flex-direction row

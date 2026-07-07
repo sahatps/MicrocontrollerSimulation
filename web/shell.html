@@ -545,6 +545,7 @@
     var btnControlBar = document.getElementById('btn-controlbar');
     var frameHackCable = document.getElementById('frame-hackcable');
     var simulationLoading = document.getElementById('simulation-loading');
+    var simulationReadyReceived = false;
 
     function hideSimulationLoading() {
       if (!simulationLoading || simulationLoading.classList.contains('is-hidden')) return;
@@ -609,6 +610,7 @@
     window.addEventListener('message', function (e) {
       if (!e.data || e.data.source !== 'hackcable') return;
       if (e.data.type === 'simulation-ready') {
+        simulationReadyReceived = true;
         hideSimulationLoading();
         return;
       }
@@ -626,6 +628,9 @@
       frameHackCable.addEventListener('load', function () {
         sendToHackCable({ source: 'shell', type: 'get-controlbar-state' });
         sendToHackCable({ source: 'shell', type: 'get-canvas-view-state' });
+        window.setTimeout(function () {
+          if (!simulationReadyReceived) hideSimulationLoading();
+        }, 1200);
       });
     }
   </script>

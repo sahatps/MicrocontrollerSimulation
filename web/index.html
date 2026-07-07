@@ -215,7 +215,13 @@
                             data-i18n="ui.mock.source.timeline">Timeline</button>
                     </div>
                     <div class="mock-source-panel" data-mock-source-panel="text">
-                        <textarea id="sensor-mock-input" rows="18">humidity = 60
+                        <div class="mock-text-toolbar">
+                            <button id="mock-text-toggle" type="button" class="mock-text-toggle" aria-expanded="false">
+                                Show Text
+                            </button>
+                        </div>
+                        <div class="mock-text-layout">
+                            <textarea id="sensor-mock-input" rows="18" hidden>humidity = 60
   temperature = 25
 ph = 7.0
 lux = 500
@@ -251,6 +257,8 @@ potassium = 180
   tubular_temperature_50 = 22
   air_velocity = 12
   noise = 48</textarea>
+                            <div id="mock-text-sliders" class="mock-text-sliders" aria-label="Sensor mock sliders"></div>
+                        </div>
                     </div>
                     <div class="mock-source-panel" data-mock-source-panel="timeline" hidden>
                         <div class="mock-timeline-toolbar">
