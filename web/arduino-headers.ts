@@ -769,6 +769,22 @@ static _NetpieClient client;
 inline void setupMQTT() {}
 `;
 
+export const MQTT_SHARING_H = `
+#pragma once
+#include <Arduino.h>
+#include <mqtt_client.h>
+#include <pub_topic.h>
+
+// Common NETPIE/MQTTSharing globals used by existing HandySense sketches.
+static const char* Netpiemqtt_server = "broker.netpie.io";
+static const int Netpiemqtt_port = 1883;
+static const char* Netpiemqtt_Client = "hackcable";
+static const char* Netpiemqtt_Token = "";
+static const char* Netpiemqtt_Secret = "";
+
+inline void connectWifiIfNotConnected() {}
+`;
+
 export const PUB_TOPIC_H = `
 #pragma once
 #include <Arduino.h>
@@ -777,6 +793,11 @@ inline void pub_topic(const char* /*topic*/, float /*value*/) {}
 inline void pub_topic(const char* /*topic*/, int /*value*/) {}
 inline void pub_topic(const char* /*topic*/, const char* /*value*/) {}
 inline void pub_topic(const char* /*topic*/, const String& /*value*/) {}
+`;
+
+export const PUB_SHARING_H = `
+#pragma once
+#include <pub_topic.h>
 `;
 
 export const THINGSPEAK_WRITER_H = `
@@ -1008,7 +1029,9 @@ export function getArduinoHeaders(): Record<string, string> {
         'BFarmEvent.h':    BFARM_EVENT_H,
         'cjob.h':          CJOB_H,
         'mqtt_client.h':   MQTT_CLIENT_H,
+        'MQTTSharing.h':   MQTT_SHARING_H,
         'pub_topic.h':     PUB_TOPIC_H,
+        'PubSharing.h':    PUB_SHARING_H,
         'ThingSpeakWriter_asukiaaa.h': THINGSPEAK_WRITER_H,
         'fertilizer.h':    FERTILIZER_H,
         'getchip.h':       GETCHIP_H,

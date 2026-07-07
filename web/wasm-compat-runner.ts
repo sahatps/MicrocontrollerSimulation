@@ -130,6 +130,29 @@ void loop() {
         `),
     },
     {
+        id: 'handysense-cloud-header-smoke',
+        tags: ['handysense', 'cloud', 'headers'],
+        source: snippetShell(`
+#include <HandySense.h>
+#include <Arduino.h>
+#include <WiFi.h>
+#include <Wire.h>
+#include <WiFiClient.h>
+#include <WebServer.h>
+#include "time.h"
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+#include <getchip.h>
+#include <ModbusMaster.h>
+#include <ThingSpeakWriter_asukiaaa.h>
+#include <MQTTSharing.h>
+#include <PubSharing.h>
+#include "MCP23008.h"
+void setup() {}
+void loop() {}
+        `),
+    },
+    {
         id: 'displays-actuators',
         tags: ['display', 'actuator'],
         source: snippetShell(`
