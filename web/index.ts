@@ -2754,24 +2754,29 @@ function circuitHasComponent(componentId: number): boolean {
     return found;
 }
 
-function getActiveModbusMockProfile(): 'sensor-weather-htco2plx' | 'sensor-ph-rs485' | 'sensor-rain-rs485' | 'sensor-wind-speed-rs485' | 'sensor-sht31-rs485' | 'sensor-weight-3kg-rs485' | 'sensor-wind-direction-rs485' | 'sensor-dt-par485' | 'bfarm-7in1-soil' | 'bfarm-ammonia-rs485' | 'bfarm-soil-temp-multiread-rs485' | 'bfarm-ultrasonic-rs485' | 'bfarm-turbidity-xm3318b-rs485' | 'bfarm-turbidity-xm8518-rs485' | 'bfarm-nitrate-isfet-rs485' | 'bfarm-tmec-tensio-rs485' | 'bfarm-water-quality-suite-rs485' | 'bfarm-tubular-soil-probe-rs485' | 'bfarm-air-velocity-sm3789' | 'bfarm-lux120k-rs485' | 'bfarm-weather-sensor-rs485' | 'default-weather' {
+let windBlocklyReadPhase = 0;
+
+function getActiveModbusMockProfile(): 'sensor-weather-htco2plx' | 'sensor-ph-rs485' | 'sensor-rain-rs485' | 'sensor-wind-pair-rs485' | 'sensor-wind-speed-rs485' | 'sensor-sht31-rs485' | 'sensor-weight-3kg-rs485' | 'sensor-wind-direction-rs485' | 'sensor-dt-par485' | 'bfarm-7in1-soil' | 'bfarm-ammonia-rs485' | 'bfarm-soil-temp-multiread-rs485' | 'bfarm-ultrasonic-rs485' | 'bfarm-turbidity-xm3318b-rs485' | 'bfarm-turbidity-xm8518-rs485' | 'bfarm-nitrate-isfet-rs485' | 'bfarm-tmec-tensio-rs485' | 'bfarm-water-quality-suite-rs485' | 'bfarm-tubular-soil-probe-rs485' | 'bfarm-air-velocity-sm3789' | 'bfarm-lux120k-rs485' | 'bfarm-weather-sensor-rs485' | 'default-weather' {
     const selectedExample = getSelectedExampleKey();
-    if (selectedExample === 'handysense_real_sensor_weather_htco2plx_test' || circuitHasComponent(40)) {
+    if (selectedExample === 'handysense_real_sensor_weather_htco2plx_test' || selectedExample === 'pressure' || circuitHasComponent(40)) {
         return 'sensor-weather-htco2plx';
     }
-    if (selectedExample === 'handysense_real_sensor_ph_rs485_test' || circuitHasComponent(35)) {
+    if (selectedExample === 'handysense_real_sensor_ph_rs485_test' || selectedExample === 'ph' || circuitHasComponent(35)) {
         return 'sensor-ph-rs485';
     }
-    if (selectedExample === 'handysense_real_sensor_rain_rs485_test' || circuitHasComponent(37)) {
+    if (selectedExample === 'handysense_real_sensor_rain_rs485_test' || selectedExample === 'rain' || circuitHasComponent(37)) {
         return 'sensor-rain-rs485';
+    }
+    if (selectedExample === 'wind') {
+        return 'sensor-wind-pair-rs485';
     }
     if (selectedExample === 'handysense_real_sensor_wind_speed_rs485_test' || circuitHasComponent(38)) {
         return 'sensor-wind-speed-rs485';
     }
-    if (selectedExample === 'handysense_real_sensor_sht31_rs485_test' || selectedExample === 'humidity' || circuitHasComponent(67)) {
+    if (selectedExample === 'handysense_real_sensor_sht31_rs485_test' || selectedExample === 'humidity' || selectedExample === 'temperature' || circuitHasComponent(67)) {
         return 'sensor-sht31-rs485';
     }
-    if (selectedExample === 'handysense_real_sensor_weight_3kg_rs485_test' || circuitHasComponent(68)) {
+    if (selectedExample === 'handysense_real_sensor_weight_3kg_rs485_test' || selectedExample === 'weight' || circuitHasComponent(68)) {
         return 'sensor-weight-3kg-rs485';
     }
     if (selectedExample === 'handysense_real_sensor_wind_direction_rs485_test' || circuitHasComponent(69)) {
@@ -2866,6 +2871,14 @@ function getFloat32BigEndianWords(value: number): [number, number] {
     }
     if (activeProfile === 'sensor-rain-rs485') {
         return regAddr === 0 ? getScaledMockRegisterValue('rain', 12.0, 10) : 0;
+    }
+    if (activeProfile === 'sensor-wind-pair-rs485') {
+        if (regAddr !== 0) return 0;
+        const isDirectionRead = windBlocklyReadPhase % 2 === 0;
+        windBlocklyReadPhase += 1;
+        return isDirectionRead
+            ? getScaledMockRegisterValue('wind_direction', 180.0, 10)
+            : getScaledMockRegisterValue('wind_speed', 5.0, 10);
     }
     if (activeProfile === 'sensor-wind-speed-rs485') {
         return regAddr === 0 ? getScaledMockRegisterValue('wind_speed', 5.0, 10) : 0;
@@ -5077,6 +5090,54 @@ void loop() {
   digitalWrite(const_relay_pin[0], HIGH);
 }`,
 
+    temperature: `#include <HandySense.h>
+#include <Arduino.h>
+#include <WiFi.h>
+#include <Wire.h>
+#include <WiFiClient.h>
+#include <WebServer.h>
+#include "time.h"
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+#include <ModbusMaster.h>
+#include "SHT31.h"
+#include "MCP23008.h"
+
+ModbusMaster rs485_sht31Meter;
+SHT31 sht;
+MCP23008 MCP(0x24);
+
+void setup() {
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  Serial2.begin(9600);
+  rs485_sht31Meter.begin(1, Serial2);
+  Wire.setClock(10000);
+  sht.begin(0x44);
+  MCP.begin();
+  MCP.pinMode8(0x00);
+
+  Serial.begin(115200);
+
+  MCP.digitalWrite(0, LOW);
+  digitalWrite(const_relay_pin[0], LOW);
+}
+
+void loop() {
+  uint8_t result_temp;
+  rs485_sht31Meter.readHoldingRegisters(0, 2);
+
+  Serial.println(rs485_sht31Meter.getResponseBuffer(0) / 10.00f);
+  Serial.println(sht.getTemperature());
+  Serial.println("Hello B-FARM!");
+  delay(5000);
+
+  MCP.digitalWrite(0, HIGH);
+  digitalWrite(const_relay_pin[0], HIGH);
+}`,
+
     light: `#include <HandySense.h>
 #include <Arduino.h>
 #include <WiFi.h>
@@ -5119,6 +5180,242 @@ void loop() {
 
   Serial.println(rs485_pair.getResponseBuffer(0));
   Serial.println(lightMeter.readLightLevel());
+  Serial.println("Hello B-FARM!");
+  delay(5000);
+
+  MCP.digitalWrite(0, HIGH);
+  digitalWrite(const_relay_pin[0], HIGH);
+}`,
+
+    ph: `#include <HandySense.h>
+#include <Arduino.h>
+#include <WiFi.h>
+#include <Wire.h>
+#include <WiFiClient.h>
+#include <WebServer.h>
+#include "time.h"
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+#include <ModbusMaster.h>
+#include "MCP23008.h"
+
+ModbusMaster PHrs485;
+float PH;
+MCP23008 MCP(0x24);
+
+void setup() {
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  Serial2.begin(9600);
+  PHrs485.begin(1, Serial2);
+  Wire.setClock(10000);
+  MCP.begin();
+  MCP.pinMode8(0x00);
+
+  Serial.begin(115200);
+
+  MCP.digitalWrite(0, LOW);
+  digitalWrite(const_relay_pin[0], LOW);
+}
+
+void loop() {
+  uint8_t result_PH;
+  result_PH = PHrs485.readHoldingRegisters(0, 2);
+
+  Serial.println(PHrs485.getResponseBuffer(1) / 10.00f);
+  Serial.println("Hello B-FARM!");
+  delay(5000);
+
+  MCP.digitalWrite(0, HIGH);
+  digitalWrite(const_relay_pin[0], HIGH);
+}`,
+
+    pressure: `#include <HandySense.h>
+#include <Arduino.h>
+#include <WiFi.h>
+#include <Wire.h>
+#include <WiFiClient.h>
+#include <WebServer.h>
+#include "time.h"
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+#include <ModbusMaster.h>
+#include "MCP23008.h"
+
+ModbusMaster rs485_Weather_HTCo2PLx;
+float Weather_HTCo2PLx;
+#define RXD 16
+#define TXD 17
+MCP23008 MCP(0x24);
+
+void setup() {
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  rs485_Weather_HTCo2PLx.begin(1, Serial2);
+  Wire.begin();
+  Wire.setClock(10000);
+  MCP.begin();
+  MCP.pinMode8(0x00);
+
+  Serial.begin(115200);
+
+  MCP.digitalWrite(0, LOW);
+  digitalWrite(const_relay_pin[0], LOW);
+}
+
+void loop() {
+  uint8_t result_rs485_Weather_HTCo2PLx;
+  result_rs485_Weather_HTCo2PLx = rs485_Weather_HTCo2PLx.readHoldingRegisters(500, 10);
+
+  Serial.println(rs485_Weather_HTCo2PLx.getResponseBuffer(5) / 1.00f);
+  Serial.println("Hello B-FARM!");
+  delay(5000);
+
+  MCP.digitalWrite(0, HIGH);
+  digitalWrite(const_relay_pin[0], HIGH);
+}`,
+
+    rain: `#include <HandySense.h>
+#include <Arduino.h>
+#include <WiFi.h>
+#include <Wire.h>
+#include <WiFiClient.h>
+#include <WebServer.h>
+#include "time.h"
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+#include <ModbusMaster.h>
+#include "MCP23008.h"
+
+ModbusMaster rs485_rain;
+#define RXD 16
+#define TXD 17
+float rain;
+MCP23008 MCP(0x24);
+
+void setup() {
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Serial2.begin(9600);
+  rs485_rain.begin(1, Serial2);
+  Wire.begin();
+  Wire.setClock(10000);
+  MCP.begin();
+  MCP.pinMode8(0x00);
+
+  Serial.begin(115200);
+
+  MCP.digitalWrite(0, LOW);
+  digitalWrite(const_relay_pin[0], LOW);
+}
+
+void loop() {
+  uint8_t result_rain;
+  result_rain = rs485_rain.readHoldingRegisters(0, 2);
+
+  Serial.println(rs485_rain.getResponseBuffer(0) / 10.0f);
+  Serial.println("Hello B-FARM!");
+  delay(5000);
+
+  MCP.digitalWrite(0, HIGH);
+  digitalWrite(const_relay_pin[0], HIGH);
+}`,
+
+    wind: `#include <HandySense.h>
+#include <Arduino.h>
+#include <WiFi.h>
+#include <Wire.h>
+#include <WiFiClient.h>
+#include <WebServer.h>
+#include "time.h"
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+#include <ModbusMaster.h>
+#include "MCP23008.h"
+
+ModbusMaster rs485_windd;
+#define RXD 16
+#define TXD 17
+float windd;
+ModbusMaster rs485_winds;
+float winds;
+MCP23008 MCP(0x24);
+
+void setup() {
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Serial2.begin(9600);
+  rs485_windd.begin(1, Serial2);
+  rs485_winds.begin(1, Serial2);
+  Wire.begin();
+  Wire.setClock(10000);
+  MCP.begin();
+  MCP.pinMode8(0x00);
+
+  Serial.begin(115200);
+
+  MCP.digitalWrite(0, LOW);
+  digitalWrite(const_relay_pin[0], LOW);
+}
+
+void loop() {
+  uint8_t result_windd;
+  result_windd = rs485_windd.readHoldingRegisters(0, 2);
+  uint8_t result_winds;
+  result_winds = rs485_winds.readHoldingRegisters(0, 2);
+
+  Serial.println(rs485_windd.getResponseBuffer(0) / 10.0f);
+  Serial.println(rs485_winds.getResponseBuffer(0) / 10.0f);
+  Serial.println("Hello B-FARM!");
+  delay(5000);
+
+  MCP.digitalWrite(0, HIGH);
+  digitalWrite(const_relay_pin[0], HIGH);
+}`,
+
+    weight: `#include <HandySense.h>
+#include <Arduino.h>
+#include <WiFi.h>
+#include <Wire.h>
+#include <WiFiClient.h>
+#include <WebServer.h>
+#include "time.h"
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+#include <ModbusMaster.h>
+#include "MCP23008.h"
+
+ModbusMaster rs485_weight;
+MCP23008 MCP(0x24);
+
+void setup() {
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  Serial2.begin(9600);
+  rs485_weight.begin(1, Serial2);
+  Wire.setClock(10000);
+  MCP.begin();
+  MCP.pinMode8(0x00);
+
+  Serial.begin(115200);
+
+  MCP.digitalWrite(0, LOW);
+  digitalWrite(const_relay_pin[0], LOW);
+}
+
+void loop() {
+  uint8_t result_rs485_weight;
+  result_rs485_weight = rs485_weight.readHoldingRegisters(0, 2);
+
+  Serial.println(rs485_weight.getResponseBuffer(1) + 0);
   Serial.println("Hello B-FARM!");
   delay(5000);
 
@@ -6133,8 +6430,26 @@ if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
                 case 'humidity':
                     setupHumidityBlocklyTestCircuit();
                     break;
+                case 'temperature':
+                    setupHumidityBlocklyTestCircuit();
+                    break;
                 case 'light':
                     setupLightBlocklyTestCircuit();
+                    break;
+                case 'ph':
+                    setupHandysenseRealSensorRs485TestCircuit(35, 'pH RS485');
+                    break;
+                case 'pressure':
+                    setupHandysenseRealSensorRs485TestCircuit(40, 'Weather HTCO2PLX');
+                    break;
+                case 'rain':
+                    setupHandysenseRealSensorRs485TestCircuit(37, 'Rain RS485');
+                    break;
+                case 'wind':
+                    setupWindBlocklyTestCircuit();
+                    break;
+                case 'weight':
+                    setupHandysenseRealSensorRs485TestCircuit(68, 'Weight 3 kg RS485');
                     break;
                 case 'weather':
                     setupHandysenseRealBfarmWeatherSensorTestCircuit();
@@ -7663,6 +7978,39 @@ function setupLightBlocklyTestCircuit() {
             console.log("Light Blockly test setup complete!");
         } catch (error) {
             console.error("Error during light Blockly test wiring:", error);
+        }
+    }, 500);
+}
+
+function setupWindBlocklyTestCircuit() {
+    console.log("Setting up wind Blockly test circuit...");
+    selectBoardForExample('handysense-real');
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[51]);
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
+
+    const windDirectionFigure = new ComponentFigure(wokwiComponentById[69]);
+    hackCable.editor.canvas.add(windDirectionFigure.setX(420).setY(60));
+
+    const windSpeedFigure = new ComponentFigure(wokwiComponentById[38]);
+    hackCable.editor.canvas.add(windSpeedFigure.setX(620).setY(60));
+
+    setTimeout(() => {
+        try {
+            connectPorts(windDirectionFigure, 'VCC', boardFigure, 'RS485_24V');
+            connectPorts(windDirectionFigure, 'GND', boardFigure, 'RS485_GND');
+            connectPorts(windDirectionFigure, 'A+', boardFigure, 'RS485_A');
+            connectPorts(windDirectionFigure, 'B-', boardFigure, 'RS485_B');
+
+            connectPorts(windSpeedFigure, 'VCC', boardFigure, 'RS485_24V');
+            connectPorts(windSpeedFigure, 'GND', boardFigure, 'RS485_GND');
+            connectPorts(windSpeedFigure, 'A+', boardFigure, 'RS485_A');
+            connectPorts(windSpeedFigure, 'B-', boardFigure, 'RS485_B');
+
+            console.log("Wind Blockly test setup complete!");
+        } catch (error) {
+            console.error("Error during wind Blockly test wiring:", error);
         }
     }, 500);
 }
