@@ -297,19 +297,15 @@ export class Catalog {
             // Click to pick up a component, then click the canvas to place it.
             div.addEventListener("click", (event) => {
                 this.startComponentPlacement(e.componentId, event);
-
-                // Hide the catalog bar after adding
-                const bar = document.querySelector('.hackCable-catalog-bar') as HTMLElement;
-                const toggleBtn = document.querySelector('.hackCable-toggle-catalog') as HTMLButtonElement;
-                if (bar) bar.classList.add('hidden');
-                if (toggleBtn) toggleBtn.classList.remove('active');
-                localStorage.setItem('hackCable-catalog-visible', 'false');
             });
 
             setTimeout(() => {
                 const svg = e.wokwiComponent.shadowRoot?.querySelector("svg");
                 if(svg) svg.setAttribute("style", "max-width: 100%; height: auto")
             })
+            if (e.wokwiComponent.constructor.name === "LedElement") {
+                e.wokwiComponent.setAttribute("preview-blink", "");
+            }
             div.appendChild(e.wokwiComponent);
         })
     }

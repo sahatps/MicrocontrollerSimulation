@@ -4,6 +4,7 @@ import '@wokwi/elements';
 import {ArduinoUnoElement, ESP32DevkitV1Element} from "@wokwi/elements";
 import {Catalog} from "./panels/catalog";
 import {EmulatorManager} from "./emulator/emulator-manager";
+import {BuzzerElement} from "./components/buzzer-element";
 import {MistingPumpElement} from "./components/misting-pump-element";
 import {WaterPumpElement} from "./components/water-pump-element";
 import {FanElement} from "./components/fan-element";
@@ -160,6 +161,14 @@ export class HackCable {
         return null;
     }
 
+    private parseRelayControlPinNumber(pinName: string): number | null {
+        const relayMatch = /^R([1-4])_(COM|NC|NO)$/.exec(pinName);
+        if (!relayMatch) return null;
+
+        const relayIndex = parseInt(relayMatch[1], 10) - 1;
+        return this.HANDYSENSE_RELAY_CONTROL_PINS[relayIndex] ?? null;
+    }
+
     private getBoardPinConnectedToPort(port: any): number | null {
         const connections = port?.getConnections?.().data ?? [];
         for (const connection of connections) {
@@ -171,6 +180,24 @@ export class HackCable {
             const pinName = otherPort?.getLocator?.().portId ?? '';
             const pinNumber = this.parseBoardPinNumber(pinName);
             if (pinNumber !== null) return pinNumber;
+        }
+        return null;
+    }
+
+    private getBoardOrRelayControlPinConnectedToPort(port: any): number | null {
+        const connections = port?.getConnections?.().data ?? [];
+        for (const connection of connections) {
+            const otherPort = connection.sourcePort === port ? connection.targetPort : connection.sourcePort;
+            const otherFigure = otherPort?.getParent();
+            const otherElement = otherFigure?.componentElement;
+            if (!otherElement || !this.isESP32BoardElement(otherElement)) continue;
+
+            const pinName = otherPort?.getLocator?.().portId ?? '';
+            const pinNumber = this.parseBoardPinNumber(pinName);
+            if (pinNumber !== null) return pinNumber;
+
+            const relayControlPin = this.parseRelayControlPinNumber(pinName);
+            if (relayControlPin !== null) return relayControlPin;
         }
         return null;
     }
@@ -187,7 +214,60 @@ export class HackCable {
         if (element instanceof FourChannelRelayElement) {
             return /^IN[1-4]$/.test(portId);
         }
+        if (element instanceof BuzzerElement) {
+            return portId === 'SIG';
+        }
         return false;
+    }
+
+    public getConnectedRelayControlPins(): number[] {
+        const pins = new Set<number>();
+        const figures = this._editor.canvas.getAllFigures();
+
+        figures.forEach((figure: any) => {
+            const element = figure.componentElement;
+            if (!element) return;
+
+            if (element instanceof RelayElement) {
+                const inPort = figure.getPortByName?.('IN');
+                const pinNumber = this.getBoardPinConnectedToPort(inPort);
+                if (pinNumber !== null) pins.add(pinNumber);
+                return;
+            }
+
+            if (element instanceof FourChannelRelayElement) {
+                ['IN1', 'IN2', 'IN3', 'IN4'].forEach((portName) => {
+                    const inPort = figure.getPortByName?.(portName);
+                    const pinNumber = this.getBoardPinConnectedToPort(inPort);
+                    if (pinNumber !== null) pins.add(pinNumber);
+                });
+                return;
+            }
+
+            if (element instanceof HandysenseProBoardElement) {
+                this.HANDYSENSE_RELAY_CONTROL_PINS.forEach((pin) => pins.add(pin));
+            }
+        });
+
+        return Array.from(pins).sort((a, b) => a - b);
+    }
+
+    public getConnectedBuzzerControlPins(): number[] {
+        const pins = new Set<number>();
+        const figures = this._editor.canvas.getAllFigures();
+
+        figures.forEach((figure: any) => {
+            const element = figure.componentElement;
+            if (!(element instanceof BuzzerElement)) return;
+
+            const signalPort = figure.getPortByName?.('SIG');
+            const vccPort = figure.getPortByName?.('VCC');
+            const pinNumber = this.getBoardOrRelayControlPinConnectedToPort(signalPort)
+                ?? this.getBoardOrRelayControlPinConnectedToPort(vccPort);
+            if (pinNumber !== null) pins.add(pinNumber);
+        });
+
+        return Array.from(pins).sort((a, b) => a - b);
     }
 
     public getSupportedBoardPins(): number[] {
@@ -495,6 +575,26 @@ export class HackCable {
                 }
                 return;
             }
+
+            if (element instanceof BuzzerElement) {
+                const sigPort = figure.getPortByName?.('SIG');
+                const vccPort = figure.getPortByName?.('VCC');
+                const gndPort = figure.getPortByName?.('GND');
+                const signalActive = Boolean(sigPort && this.portHasActiveSource(sigPort));
+                const powered = Boolean(
+                    vccPort
+                    && this.portHasActiveSource(vccPort)
+                    && (!gndPort || this.portHasGround(gndPort))
+                );
+                const nextValue = signalActive || powered;
+
+                if (element.isOn !== nextValue || element.ledPower !== nextValue) {
+                    element.isOn = nextValue;
+                    element.ledPower = nextValue;
+                    element.requestUpdate();
+                }
+                return;
+            }
         });
     }
 
@@ -690,7 +790,8 @@ export class HackCable {
 
             if (element instanceof MistingPumpElement ||
                 element instanceof WaterPumpElement ||
-                element instanceof FanElement) {
+                element instanceof FanElement ||
+                element instanceof BuzzerElement) {
                 element.isOn = false;
                 element.ledPower = false;
                 element.requestUpdate();

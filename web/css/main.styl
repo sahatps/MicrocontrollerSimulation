@@ -460,6 +460,9 @@ body.controlbar-hidden #hackCable
         flex-direction column
         gap 6px
 
+        &#sync-controls
+            display none !important
+
         p
             margin 0
             white-space nowrap
@@ -493,10 +496,17 @@ body.controlbar-hidden #hackCable
                 color black
 
     .buttonBar.run-controls
-        position relative
+        position sticky
+        top 0
         flex-direction column
         align-items stretch
         gap 8px
+        z-index 25
+        margin -10px -10px 0
+        padding 10px
+        background-color #77af5a
+        border-bottom 1px solid rgba(41, 64, 28, 0.18)
+        box-shadow 0 6px 16px rgba(24, 36, 12, 0.12)
 
         p
             width 100%
@@ -659,6 +669,12 @@ body.controlbar-hidden #hackCable
                 font-size 22px
                 line-height 1
                 user-select none
+
+            .run-btn-svg
+                width 22px
+                height 22px
+                display block
+                flex-shrink 0
 
         #compile.run-circle-btn
             .icon-cancel
@@ -863,24 +879,34 @@ body.controlbar-hidden #hackCable
 
                 .mock-source-toggle
                     display flex
-                    gap 6px
+                    gap 4px
+                    align-self flex-start
+                    padding 3px
+                    border 1px solid #343b47
+                    border-radius 8px
+                    background-color #151922
 
                 .mock-source-btn
-                    border none
+                    min-width 78px
+                    border 1px solid transparent
                     border-radius 6px
-                    background-color #a8cd8b
-                    color #f4fff0
-                    font-size 0.9rem
+                    background-color transparent
+                    color #aeb7c4
+                    font-size 0.82rem
                     font-weight 600
-                    padding 6px 10px
+                    padding 5px 12px
+                    line-height 1.1
                     cursor pointer
+                    transition background-color 120ms ease, color 120ms ease, border-color 120ms ease
 
                     &:hover
-                        background-color #b7d79f
+                        background-color #1f2530
+                        color #e5e7eb
 
                     &.active
-                        background-color #ffffff
-                        color #77af5a
+                        border-color #5e7f4a
+                        background-color #a8cd8b
+                        color #182111
 
                 .mock-source-panel
                     display flex
@@ -893,23 +919,28 @@ body.controlbar-hidden #hackCable
                 .mock-source-panel[data-mock-source-panel="text"]
                     .mock-text-toolbar
                         display flex
-                        justify-content flex-end
+                        justify-content flex-start
 
                     .mock-text-toggle
-                        border 1px solid #cfdac7
-                        border-radius 999px
-                        background-color #ffffff
-                        color #5f9e43
+                        border 1px solid #343b47
+                        border-radius 8px
+                        background-color #151922
+                        color #c8d0db
+                        min-height 30px
                         padding 5px 12px
-                        font-size 0.8rem
-                        font-weight 700
+                        font-size 0.78rem
+                        font-weight 600
+                        line-height 1.1
                         cursor pointer
+                        transition background-color 120ms ease, color 120ms ease, border-color 120ms ease
 
                         &:hover
-                            background-color #eef6e8
+                            background-color #1f2530
+                            color #f3f4f6
+                            border-color #475163
 
                         &:focus
-                            outline 2px solid rgba(168, 205, 139, 0.45)
+                            outline 2px solid rgba(168, 205, 139, 0.28)
                             outline-offset 2px
 
                     .mock-text-layout
@@ -1362,98 +1393,83 @@ body.controlbar-hidden #hackCable
     white-space pre-wrap
     word-break break-word
 
-    .tab-bar
+.tab-panel.io-panel
+    display flex
+    flex-direction column
+    gap 1rem
+
+.io-section
+    display flex
+    align-items center
+    flex-wrap wrap
+    gap 6px
+
+    .io-section-header
         display flex
-        gap 4px
+        align-items center
+        gap 6px
+        margin-bottom 0
         flex-shrink 0
 
-        .tab-btn
-            flex 1
-            border none
-            border-radius 5px 5px 0 0
-            padding 7px 8px
-            cursor pointer
-            background-color #a8cd8b
-            color #f4fff0
-            font-size 1rem
-            font-weight 500
-            transition background-color 0.2s, color 0.2s
+    .io-section-title
+        margin 0
+        font-size 11px
+        font-weight 700
+        color #111
+        text-transform uppercase
+        letter-spacing 0.5px
 
-            &:hover
-                background-color #b7d79f
-                color white
+.io-list
+    display inline-flex
+    flex-direction row
+    flex-wrap wrap
+    gap 6px
+    margin-bottom 0
 
-            &.active
-                background-color #ffffff
-                color #77af5a
-
-    .tab-panel
-        display none
-        flex-direction column
-        gap 1rem
-
-        &.active
-            display flex
-
-    .io-section
-        .io-section-title
-            margin 0 0 6px 0
-            font-size 11px
-            font-weight 700
-            color #888
-            text-transform uppercase
-            letter-spacing 0.5px
-            border-bottom 1px solid #444
-            padding-bottom 4px
-
-    .io-list
+    .io-item
         display flex
-        flex-direction column
-        gap 4px
-        margin-bottom 8px
+        align-items center
+        justify-content flex-start
+        gap 6px
+        padding 0
+        background-color transparent
+        border-radius 0
+        font-size 12px
 
-        .io-item
-            display flex
+        .io-item-name
+            flex 0 1 auto
+            color #f4f6f8
+            overflow hidden
+            text-overflow ellipsis
+            white-space nowrap
+
+        .io-item-pin
+            display inline-flex
             align-items center
+            justify-content center
             gap 6px
-            padding 6px 8px
-            background-color #3d4150
-            border-radius 5px
-            font-size 12px
+            padding 3px 10px
+            border-radius 999px
+            border 1px solid #778090
+            background-color #5f6775
+            color #edf1f6
+            font-size 10px
+            font-weight 700
+            line-height 1
+            flex-shrink 0
 
-            .io-item-name
-                flex 1
-                color #ddd
-                overflow hidden
-                text-overflow ellipsis
-                white-space nowrap
-
+        &.state-on
             .io-item-pin
-                color #777
-                font-size 11px
-                flex-shrink 0
+                background-color #f4d03f
+                color #342700
+                border-color #ffe082
 
-            .io-item-state
-                flex-shrink 0
-                padding 2px 8px
-                border-radius 10px
-                font-size 11px
-                font-weight bold
-
-                &.state-on
-                    background-color #4CAF50
-                    color white
-
-                &.state-off
-                    background-color #555
-                    color #aaa
-
-        .io-empty
-            color #666
-            font-size 12px
-            text-align center
-            padding 16px
-            font-style italic
+    .io-empty
+        color #666
+        font-size 12px
+        text-align center
+        padding 16px
+        font-style italic
 
 .serial-output
     height 200px

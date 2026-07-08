@@ -58,7 +58,9 @@
                         </button>
                         <button id="execute" class="run-circle-btn" data-i18n-title="ui.execute" title="Execute"
                             aria-label="Execute">
-                            <span class="material-symbols-outlined run-btn-icon">play_arrow</span>
+                            <svg class="run-btn-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M8 6.5v11l9-5.5z" fill="currentColor"></path>
+                            </svg>
                         </button>
                         <button id="stop" class="run-circle-btn" data-i18n-title="ui.stop" title="Stop"
                             aria-label="Stop">
@@ -124,6 +126,7 @@
                             <option value="handysense_real_buttons_leds_test">Buttons + LEDs Test</option>
                             <option value="handysense_real_relay0_red_led_test">Relay0 LED Test</option>
                             <option value="handysense_real_bfarm_lux120k_relay0_red_led_test">Relay test</option>
+                            <option value="handysense_real_bfarm_lux120k_buzzer_test">Buzzer test</option>
                             <option value="handysense_real_bfarm_ph_misting">BFARM RS485 pH + Misting Pump</option>
                             <option value="handysense_real_bfarm_soil_watering">BFARM Soil Moisture + Water Pump
                             </option>
@@ -350,7 +353,7 @@ potassium = 180
                     <canvas id="serial-plotter-canvas" class="serial-plotter-canvas"></canvas>
                 </div>
             </div>
-            <div class="buttonBar">
+            <div id="sync-controls" class="buttonBar" hidden>
                 <p>Sync:</p>
                 <button id="transfer-to-blocks">Transfer to Blocks</button>
                 <label><input type="checkbox" id="auto-sync-blocks"> Auto-sync</label>
@@ -358,12 +361,16 @@ potassium = 180
         </div>
         <div class="tab-panel io-panel">
             <div class="io-section">
-                <h4 class="io-section-title" data-i18n="ui.io.outputs">Outputs</h4>
-                <div id="io-outputs-list" class="io-list"></div>
+                <div class="io-section-header">
+                    <h4 class="io-section-title" data-i18n="ui.io.inputs">Inputs</h4>
+                </div>
+                <div id="io-inputs-list" class="io-list"></div>
             </div>
             <div class="io-section">
-                <h4 class="io-section-title" data-i18n="ui.io.inputs">Inputs</h4>
-                <div id="io-inputs-list" class="io-list"></div>
+                <div class="io-section-header">
+                    <h4 class="io-section-title" data-i18n="ui.io.outputs">Outputs</h4>
+                </div>
+                <div id="io-outputs-list" class="io-list"></div>
             </div>
         </div>
     </div>

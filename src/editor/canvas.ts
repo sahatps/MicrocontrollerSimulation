@@ -19,6 +19,25 @@ const CANVAS_ORIGIN_OFFSET_Y = 420;
 const FastPanningSelectionPolicy = draw2d.policy.canvas.SingleSelectionPolicy.extend({
     NAME: "hackCable.policy.canvas.FastPanningSelectionPolicy",
 
+    onMouseDown: function(
+        canvas: Canvas,
+        x: number,
+        y: number,
+        shiftKey: boolean,
+        ctrlKey: boolean
+    ) {
+        const figure = canvas.getBestFigure(x, y);
+        if (figure === null) {
+            this.mouseMovedDuringMouseDown = false;
+            this.mouseDraggingElement = null;
+            this.mouseDownElement = null;
+            this.select(canvas, null);
+            return;
+        }
+
+        this._super(canvas, x, y, shiftKey, ctrlKey);
+    },
+
     onMouseDrag: function(
         canvas: Canvas,
         dx: number,
@@ -195,6 +214,7 @@ export class Canvas extends draw2d.Canvas{
             this.isPanningPointerDown = figure === null;
 
             if (this.isPanningPointerDown) {
+                this.setCurrentSelection(null);
                 this.editorElement?.classList.add('is-panning');
                 this.setPanningCursor(true);
             }
@@ -478,7 +498,8 @@ export class Canvas extends draw2d.Canvas{
         }
     }
     public getSelected(): any {
-        return this.selected;
+        const liveSelection = (this as any).getCurrentSelection?.();
+        return liveSelection ?? this.selected;
     }
     public clear(){
         super.clear()

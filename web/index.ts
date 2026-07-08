@@ -51,6 +51,130 @@ const clangRunner = new ClangWasmRunner();
 let lastClangResult: Uint8Array | null = null;
 let activeClangLoopHandle: ReturnType<typeof setInterval> | null = null;
 let activeClangShim: ArduinoWasmShim | null = null;
+let activeClangLoopPaused = false;
+
+type ActiveBuzzerTone = {
+    oscillator: OscillatorNode;
+    gain: GainNode;
+};
+
+class SimulationAudioFeedback {
+    private audioContext: AudioContext | null = null;
+    private relayPins = new Set<number>();
+    private buzzerPins = new Set<number>();
+    private relayStates = new Map<number, boolean>();
+    private activeBuzzers = new Map<number, ActiveBuzzerTone>();
+
+    configure(source: HackCable): void {
+        this.relayPins = new Set(source.getConnectedRelayControlPins());
+        this.buzzerPins = new Set(source.getConnectedBuzzerControlPins());
+        this.relayStates.clear();
+
+        Array.from(this.activeBuzzers.keys()).forEach((pin) => {
+            if (!this.buzzerPins.has(pin)) this.stopBuzzer(pin);
+        });
+    }
+
+    prime(): void {
+        this.ensureAudioContext();
+    }
+
+    handlePinChange(pin: number, value: boolean): void {
+        if (this.relayPins.has(pin)) {
+            const previous = this.relayStates.get(pin);
+            if (previous !== value && (previous !== undefined || value)) {
+                this.playRelayClick(value);
+            }
+            this.relayStates.set(pin, value);
+        }
+
+        if (this.buzzerPins.has(pin)) {
+            if (value) {
+                this.startBuzzer(pin);
+            } else {
+                this.stopBuzzer(pin);
+            }
+        }
+    }
+
+    reset(): void {
+        Array.from(this.activeBuzzers.keys()).forEach((pin) => this.stopBuzzer(pin));
+        this.relayStates.clear();
+    }
+
+    private ensureAudioContext(): AudioContext | null {
+        if (this.audioContext) {
+            if (this.audioContext.state === 'suspended') {
+                this.audioContext.resume().catch(() => undefined);
+            }
+            return this.audioContext;
+        }
+
+        try {
+            this.audioContext = new AudioContext({ latencyHint: 'interactive' });
+            return this.audioContext;
+        } catch (error) {
+            console.warn('[audio-feedback] Web Audio unavailable:', error);
+            return null;
+        }
+    }
+
+    private playRelayClick(on: boolean): void {
+        const context = this.ensureAudioContext();
+        if (!context) return;
+
+        const now = context.currentTime;
+        const duration = on ? 0.035 : 0.026;
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+
+        oscillator.type = 'square';
+        oscillator.frequency.setValueAtTime(on ? 1500 : 1050, now);
+        oscillator.frequency.exponentialRampToValueAtTime(on ? 360 : 260, now + duration);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.2, now + 0.002);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start(now);
+        oscillator.stop(now + duration + 0.01);
+    }
+
+    private startBuzzer(pin: number): void {
+        if (this.activeBuzzers.has(pin)) return;
+        const context = this.ensureAudioContext();
+        if (!context) return;
+
+        const now = context.currentTime;
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+
+        oscillator.type = 'square';
+        oscillator.frequency.setValueAtTime(880, now);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.055, now + 0.025);
+
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start(now);
+        this.activeBuzzers.set(pin, { oscillator, gain });
+    }
+
+    private stopBuzzer(pin: number): void {
+        const buzzer = this.activeBuzzers.get(pin);
+        if (!buzzer || !this.audioContext) return;
+
+        const now = this.audioContext.currentTime;
+        buzzer.gain.gain.cancelScheduledValues(now);
+        buzzer.gain.gain.setValueAtTime(Math.max(0.0001, buzzer.gain.gain.value), now);
+        buzzer.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
+        buzzer.oscillator.stop(now + 0.045);
+        this.activeBuzzers.delete(pin);
+    }
+}
+
+const simulationAudioFeedback = new SimulationAudioFeedback();
 
 const SIM_FIXED_STEP_MS = 16;
 const SIM_MAX_STEPS_PER_TICK = 240;
@@ -59,6 +183,7 @@ const SIM_MAX_PENDING_STEPS = 12000;
 function startFixedStepSimulationLoop(
     step: () => void,
     onError: (error: unknown) => void,
+    isPaused: () => boolean = () => false,
 ): ReturnType<typeof setInterval> {
     let pendingSteps = 0;
     let lastTimestamp = performance.now();
@@ -66,6 +191,11 @@ function startFixedStepSimulationLoop(
 
     return setInterval(() => {
         const now = performance.now();
+        if (isPaused()) {
+            lastTimestamp = now;
+            pendingSteps = 0;
+            return;
+        }
         let elapsedMs = now - lastTimestamp;
         lastTimestamp = now;
         if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) {
@@ -711,6 +841,12 @@ function setRunControlState(state: RunControlState) {
             pauseButton.disabled = false;
             break;
     }
+
+    if (state !== 'executing') {
+        updatePauseButtonPresentation(false);
+    } else {
+        updatePauseButtonPresentation(isExecutionPaused());
+    }
 }
 
 function updateCompileButtonMode(isCancel: boolean) {
@@ -718,6 +854,38 @@ function updateCompileButtonMode(isCancel: boolean) {
     compileButton.classList.toggle('is-cancel', isCancel);
     compileButton.title = isCancel ? 'Cancel compile' : 'Compile';
     compileButton.setAttribute('aria-label', isCancel ? 'Cancel compile' : 'Compile');
+}
+
+function updatePauseButtonPresentation(paused: boolean) {
+    if (!(pauseButton instanceof HTMLButtonElement)) return;
+    pauseButton.title = paused ? 'Resume' : translateUi('ui.pause');
+    pauseButton.setAttribute('aria-label', paused ? 'Resume' : translateUi('ui.pause'));
+    pauseButton.setAttribute('aria-pressed', paused ? 'true' : 'false');
+    const icon = pauseButton.querySelector('.run-btn-icon');
+    if (icon instanceof HTMLElement) {
+        icon.textContent = paused ? 'play_arrow' : 'pause';
+    }
+}
+
+function isExecutionPaused(): boolean {
+    if (activeClangLoopHandle !== null || activeClangShim !== null) {
+        return activeClangLoopPaused;
+    }
+    return hackCable.emulatorManager.isPaused();
+}
+
+function setExecutionPaused(paused: boolean) {
+    if (activeClangLoopHandle !== null || activeClangShim !== null) {
+        activeClangLoopPaused = paused;
+    } else {
+        hackCable.emulatorManager.setPaused(paused);
+    }
+    updatePauseButtonPresentation(paused);
+}
+
+function resetExecutionPauseState() {
+    activeClangLoopPaused = false;
+    updatePauseButtonPresentation(false);
 }
 
 function markCompileStale() {
@@ -779,6 +947,7 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
     });
     stopButton.addEventListener("click", () => {
         if ((stopButton as HTMLButtonElement).disabled) return;
+        resetExecutionPauseState();
         hackCable.emulatorManager.stop();
         stopIOMonitor();
         cleanupWasmInstance();
@@ -786,7 +955,7 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
     });
     pauseButton.addEventListener("click", () => {
         if ((pauseButton as HTMLButtonElement).disabled) return;
-        hackCable.emulatorManager.setPaused(!hackCable.emulatorManager.isPosed())
+        setExecutionPaused(!isExecutionPaused());
     });
 
     function compile(){
@@ -807,6 +976,7 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
         const currentCompileId = ++compileOperationId;
         const isCurrentCompile = () => currentCompileId === compileOperationId;
 
+        clearSerialOutputs();
         isCompilingCode = true;
         setRunControlState('compiling');
         showStatus('ui.status.compiling', 'info');
@@ -923,10 +1093,10 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                 showWiringValidationFailure(validation);
                 return false;
             }
-            clearSerial();
+            clearSerialOutputs();
             appendWiringValidationWarnings(validation);
         } else {
-            clearSerial();
+            clearSerialOutputs();
         }
 
         registerSerialDataCallback();
@@ -939,7 +1109,12 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
         if(!(hexInput instanceof HTMLTextAreaElement && codeInput instanceof HTMLTextAreaElement)) return false;
         showStatus('ui.status.executing', 'info');
         resetMockRunStartTime();
+        switchEditorTab('mock');
+        switchOutputTab('serial');
         flushSerialBufferToDom(true);
+        resetExecutionPauseState();
+        simulationAudioFeedback.configure(hackCable);
+        simulationAudioFeedback.prime();
 
         if (boardType === 'esp32') {
             // --- CLANG/LLVM EXECUTE ---
@@ -952,8 +1127,11 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
             setRunControlState('executing');
             cleanupWasmInstance();
             const shim = new ArduinoWasmShim(
-                (pin, value) => hackCable.esp32PinUpdate(pin, value),
-                (text) => appendSerial(text),
+                (pin, value) => {
+                    hackCable.esp32PinUpdate(pin, value);
+                    simulationAudioFeedback.handlePinChange(pin, value);
+                },
+                (text) => routeIncomingSerialData(text, 'internal'),
                 (slaveId, regAddr) => readBridgeNumber('hackcable_modbus_read', [slaveId, regAddr], 0),
                 () => readBridgeNumber('hackcable_sht31_temp', [], 25),
                 () => readBridgeNumber('hackcable_sht31_humidity', [], 60),
@@ -990,6 +1168,7 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                                 }
                                 appendSerial('Runtime error: ' + (e as Error).message + '\n');
                             },
+                            () => activeClangLoopPaused,
                         );
                     }
                     autoActivateSensorsFromCode(sourceCode);
@@ -2449,9 +2628,9 @@ outputFloatOpenBtn?.addEventListener('click', openCompiledWindowFloating);
 outputFloatCloseBtn?.addEventListener('click', closeCompiledWindowFloating);
 outputClearBtn?.addEventListener('click', () => {
     if (activeOutputTab === 'serial') {
-        clearSerial();
+        clearSerialOutputs();
     } else if (activeOutputTab === 'plotter') {
-        clearPlotter();
+        clearSerialOutputs();
     }
 });
 
@@ -2544,8 +2723,7 @@ function buildIOList() {
     inputsList.innerHTML = '';
     ioItems.clear();
 
-    // Use class names (language-independent) to identify actuator outputs
-    const OUTPUT_CLASSES = new Set(['MistingPumpElement', 'WaterPumpElement', 'FanElement', 'RelayElement']);
+    const OUTPUT_CLASSES = new Set(['MistingPumpElement', 'WaterPumpElement', 'FanElement', 'RelayElement', 'BuzzerElement']);
     const BFARM_OUTPUT_CLASSES = new Set(['FourChannelRelayElement']);
     const figures = hackCable.editor.canvas.getAllFigures();
     let outCount = 0;
@@ -2564,17 +2742,18 @@ function buildIOList() {
             || (info.type === ComponentType.BFARM && BFARM_OUTPUT_CLASSES.has(el.constructor.name));
         const isInput = info.type === ComponentType.BUTTON
             || info.type === ComponentType.SENSOR
+            || info.type === ComponentType.BFARM_SENSOR
             || (info.type === ComponentType.CUSTOM && !OUTPUT_CLASSES.has(el.constructor.name))
             || (info.type === ComponentType.BFARM && !BFARM_OUTPUT_CLASSES.has(el.constructor.name));
 
         if (!isOutput && !isInput) return;
 
         const pin = getConnectedBoardPin(figure);
-        const { state, isOn } = readElementState(el);
+        const { isOn } = readElementState(el);
         const itemId = `io-${idx}`;
 
         const item = document.createElement('div');
-        item.className = 'io-item';
+        item.className = `io-item ${isOn ? 'state-on' : 'state-off'}`;
         item.id = itemId;
 
         const nameEl = document.createElement('span');
@@ -2583,19 +2762,18 @@ function buildIOList() {
 
         const pinEl = document.createElement('span');
         pinEl.className = 'io-item-pin';
-        pinEl.textContent = pin ? `Pin ${pin}` : '';
-
-        const stateEl = document.createElement('span');
-        stateEl.className = `io-item-state ${isOn ? 'state-on' : 'state-off'}`;
-        stateEl.textContent = isOutput ? state : '—';
+        pinEl.textContent = pin ? `Pin ${pin} ${isOn ? 'ON' : 'OFF'}` : `No Pin ${isOn ? 'ON' : 'OFF'}`;
 
         item.appendChild(nameEl);
         item.appendChild(pinEl);
-        item.appendChild(stateEl);
 
         ioItems.set(itemId, { el, isOutput });
         (isOutput ? outputsList : inputsList).appendChild(item);
-        isOutput ? outCount++ : inCount++;
+        if (isOutput) {
+            outCount++;
+        } else {
+            inCount++;
+        }
     });
 
     if (outCount === 0) outputsList.innerHTML = '<div class="io-empty">No output components</div>';
@@ -2604,11 +2782,15 @@ function buildIOList() {
 
 function updateIOStates() {
     ioItems.forEach(({ el }, id) => {
-        const stateEl = document.querySelector(`#${id} .io-item-state`);
-        if (!stateEl) return;
-        const { state, isOn } = readElementState(el);
-        stateEl.textContent = state;
-        stateEl.className = `io-item-state ${isOn ? 'state-on' : 'state-off'}`;
+        const itemEl = document.getElementById(id);
+        if (!itemEl) return;
+        const { isOn } = readElementState(el);
+        itemEl.className = `io-item ${isOn ? 'state-on' : 'state-off'}`;
+        const pinEl = itemEl.querySelector('.io-item-pin');
+        if (pinEl) {
+            const rawPin = pinEl.textContent?.replace(/\s+(ON|OFF)$/, '') ?? '';
+            pinEl.textContent = `${rawPin} ${isOn ? 'ON' : 'OFF'}`;
+        }
     });
 }
 
@@ -2825,6 +3007,11 @@ function clearPlotter() {
     plotterSeries = [];
     serialLineBuffer = '';
     drawPlotter();
+}
+
+function clearSerialOutputs() {
+    clearSerial();
+    clearPlotter();
 }
 
 function feedPlotter(data: string): boolean {
@@ -3078,7 +3265,7 @@ function getActiveModbusMockProfile(): ModbusMockProfile {
     if (selectedExample === 'handysense_real_bfarm_air_velocity_sensor_sm3789_test' || circuitHasComponent(64)) {
         return 'bfarm-air-velocity-sm3789';
     }
-    if (selectedExample === 'handysense_real_bfarm_lux120k_rs485_test' || selectedExample === 'handysense_real_bfarm_lux120k_relay0_red_led_test' || selectedExample === 'light' || circuitHasComponent(65)) {
+    if (selectedExample === 'handysense_real_bfarm_lux120k_rs485_test' || selectedExample === 'handysense_real_bfarm_lux120k_relay0_red_led_test' || selectedExample === 'handysense_real_bfarm_lux120k_buzzer_test' || selectedExample === 'light' || circuitHasComponent(65)) {
         return 'bfarm-lux120k-rs485';
     }
     if (selectedExample === 'handysense_real_bfarm_weather_sensor_test' || selectedExample === 'weather' || circuitHasComponent(66)) {
@@ -3345,12 +3532,14 @@ function getFloat32BigEndianWords(value: number): [number, number] {
 
 async function cleanupWasmInstance() {
     delete (window as any).HackCableModule;
+    simulationAudioFeedback.reset();
     if (activeClangLoopHandle !== null) {
         clearInterval(activeClangLoopHandle);
         activeClangLoopHandle = null;
     }
     activeClangShim?.clearScheduledPinEvents();
     activeClangShim = null;
+    activeClangLoopPaused = false;
 }
 
 // Initialize sidebar toggle functionality
@@ -4136,6 +4325,7 @@ void setup() {
   lux120k_rs485.begin(1, Serial2);
 
   Serial.println("Handysense real Relay test ready");
+  Serial.println("Serial Plotter format: lux=<value> threshold=<value> relay0=<0|1> status=<0|1>");
 }
 
 void loop() {
@@ -4149,13 +4339,85 @@ void loop() {
 
     Serial.print("lux=");
     Serial.print(lux120k, 0);
-    Serial.print(", threshold=");
+    Serial.print(" threshold=");
     Serial.print(LIGHT_THRESHOLD_LUX, 0);
-    Serial.print(", relay0=");
-    Serial.println(relayOn ? "ON" : "OFF");
+    Serial.print(" relay0=");
+    Serial.print(relayOn ? 1 : 0);
+    Serial.print(" status=1");
+    Serial.println();
   } else {
     digitalWrite(RELAY0_PIN, LOW);
-    Serial.println("lux read failed");
+    Serial.print("lux=0 threshold=");
+    Serial.print(LIGHT_THRESHOLD_LUX, 0);
+    Serial.println(" relay0=0 status=0");
+  }
+
+  delay(1000);
+}`,
+
+    handysense_real_bfarm_lux120k_buzzer_test: `// Handysense real - Buzzer test
+// Sensor wiring:
+// Lux120k RS485: VCC -> RS485_24V, GND -> RS485_GND, A+ -> RS485_A, B- -> RS485_B
+// Relay buzzer wiring:
+// RELAY5V_VIN -> R1_COM (COM0)
+// R1_NO (NO0) -> Buzzer VCC
+// R1_NO (NO0) -> Buzzer SIG
+// Buzzer GND -> RELAY5V_GND
+// Behavior:
+// If lux is greater than LIGHT_THRESHOLD_LUX, relay0 closes and the buzzer turns on.
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+
+const int RXD = 16;
+const int TXD = 17;
+const int BUZZER_PIN = 25;
+const float LIGHT_THRESHOLD_LUX = 1000.0f;
+
+ModbusMaster lux120k_rs485;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
+
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  lux120k_rs485.begin(1, Serial2);
+
+  Serial.println("Handysense real Buzzer test ready");
+  Serial.println("Serial Plotter format: lux=<value> threshold=<value> relay=<0|1> buzzer=<0|1>");
+}
+
+void loop() {
+  uint8_t result = lux120k_rs485.readHoldingRegisters(0, 5);
+
+  if (result == ModbusMaster::ku8MBSuccess) {
+    float lux120k = lux120k_rs485.getResponseBuffer(3);
+    bool buzzerOn = lux120k > LIGHT_THRESHOLD_LUX;
+
+    digitalWrite(BUZZER_PIN, buzzerOn ? HIGH : LOW);
+
+    Serial.print("lux=");
+    Serial.print(lux120k, 0);
+    Serial.print(" threshold=");
+    Serial.print(LIGHT_THRESHOLD_LUX, 0);
+    Serial.print(" relay=");
+    Serial.print(buzzerOn ? 1 : 0);
+    Serial.print(" buzzer=");
+    Serial.print(buzzerOn ? 1 : 0);
+    Serial.println();
+  } else {
+    digitalWrite(BUZZER_PIN, LOW);
+    Serial.print("lux=0 threshold=");
+    Serial.print(LIGHT_THRESHOLD_LUX, 0);
+    Serial.println(" relay=0 buzzer=0");
   }
 
   delay(1000);
@@ -7063,6 +7325,7 @@ if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
     codeExamplesSelect.addEventListener('change', () => {
         const selectedExample = codeExamplesSelect.value;
         if (selectedExample && codeExamples[selectedExample]) {
+            clearSerialOutputs();
             setCodeEditorValue(codeExamples[selectedExample]);
             localStorage.setItem('hackCable-webExample-inputCode', getCodeEditorValue());
             localStorage.setItem(EXAMPLE_SELECTION_STORAGE_KEY, selectedExample);
@@ -7106,6 +7369,9 @@ if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
                     break;
                 case 'handysense_real_bfarm_lux120k_relay0_red_led_test':
                     setupHandysenseRealBfarmLux120kRelay0RedLedTestCircuit();
+                    break;
+                case 'handysense_real_bfarm_lux120k_buzzer_test':
+                    setupHandysenseRealBfarmLux120kBuzzerTestCircuit();
                     break;
                 case 'handysense_real_bfarm_ph_misting':
                     setupHandysenseRealBfarmPhMistingCircuit();
@@ -8042,8 +8308,9 @@ function autoWireCircuitPlanItem(
 
     switch (item.kind) {
         case 'buzzer':
-            connectBoardPin('1', item.pin);
-            connectPorts(componentFigure, '2', boardFigure, 'GND.1');
+            connectPorts(componentFigure, 'VCC', boardFigure, 'VIN');
+            connectPorts(componentFigure, 'GND', boardFigure, 'GND.1');
+            connectBoardPin('SIG', item.pin);
             return;
         case 'fan':
         case 'water-pump':
@@ -8237,6 +8504,40 @@ function setupHandysenseRealBfarmLux120kRelay0RedLedTestCircuit() {
             console.log("Handysense real Lux120k RS485 + relay0 LED test setup complete!");
         } catch (error) {
             console.error("Error during Handysense real Lux120k RS485 + relay0 LED test wiring:", error);
+        }
+    }, 500);
+}
+
+function setupHandysenseRealBfarmLux120kBuzzerTestCircuit() {
+    console.log("Setting up Handysense real Lux120k RS485 + buzzer test circuit...");
+    selectBoardForExample('handysense-real');
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[51]);
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(500));
+
+    const sensorFigure = new ComponentFigure(wokwiComponentById[65]);
+    hackCable.editor.canvas.add(sensorFigure.setX(430).setY(180));
+
+    const buzzerFigure = new ComponentFigure(wokwiComponentById[9]);
+    hackCable.editor.canvas.add(buzzerFigure.setX(1010).setY(760));
+
+    setTimeout(() => {
+        try {
+            connectPorts(sensorFigure, 'VCC', boardFigure, 'RS485_24V');
+            connectPorts(sensorFigure, 'GND', boardFigure, 'RS485_GND');
+            connectPorts(sensorFigure, 'A+', boardFigure, 'RS485_A');
+            connectPorts(sensorFigure, 'B-', boardFigure, 'RS485_B');
+
+            connectPorts(boardFigure, 'RELAY5V_VIN', boardFigure, 'R1_COM');
+            connectPorts(boardFigure, 'R1_NO', buzzerFigure, 'VCC');
+            connectPorts(boardFigure, 'R1_NO', buzzerFigure, 'SIG');
+            connectPorts(buzzerFigure, 'GND', boardFigure, 'RELAY5V_GND');
+
+            scheduleInitialViewportCenter(150);
+            console.log("Handysense real Lux120k RS485 + buzzer test setup complete!");
+        } catch (error) {
+            console.error("Error during Handysense real Lux120k RS485 + buzzer test wiring:", error);
         }
     }, 500);
 }
@@ -9410,8 +9711,13 @@ window.addEventListener('message', (e: MessageEvent) => {
 });
 
 // Transfer code to Blocks page
+const syncControls = document.getElementById('sync-controls');
 const transferToBlocksBtn = document.getElementById('transfer-to-blocks');
 const autoSyncBlocksCheckbox = document.getElementById('auto-sync-blocks') as HTMLInputElement | null;
+
+if (syncControls instanceof HTMLDivElement) {
+    syncControls.hidden = true;
+}
 
 function transferToBlocks() {
     if (codeInput instanceof HTMLTextAreaElement) {

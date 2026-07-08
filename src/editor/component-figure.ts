@@ -67,6 +67,7 @@ export class ComponentFigure extends draw2d.shape.basic.Rectangle{
         const elementPinInfo = ((element as any).pinInfo ?? []) as ElementPin[];
         elementPinInfo.forEach((pinInfo: ElementPin) => {
             let port = this.createPort("hybrid", new CoordinatePortLocator(pinInfo.name, pinInfo.x, pinInfo.y));
+            const useCustomLedPortVisual = component.clasz.name === "LedElement";
 
             // Click-only wiring: remove all port drag feedback and veto any drag start
             // so the connector dot never enlarges or visually detaches from the board.
@@ -82,8 +83,9 @@ export class ComponentFigure extends draw2d.shape.basic.Rectangle{
             port.onDragStart = () => false;
             port.onDrag = () => {};
             port.onDragEnd = () => {};
-            port.setAlpha(1)
-            port.setBackgroundColor('#424B5A')
+            port.setAlpha(useCustomLedPortVisual ? 0 : 1)
+            port.setBackgroundColor(useCustomLedPortVisual ? 'transparent' : '#424B5A')
+            port.setColor(useCustomLedPortVisual ? 'transparent' : '#424B5A')
             port.setDiameter(7)
             port.setVisible(true);
             port.on("connect", (_emitter: any, _event: any) => {

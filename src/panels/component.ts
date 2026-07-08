@@ -3,7 +3,6 @@ import {
     ArduinoNanoElement,
     ArduinoUnoElement,
     BigSoundSensorElement,
-    BuzzerElement,
     Dht22Element, DipSwitch8Element,
     Ds1307Element,
     ESP32DevkitV1Element, FlameSensorElement,
@@ -31,6 +30,7 @@ import {
 } from "@wokwi/elements";
 import i18next from "i18next";
 import { CustomESP32BoardElement } from "../components/custom-esp32-board";
+import { BuzzerElement } from "../components/buzzer-element";
 import { HandysenseBoardElement } from "../components/handysense-board";
 import { HandysenseRealBoardElement } from "../components/handysense-real-board";
 import { HandysenseProBoardElement } from "../components/handysense-pro-board";
@@ -189,8 +189,8 @@ export const wokwiComponents = (): WokwiComponents => [
         id: 9,
         clasz: BuzzerElement,
         name: "Buzzer",
-        description: "Haut parleur",
-        type: ComponentType.TRANSMITTER
+        description: "Active buzzer for alarms and notifications",
+        type: ComponentType.CUSTOM
     },{
         id: 10,
         clasz: PushbuttonElement,

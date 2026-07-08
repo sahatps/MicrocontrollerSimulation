@@ -1659,13 +1659,17 @@ export class EmulatorManager {
         }
     }
 
-    isPosed() {
+    isPaused() {
         if (this.boardType === 'esp32') {
-            return true;
+            return false;
         } else {
             if (this.runner) return this.runner.pause;
-            return true;
+            return false;
         }
+    }
+
+    isPosed() {
+        return this.isPaused();
     }
 
     stop() {
