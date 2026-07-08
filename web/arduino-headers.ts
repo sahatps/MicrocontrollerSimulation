@@ -83,8 +83,12 @@ public:
     String& operator+=(const String& /*other*/) { return *this; }
     String& operator+=(const char* /*other*/) { return *this; }
     String& operator+=(char /*other*/) { return *this; }
+    bool equals(const char* other) const { return strcmp(_value, other ? other : "") == 0; }
+    bool equals(const String& other) const { return strcmp(_value, other._value) == 0; }
     bool operator==(const char* other) const { return strcmp(_value, other ? other : "") == 0; }
+    bool operator==(const String& other) const { return strcmp(_value, other._value) == 0; }
     bool operator!=(const char* other) const { return !(*this == other); }
+    bool operator!=(const String& other) const { return !(*this == other); }
 };
 inline String operator+(const String& lhs, const String& rhs) { (void)lhs; (void)rhs; return String(""); }
 inline String operator+(const String& lhs, const char* rhs) { (void)lhs; (void)rhs; return String(""); }
@@ -776,13 +780,8 @@ export const MQTT_SHARING_H = `
 #include <pub_topic.h>
 
 // Common NETPIE/MQTTSharing globals used by existing HandySense sketches.
-static const char* Netpiemqtt_server = "broker.netpie.io";
-static const int Netpiemqtt_port = 1883;
-static const char* Netpiemqtt_Client = "hackcable";
-static const char* Netpiemqtt_Token = "";
-static const char* Netpiemqtt_Secret = "";
-
-inline void connectWifiIfNotConnected() {}
+template<typename... Args>
+inline void connectWifiIfNotConnected(Args... /*args*/) {}
 `;
 
 export const PUB_TOPIC_H = `
@@ -793,6 +792,14 @@ inline void pub_topic(const char* /*topic*/, float /*value*/) {}
 inline void pub_topic(const char* /*topic*/, int /*value*/) {}
 inline void pub_topic(const char* /*topic*/, const char* /*value*/) {}
 inline void pub_topic(const char* /*topic*/, const String& /*value*/) {}
+inline void Pub_topic(const char* topic, float value) { pub_topic(topic, value); }
+inline void Pub_topic(const char* topic, int value) { pub_topic(topic, value); }
+inline void Pub_topic(const char* topic, const char* value) { pub_topic(topic, value); }
+inline void Pub_topic(const char* topic, const String& value) { pub_topic(topic, value); }
+inline void Pub_topic(const String& topic, float value) { pub_topic(topic.c_str(), value); }
+inline void Pub_topic(const String& topic, int value) { pub_topic(topic.c_str(), value); }
+inline void Pub_topic(const String& topic, const char* value) { pub_topic(topic.c_str(), value); }
+inline void Pub_topic(const String& topic, const String& value) { pub_topic(topic.c_str(), value); }
 `;
 
 export const PUB_SHARING_H = `

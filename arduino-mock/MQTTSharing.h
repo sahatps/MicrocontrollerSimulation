@@ -18,18 +18,22 @@ public:
 
 static _NetpieClient Netpieclient;
 static _NetpieClient client;
-static const char* Netpiemqtt_server = "broker.netpie.io";
-static const int Netpiemqtt_port = 1883;
-static const char* Netpiemqtt_Client = "hackcable";
-static const char* Netpiemqtt_Token = "";
-static const char* Netpiemqtt_Secret = "";
 
 inline void setupMQTT() {}
-inline void connectWifiIfNotConnected() {}
+template<typename... Args>
+inline void connectWifiIfNotConnected(Args... /*args*/) {}
 inline void publishMessage(const char* /*payload*/) {}
 inline void pub_topic(const char* /*topic*/, float /*value*/) {}
 inline void pub_topic(const char* /*topic*/, int /*value*/) {}
 inline void pub_topic(const char* /*topic*/, const char* /*value*/) {}
 inline void pub_topic(const char* /*topic*/, const String& /*value*/) {}
+inline void Pub_topic(const char* topic, float value) { pub_topic(topic, value); }
+inline void Pub_topic(const char* topic, int value) { pub_topic(topic, value); }
+inline void Pub_topic(const char* topic, const char* value) { pub_topic(topic, value); }
+inline void Pub_topic(const char* topic, const String& value) { pub_topic(topic, value); }
+inline void Pub_topic(const String& topic, float value) { pub_topic(topic.c_str(), value); }
+inline void Pub_topic(const String& topic, int value) { pub_topic(topic.c_str(), value); }
+inline void Pub_topic(const String& topic, const char* value) { pub_topic(topic.c_str(), value); }
+inline void Pub_topic(const String& topic, const String& value) { pub_topic(topic.c_str(), value); }
 
 #endif

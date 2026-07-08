@@ -114,7 +114,10 @@ public:
         return *this;
     }
     operator const char*() const { return _buf; }
+    bool equals(const char* s) const { return strcmp(_buf, s ? s : "") == 0; }
+    bool equals(const String& s) const { return strcmp(_buf, s._buf) == 0; }
     bool operator==(const char* s) const { return strcmp(_buf, s) == 0; }
+    bool operator==(const String& s) const { return strcmp(_buf, s._buf) == 0; }
 };
 
 inline String operator+(const char* a, const String& b) {

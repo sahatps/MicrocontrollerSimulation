@@ -3033,7 +3033,7 @@ function getActiveModbusMockProfile(): ModbusMockProfile {
     if (selectedExample === 'handysense_real_sensor_wind_speed_rs485_test' || circuitHasComponent(38)) {
         return 'sensor-wind-speed-rs485';
     }
-    if (selectedExample === 'handysense_real_sensor_sht31_rs485_test' || selectedExample === 'humidity' || selectedExample === 'temperature' || circuitHasComponent(67)) {
+    if (selectedExample === 'handysense_real_sensor_sht31_rs485_test' || selectedExample === 'humidity' || selectedExample === 'temperature' || selectedExample === 'netpie_thingspeak' || selectedExample === 'awd' || circuitHasComponent(67)) {
         return 'sensor-sht31-rs485';
     }
     if (selectedExample === 'handysense_real_sensor_weight_3kg_rs485_test' || selectedExample === 'weight' || circuitHasComponent(68)) {
@@ -5731,6 +5731,381 @@ void loop() {
   digitalWrite(const_relay_pin[0], HIGH);
 }`,
 
+    netpie_thingspeak: `#include <HandySense.h>
+#include <Arduino.h>
+#include <WiFi.h>
+#include <Wire.h>
+#include <WiFiClient.h>
+#include <WebServer.h>
+#include "time.h"
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+#include <getchip.h>
+#include <ModbusMaster.h>
+#include <ThingSpeakWriter_asukiaaa.h>
+#include <MQTTSharing.h>
+#include <PubSharing.h>
+#include "MCP23008.h"
+
+uint32_t chip_id = 0;
+ModbusMaster rs485_sht31Meter;
+#define WRITE_API_KEY "xxx"
+ThingSpeakWriter_asukiaaa channelWriter(WRITE_API_KEY);
+MCP23008 MCP (0x24);
+
+void connectWifiIfNotConnected(unsigned long timeoutMs = 10000) {
+  if (WiFi.status() == WL_CONNECTED) {
+    return;
+  }
+  uint8_t startAt = millis();
+  Serial.println("Connecting to WiFi.." + String(WiFi.status()));
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    if (millis() - startAt > timeoutMs) {
+      Serial.println("Cannot connect to WiFi");
+      break;
+    }
+    delay(1000);
+  }
+}
+const char* Netpiemqtt_server = "broker.netpie.io";
+const int Netpiemqtt_port = 1883;
+const char* Netpiemqtt_username = "xxx";
+const char* Netpiemqtt_password = "xxx";
+const char* Netpiemqtt_Client = "xxx";
+void Netpiecallback(String topic, byte* payload, unsigned int length) {
+  Serial.print("Message arrived [");
+  Serial.print("Message arrived [");
+  Serial.print(topic);
+  Serial.print("] ");
+  String message;
+  for (int i = 0; i < length; i++) {
+    message = message + (char)payload[i];
+  }
+  
+  if ((topic) == String("@private/sw0")) {
+    if (((message).toInt()) == 1) {
+      digitalWrite(32, 0);
+    } else if (((message).toInt()) == 0) {
+      digitalWrite(32, 1);
+    }
+  }
+}
+void setup() {
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  WiFi.begin("test","test");
+  while(WiFi.status() != WL_CONNECTED){
+    delay(500);
+  }
+  setup_chipid("test@test");
+  for (int i = 0; i < 17; i = i + 8) {
+    chip_id |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
+  }
+  Wire.begin();
+  Serial2.begin(9600);
+  rs485_sht31Meter.begin(1, Serial2);
+  Serial.begin(115200);
+  Wire.setClock(10000);
+  setupMQTT();
+  Netpieclient.setServer(Netpiemqtt_server, Netpiemqtt_port);
+  
+  Netpieclient.setCallback(Netpiecallback);
+  pinMode(36, INPUT_PULLUP);
+  pinMode(32, OUTPUT);
+  MCP.begin();
+  MCP.pinMode8(0x00);
+  
+}
+
+void loop() {
+  loop_chipid("test@test");
+  uint8_t result_temp;
+  rs485_sht31Meter.readHoldingRegisters(0, 2);
+  connectWifiIfNotConnected();
+  channelWriter.setField(1, String(0));
+  int sensor1 = channelWriter.writeFields();
+  if (sensor1 < 0) {
+    Serial.println("Failed to send data");
+  } else if (sensor1 != 200) {
+    Serial.println("Sent data but failed at status code: " + String(sensor1));
+  } else {
+    Serial.println("Succeeded in sending data1.");
+  }
+  publishMessage((String("#T,1:") + String(0) +
+  String(",$") + String(chip_id) + String("|") +
+  String("test@test"))
+  .c_str());
+  delay(1000);
+  connectWifiIfNotConnected();
+  channelWriter.setField(2, String(0));
+  int sensor2 = channelWriter.writeFields();
+  if (sensor2 < 0) {
+    Serial.println("Failed to send data");
+  } else if (sensor2 != 200) {
+    Serial.println("Sent data but failed at status code: " + String(sensor2));
+  } else {
+    Serial.println("Succeeded in sending data2.");
+  }
+  publishMessage((String("#T,2:") + String(0) + String(",$") +
+  String(chip_id) + String("|") + String("test@test"))
+  .c_str());
+  delay(1000);
+  connectWifiIfNotConnected();
+  channelWriter.setField(3,
+  String(0));
+  int sensor3 = channelWriter.writeFields();
+  if (sensor3 < 0) {
+    Serial.println("Failed to send data");
+  } else if (sensor3 != 200) {
+    Serial.println("Sent data but failed at status code: " + String(sensor3));
+  } else {
+    Serial.println("Succeeded in sending data3.");
+  }
+  publishMessage(
+  (String("#T,3:") + String(0) +
+  String(",$") + String(chip_id) + String("|") + String("test@test"))
+  .c_str());
+  delay(1000);
+  if (!Netpieclient.connected()) {
+    while (!Netpieclient.connected()) {
+      Serial.print("Attempting NETPIE2020 connection...");
+      if (Netpieclient.connect(Netpiemqtt_Client, Netpiemqtt_username,
+      Netpiemqtt_password)) {
+        Serial.println("NETPIE2020 connected");
+        Netpieclient.subscribe("@private/#");
+      } else {
+        Serial.print("failed, rc=");
+        Serial.print(client.state());
+        Serial.println("try again in 5 seconds");
+        delay(5000);
+      }
+    }
+  }
+  Netpieclient.loop();
+  Pub_topic(String("Temperature"), 0);
+  publishMessage((String("#N,Temperature:") + String(0) +
+  String(",$") + String(chip_id) + String("|") +
+  String("test@test"))
+  .c_str());
+  Pub_topic(String("Humidity"), 0);
+  publishMessage((String("#N,Humidity:") + String(0) +
+  String(",$") + String(chip_id) + String("|") +
+  String("test@test"))
+  .c_str());
+  Pub_topic(String("Ultrasonic"), 0);
+  publishMessage((String("#N,Ultrasonic:") +
+  String(0) +
+  String(",$") + String(chip_id) + String("|") +
+  String("test@test"))
+  .c_str());
+  delay(300000);
+  
+  if (((rs485_sht31Meter.getResponseBuffer(0) / 10.00f)) >= 50) {
+    
+    MCP.digitalWrite(0, HIGH);
+    Serial.println("LED ON");
+  } else {
+    
+    MCP.digitalWrite(0, LOW);
+    Serial.println("LED OFF");
+  }
+  
+}`,
+
+    awd: `#include <HandySense.h>
+#include <Arduino.h>
+#include <WiFi.h>
+#include <Wire.h>
+#include <WiFiClient.h>
+#include <WebServer.h>
+#include "time.h"
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+#include <getchip.h>
+#include <ModbusMaster.h>
+#include <ThingSpeakWriter_asukiaaa.h>
+#include <MQTTSharing.h>
+#include <PubSharing.h>
+#include "MCP23008.h"
+
+uint32_t chip_id = 0;
+ModbusMaster rs485_sht31Meter;
+#define WRITE_API_KEY "22"
+ThingSpeakWriter_asukiaaa channelWriter(WRITE_API_KEY);
+MCP23008 MCP (0x24);
+
+void connectWifiIfNotConnected(unsigned long timeoutMs = 10000) {
+  if (WiFi.status() == WL_CONNECTED) {
+    return;
+  }
+  uint8_t startAt = millis();
+  Serial.println("Connecting to WiFi.." + String(WiFi.status()));
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    if (millis() - startAt > timeoutMs) {
+      Serial.println("Cannot connect to WiFi");
+      break;
+    }
+    delay(1000);
+  }
+}
+const char* Netpiemqtt_server = "broker.netpie.io";
+const int Netpiemqtt_port = 1883;
+const char* Netpiemqtt_username = "11";
+const char* Netpiemqtt_password = "11";
+const char* Netpiemqtt_Client = "11";
+void Netpiecallback(String topic, byte* payload, unsigned int length) {
+  Serial.print("Message arrived [");
+  Serial.print("Message arrived [");
+  Serial.print(topic);
+  Serial.print("] ");
+  String message;
+  for (int i = 0; i < length; i++) {
+    message = message + (char)payload[i];
+  }
+  
+  if ((topic) == String("@private/sw0")) {
+    if (((message).toInt()) == 1) {
+      digitalWrite(32, 0);
+    } else if (((message).toInt()) == 0) {
+      digitalWrite(32, 1);
+    }
+  }
+}
+void setup() {
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  WiFi.begin("test","test");
+  while(WiFi.status() != WL_CONNECTED){
+    delay(500);
+  }
+  setup_chipid("sahacstu@gmail.com");
+  for (int i = 0; i < 17; i = i + 8) {
+    chip_id |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
+  }
+  Wire.begin();
+  Serial2.begin(9600);
+  rs485_sht31Meter.begin(1, Serial2);
+  Serial.begin(115200);
+  Wire.setClock(10000);
+  setupMQTT();
+  Netpieclient.setServer(Netpiemqtt_server, Netpiemqtt_port);
+  
+  Netpieclient.setCallback(Netpiecallback);
+  pinMode(36, INPUT_PULLUP);
+  pinMode(32, OUTPUT);
+  MCP.begin();
+  MCP.pinMode8(0x00);
+  
+}
+
+void loop() {
+  loop_chipid("sahacstu@gmail.com");
+  uint8_t result_temp;
+  rs485_sht31Meter.readHoldingRegisters(0, 2);
+  connectWifiIfNotConnected();
+  channelWriter.setField(1, String(0));
+  int sensor1 = channelWriter.writeFields();
+  if (sensor1 < 0) {
+    Serial.println("Failed to send data");
+  } else if (sensor1 != 200) {
+    Serial.println("Sent data but failed at status code: " + String(sensor1));
+  } else {
+    Serial.println("Succeeded in sending data1.");
+  }
+  publishMessage((String("#T,1:") + String(0) +
+  String(",$") + String(chip_id) + String("|") +
+  String("sahacstu@gmail.com"))
+  .c_str());
+  delay(1000);
+  connectWifiIfNotConnected();
+  channelWriter.setField(2, String(0));
+  int sensor2 = channelWriter.writeFields();
+  if (sensor2 < 0) {
+    Serial.println("Failed to send data");
+  } else if (sensor2 != 200) {
+    Serial.println("Sent data but failed at status code: " + String(sensor2));
+  } else {
+    Serial.println("Succeeded in sending data2.");
+  }
+  publishMessage((String("#T,2:") + String(0) + String(",$") +
+  String(chip_id) + String("|") + String("sahacstu@gmail.com"))
+  .c_str());
+  delay(1000);
+  connectWifiIfNotConnected();
+  channelWriter.setField(3,
+  String(0));
+  int sensor3 = channelWriter.writeFields();
+  if (sensor3 < 0) {
+    Serial.println("Failed to send data");
+  } else if (sensor3 != 200) {
+    Serial.println("Sent data but failed at status code: " + String(sensor3));
+  } else {
+    Serial.println("Succeeded in sending data3.");
+  }
+  publishMessage(
+  (String("#T,3:") + String(0) +
+  String(",$") + String(chip_id) + String("|") + String("sahacstu@gmail.com"))
+  .c_str());
+  delay(1000);
+  if (!Netpieclient.connected()) {
+    while (!Netpieclient.connected()) {
+      Serial.print("Attempting NETPIE2020 connection...");
+      if (Netpieclient.connect(Netpiemqtt_Client, Netpiemqtt_username,
+      Netpiemqtt_password)) {
+        Serial.println("NETPIE2020 connected");
+        Netpieclient.subscribe("@private/#");
+      } else {
+        Serial.print("failed, rc=");
+        Serial.print(client.state());
+        Serial.println("try again in 5 seconds");
+        delay(5000);
+      }
+    }
+  }
+  Netpieclient.loop();
+  Pub_topic(String("Temperature"), 0);
+  publishMessage((String("#N,Temperature:") + String(0) +
+  String(",$") + String(chip_id) + String("|") +
+  String("sahacstu@gmail.com"))
+  .c_str());
+  Pub_topic(String("Humidity"), 0);
+  publishMessage((String("#N,Humidity:") + String(0) +
+  String(",$") + String(chip_id) + String("|") +
+  String("sahacstu@gmail.com"))
+  .c_str());
+  Pub_topic(String("Ultrasonic"), 0);
+  publishMessage((String("#N,Ultrasonic:") +
+  String(0) +
+  String(",$") + String(chip_id) + String("|") +
+  String("sahacstu@gmail.com"))
+  .c_str());
+  delay(3000);
+  
+  if (((rs485_sht31Meter.getResponseBuffer(0) / 10.00f)) >= 50) {
+    
+    MCP.digitalWrite(0, HIGH);
+    Serial.println("Temp LED ON");
+  } else {
+    
+    MCP.digitalWrite(0, LOW);
+    Serial.println("Temp LED OFF");
+  }
+  if (((rs485_sht31Meter.getResponseBuffer(1) / 10.00f)) >= 66) {
+    
+    MCP.digitalWrite(1, HIGH);
+    Serial.println("Humidity LED ON");
+  } else {
+    
+    MCP.digitalWrite(1, LOW);
+    Serial.println("Humidity LED OFF");
+  }
+  
+}`,
+
     handysense_real_sensor_weather_htco2plx_test: `// Handysense real - Weather HTCO2PLX (RS485) Test
 // One component covers the Carbon dioxide and Pressure block categories.
 #include <HandySense.h>
@@ -6713,6 +7088,10 @@ if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
                     break;
                 case 'weather':
                     setupHandysenseRealBfarmWeatherSensorTestCircuit();
+                    break;
+                case 'netpie_thingspeak':
+                case 'awd':
+                    setupHandysenseRealSensorRs485TestCircuit(67, 'SHT31 RS485');
                     break;
                 case 'handysense_real_sensor_weather_htco2plx_test':
                     setupHandysenseRealSensorRs485TestCircuit(40, 'Weather HTCO2PLX');
