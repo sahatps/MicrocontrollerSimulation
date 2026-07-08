@@ -1,7 +1,8 @@
 {
   "wokwiComponents.arduinoUno.description": "Arduino Uno Card",
   "wokwiComponents.esp32.description": "ESP32 Development Board",
-  "wokwiComponents.led.description": "Light-Emitting Diode",
+  "wokwiComponents.led.name": "LED",
+  "wokwiComponents.led.description": "Custom red two-pin light-emitting diode",
   "wokwiComponents.rgbLed.description": "Light-Emitting Diode with a controllable color",
   "wokwiComponents.ledBar.description": "Bar composed of 10 Light-Emitting Diode",
   "ui.code": "Code:",

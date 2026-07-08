@@ -1,13 +1,14 @@
 import "./ui/css.styl"
 import * as avr8js from 'avr8js';
 import '@wokwi/elements';
-import {LEDElement, ArduinoUnoElement, ESP32DevkitV1Element} from "@wokwi/elements";
+import {ArduinoUnoElement, ESP32DevkitV1Element} from "@wokwi/elements";
 import {Catalog} from "./panels/catalog";
 import {EmulatorManager} from "./emulator/emulator-manager";
 import {MistingPumpElement} from "./components/misting-pump-element";
 import {WaterPumpElement} from "./components/water-pump-element";
 import {FanElement} from "./components/fan-element";
 import {RelayElement} from "./components/relay-element";
+import {LedElement} from "./components/led-element";
 import {FourChannelRelayElement} from "./components/four-channel-relay-element";
 import {CustomESP32BoardElement} from "./components/custom-esp32-board";
 import {resolveHandysensePinNumber} from "./components/handysense-board";
@@ -465,7 +466,7 @@ export class HackCable {
             const element = figure.componentElement;
             if (!element) return;
 
-            if (element instanceof LEDElement) {
+            if (element instanceof LedElement) {
                 const anodePort = figure.getPortByName?.('A');
                 const cathodePort = figure.getPortByName?.('C');
                 const nextValue = Boolean(
@@ -476,6 +477,7 @@ export class HackCable {
 
                 if (element.value !== nextValue) {
                     element.value = nextValue;
+                    element.isOn = nextValue;
                     element.requestUpdate();
                 }
                 return;
@@ -505,7 +507,7 @@ export class HackCable {
             const element = figure.componentElement;
 
             // Check if this is an LED element
-            if (element instanceof LEDElement) {
+            if (element instanceof LedElement) {
                 console.log('[updateLEDs] Found LED element');
                 // Find which Arduino pin this LED is connected to
                 const connections = figure.getPorts().data;
@@ -544,6 +546,7 @@ export class HackCable {
                                     const isHigh = pinState === avr8js.PinState.High;
                                     console.log(`[updateLEDs] Pin ${mappedPinName} state: ${pinState} (${isHigh ? 'HIGH' : 'LOW'}), setting LED to ${isHigh}`);
                                     element.value = isHigh;
+                                    element.isOn = isHigh;
                                 }
                             }
                         }
@@ -705,6 +708,13 @@ export class HackCable {
                 element.ch2 = false;
                 element.ch3 = false;
                 element.ch4 = false;
+                element.requestUpdate();
+                return;
+            }
+
+            if (element instanceof LedElement) {
+                element.value = false;
+                element.isOn = false;
                 element.requestUpdate();
                 return;
             }

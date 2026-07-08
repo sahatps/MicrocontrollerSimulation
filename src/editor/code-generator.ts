@@ -1,12 +1,13 @@
 import {ComponentFigure} from "./component-figure";
 import {Canvas} from "./canvas";
-import {ArduinoUnoElement, ESP32DevkitV1Element, LEDElement, PushbuttonElement} from "@wokwi/elements";
+import {ArduinoUnoElement, ESP32DevkitV1Element, PushbuttonElement} from "@wokwi/elements";
 import {CustomESP32BoardElement} from "../components/custom-esp32-board";
 import {resolveHandysensePinNumber} from "../components/handysense-board";
 import {HandysenseProBoardElement} from "../components/handysense-pro-board";
 import {MistingPumpElement} from "../components/misting-pump-element";
 import {WaterPumpElement} from "../components/water-pump-element";
 import {FanElement} from "../components/fan-element";
+import {LedElement} from "../components/led-element";
 
 export class CodeGenerator {
 
@@ -118,7 +119,7 @@ export class CodeGenerator {
             if (boardPort && componentEl) {
                 const pinNumber = this.extractPinNumber(boardPort);
 
-                if (componentEl instanceof LEDElement) {
+                if (componentEl instanceof LedElement) {
                     // Check if this LED is already tracked
                     let led = wiring.leds.find(l => l.anode === pinNumber || l.cathode === pinNumber);
                     if (!led) {

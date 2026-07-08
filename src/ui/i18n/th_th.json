@@ -1,7 +1,7 @@
 {
   "wokwiComponents.arduinoUno.description": "บอร์ด Arduino Uno",
   "wokwiComponents.esp32.description": "บอร์ดพัฒนา ESP32",
-  "wokwiComponents.led.description": "หลอดไฟ LED",
+  "wokwiComponents.led.description": "?????? LED ???????? 2 ??",
   "wokwiComponents.rgbLed.description": "หลอดไฟ LED ที่ควบคุมสีได้",
   "wokwiComponents.ledBar.description": "แถบ LED ประกอบด้วย 10 หลอด",
   "ui.code": "โค้ด:",
@@ -212,5 +212,6 @@
   "ui.mock.graph.yMin": "ค่า Y ต่ำสุด",
   "ui.mock.graph.yMax": "ค่า Y สูงสุด",
   "ui.mock.graph.deletePoint": "ลบจุด",
-  "ui.mock.graph.hint": "คลิกเพื่อเพิ่มจุด ลากจุดเพื่อแก้ไข ค่าใช้พฤติกรรมแบบขั้นบันได/คงค่า"
+  "ui.mock.graph.hint": "คลิกเพื่อเพิ่มจุด ลากจุดเพื่อแก้ไข ค่าใช้พฤติกรรมแบบขั้นบันได/คงค่า",
+  "wokwiComponents.led.name": "LED"
 }

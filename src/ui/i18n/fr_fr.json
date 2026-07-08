@@ -1,6 +1,6 @@
 {
   "wokwiComponents.arduinoUno.description": "Carte Arduino Uno",
-  "wokwiComponents.led.description": "Diode Électroluminescente",
+  "wokwiComponents.led.description": "Diode rouge personnalisee a deux broches",
   "wokwiComponents.rgbLed.description": "Diode Électroluminescente de couleur contrôllable",
   "wokwiComponents.ledBar.description": "Barre de 10 Diodes Électroluminescentes",
   "wokwiComponents.relay.name": "Relais",
@@ -156,5 +156,6 @@
   "ui.mock.sensor.windDirection": "Direction du vent (degrés)",
   "ui.mock.sensor.windSpeed": "Vitesse du vent (m/s)",
   "ui.mock.sensor.rain": "Précipitations (mm)",
-  "ui.mock.sensor.par": "PAR (umol/m2/s)"
+  "ui.mock.sensor.par": "PAR (umol/m2/s)",
+  "wokwiComponents.led.name": "LED"
 }

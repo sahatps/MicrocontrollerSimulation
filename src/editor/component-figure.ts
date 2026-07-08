@@ -64,7 +64,8 @@ export class ComponentFigure extends draw2d.shape.basic.Rectangle{
         this.overlay = element;
         this.componentElement = element;
 
-        element.pinInfo.forEach((pinInfo: ElementPin) => {
+        const elementPinInfo = ((element as any).pinInfo ?? []) as ElementPin[];
+        elementPinInfo.forEach((pinInfo: ElementPin) => {
             let port = this.createPort("hybrid", new CoordinatePortLocator(pinInfo.name, pinInfo.x, pinInfo.y));
 
             // Click-only wiring: remove all port drag feedback and veto any drag start

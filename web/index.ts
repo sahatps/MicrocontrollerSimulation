@@ -3078,7 +3078,7 @@ function getActiveModbusMockProfile(): ModbusMockProfile {
     if (selectedExample === 'handysense_real_bfarm_air_velocity_sensor_sm3789_test' || circuitHasComponent(64)) {
         return 'bfarm-air-velocity-sm3789';
     }
-    if (selectedExample === 'handysense_real_bfarm_lux120k_rs485_test' || selectedExample === 'light' || circuitHasComponent(65)) {
+    if (selectedExample === 'handysense_real_bfarm_lux120k_rs485_test' || selectedExample === 'handysense_real_bfarm_lux120k_relay0_red_led_test' || selectedExample === 'light' || circuitHasComponent(65)) {
         return 'bfarm-lux120k-rs485';
     }
     if (selectedExample === 'handysense_real_bfarm_weather_sensor_test' || selectedExample === 'weather' || circuitHasComponent(66)) {
@@ -4069,6 +4069,97 @@ void loop() {
   delay(500);
 }`
 ,
+
+    handysense_real_relay0_red_led_test: `// Handysense real - Relay0 LED Test
+// Wiring:
+// RELAY5V_VIN -> R1_COM (COM0)
+// R1_NO (NO0) -> LED A
+// LED C -> RELAY5V_GND
+// GPIO25 drives relay0, so the LED lights when the relay closes
+
+const int RELAY0_PIN = 25;
+
+void setup() {
+  Serial.begin(115200);
+  delay(150);
+
+  pinMode(RELAY0_PIN, OUTPUT);
+  digitalWrite(RELAY0_PIN, LOW);
+
+  Serial.println();
+  Serial.println("Handysense real relay0 LED test ready");
+}
+
+void loop() {
+  digitalWrite(RELAY0_PIN, HIGH);
+  Serial.println("RELAY0 LED ON");
+  delay(1000);
+
+  digitalWrite(RELAY0_PIN, LOW);
+  Serial.println("RELAY0 LED OFF");
+  delay(1000);
+}`,
+
+    handysense_real_bfarm_lux120k_relay0_red_led_test: `// Handysense real - Relay test
+// Sensor wiring:
+// Lux120k RS485: VCC -> RS485_24V, GND -> RS485_GND, A+ -> RS485_A, B- -> RS485_B
+// Relay LED wiring:
+// RELAY5V_VIN -> R1_COM (COM0)
+// R1_NO (NO0) -> LED A
+// LED C -> RELAY5V_GND
+// Behavior:
+// If lux is greater than LIGHT_THRESHOLD_LUX, relay0 closes and the LED turns on.
+
+#include <HandySense.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <ModbusMaster.h>
+
+const int RXD = 16;
+const int TXD = 17;
+const int RELAY0_PIN = 25;
+const float LIGHT_THRESHOLD_LUX = 1000.0f;
+
+ModbusMaster lux120k_rs485;
+
+void setup() {
+  Serial.begin(115200);
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+
+  pinMode(RELAY0_PIN, OUTPUT);
+  digitalWrite(RELAY0_PIN, LOW);
+
+  Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
+  lux120k_rs485.begin(1, Serial2);
+
+  Serial.println("Handysense real Relay test ready");
+}
+
+void loop() {
+  uint8_t result = lux120k_rs485.readHoldingRegisters(0, 5);
+
+  if (result == ModbusMaster::ku8MBSuccess) {
+    float lux120k = lux120k_rs485.getResponseBuffer(3);
+    bool relayOn = lux120k > LIGHT_THRESHOLD_LUX;
+
+    digitalWrite(RELAY0_PIN, relayOn ? HIGH : LOW);
+
+    Serial.print("lux=");
+    Serial.print(lux120k, 0);
+    Serial.print(", threshold=");
+    Serial.print(LIGHT_THRESHOLD_LUX, 0);
+    Serial.print(", relay0=");
+    Serial.println(relayOn ? "ON" : "OFF");
+  } else {
+    digitalWrite(RELAY0_PIN, LOW);
+    Serial.println("lux read failed");
+  }
+
+  delay(1000);
+}`,
 
     handysense_real_six_button_test: `// Handysense real - 6 Button Test
 // On-board controls:
@@ -7010,6 +7101,12 @@ if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
                 case 'handysense_real_buttons_leds_test':
                     setupHandysenseRealButtonsLedsTestCircuit();
                     break;
+                case 'handysense_real_relay0_red_led_test':
+                    setupHandysenseRealRelay0RedLedTestCircuit();
+                    break;
+                case 'handysense_real_bfarm_lux120k_relay0_red_led_test':
+                    setupHandysenseRealBfarmLux120kRelay0RedLedTestCircuit();
+                    break;
                 case 'handysense_real_bfarm_ph_misting':
                     setupHandysenseRealBfarmPhMistingCircuit();
                     break;
@@ -8084,6 +8181,64 @@ function setupHandysenseRealButtonsLedsTestCircuit() {
     selectBoardForExample('handysense-real');
     hackCable.editor.canvas.clear();
     setupHandysenseCircuit('handysense-real');
+}
+
+function setupHandysenseRealRelay0RedLedTestCircuit() {
+    console.log("Setting up Handysense real relay0 LED test circuit...");
+    selectBoardForExample('handysense-real');
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[51]);
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(510));
+
+    const ledFigure = new ComponentFigure(wokwiComponentById[1]);
+    hackCable.editor.canvas.add(ledFigure.setX(995).setY(780));
+
+    setTimeout(() => {
+        try {
+            connectPorts(boardFigure, 'RELAY5V_VIN', boardFigure, 'R1_COM');
+            connectPorts(boardFigure, 'R1_NO', ledFigure, 'A');
+            connectPorts(ledFigure, 'C', boardFigure, 'RELAY5V_GND');
+            scheduleInitialViewportCenter(150);
+
+            console.log("Handysense real relay0 LED setup complete!");
+        } catch (error) {
+            console.error("Error during Handysense real relay0 LED wiring:", error);
+        }
+    }, 500);
+}
+
+function setupHandysenseRealBfarmLux120kRelay0RedLedTestCircuit() {
+    console.log("Setting up Handysense real Lux120k RS485 + relay0 LED test circuit...");
+    selectBoardForExample('handysense-real');
+    hackCable.editor.canvas.clear();
+
+    const boardFigure = new ComponentFigure(wokwiComponentById[51]);
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(500));
+
+    const sensorFigure = new ComponentFigure(wokwiComponentById[65]);
+    hackCable.editor.canvas.add(sensorFigure.setX(430).setY(180));
+
+    const ledFigure = new ComponentFigure(wokwiComponentById[1]);
+    hackCable.editor.canvas.add(ledFigure.setX(995).setY(780));
+
+    setTimeout(() => {
+        try {
+            connectPorts(sensorFigure, 'VCC', boardFigure, 'RS485_24V');
+            connectPorts(sensorFigure, 'GND', boardFigure, 'RS485_GND');
+            connectPorts(sensorFigure, 'A+', boardFigure, 'RS485_A');
+            connectPorts(sensorFigure, 'B-', boardFigure, 'RS485_B');
+
+            connectPorts(boardFigure, 'RELAY5V_VIN', boardFigure, 'R1_COM');
+            connectPorts(boardFigure, 'R1_NO', ledFigure, 'A');
+            connectPorts(ledFigure, 'C', boardFigure, 'RELAY5V_GND');
+
+            scheduleInitialViewportCenter(150);
+            console.log("Handysense real Lux120k RS485 + relay0 LED test setup complete!");
+        } catch (error) {
+            console.error("Error during Handysense real Lux120k RS485 + relay0 LED test wiring:", error);
+        }
+    }, 500);
 }
 
 function setupHandysenseRealBfarmPhMistingCircuit() {

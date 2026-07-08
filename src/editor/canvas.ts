@@ -121,7 +121,7 @@ export class Canvas extends draw2d.Canvas{
         rect.createPort("hybrid", new CoordinatePortLocator("", 0, 0));
         rect.createPort("hybrid", new CoordinatePortLocator("", 30, 30));
         this.add(rect)
-        let led = new ComponentFigure(wokwiComponentByClass[LEDElement.name]);
+        let led = new ComponentFigure(wokwiComponentByClass["LedElement"]);
         this.add(led.setX(100).setY(100))
         let card = new ComponentFigure(wokwiComponentByClass[ArduinoUnoElement.name]);
         this.add(card.setX(200).setY(150))
