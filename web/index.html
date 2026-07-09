@@ -56,12 +56,26 @@
                             <span class="material-symbols-outlined run-btn-icon icon-default">check</span>
                             <span class="material-symbols-outlined run-btn-icon icon-cancel">close</span>
                         </button>
-                        <button id="execute" class="run-circle-btn" data-i18n-title="ui.execute" title="Execute"
-                            aria-label="Execute">
-                            <svg class="run-btn-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                                <path d="M8 6.5v11l9-5.5z" fill="currentColor"></path>
-                            </svg>
-                        </button>
+                        <div id="execute-speed-control" class="execute-speed-control">
+                            <button id="execute" class="run-circle-btn" data-i18n-title="ui.execute" title="Execute"
+                                aria-label="Execute">
+                                <svg class="run-btn-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                    <path d="M8 6.5v11l9-5.5z" fill="currentColor"></path>
+                                </svg>
+                            </button>
+                            <button id="simulation-speed-trigger" class="simulation-speed-badge" type="button"
+                                aria-label="Simulation speed x1" title="Simulation speed x1" aria-haspopup="menu"
+                                aria-expanded="false">x1</button>
+                            <div id="simulation-speed-menu" class="simulation-speed-menu" role="menu" hidden>
+                                <button type="button" class="simulation-speed-option" role="menuitem" data-speed="0.2">x0.2</button>
+                                <button type="button" class="simulation-speed-option" role="menuitem" data-speed="0.5">x0.5</button>
+                                <button type="button" class="simulation-speed-option" role="menuitem" data-speed="1">x1</button>
+                                <button type="button" class="simulation-speed-option" role="menuitem" data-speed="1.5">x1.5</button>
+                                <button type="button" class="simulation-speed-option" role="menuitem" data-speed="2">x2</button>
+                                <button type="button" class="simulation-speed-option" role="menuitem" data-speed="5">x5</button>
+                                <button type="button" class="simulation-speed-option" role="menuitem" data-speed="10">x10</button>
+                            </div>
+                        </div>
                         <button id="stop" class="run-circle-btn" data-i18n-title="ui.stop" title="Stop"
                             aria-label="Stop">
                             <span class="material-symbols-outlined run-btn-icon">stop</span>

@@ -24,7 +24,8 @@ export class AVRRunner {
     readonly portD: AVRIOPort;
     readonly usart: AVRUSART;
     readonly speed = 16e6; // 16 MHZ
-    readonly workUnitCycles = 500000;
+    private readonly baseWorkUnitCycles = 500000;
+    private simulationSpeedMultiplier = 1;
     readonly taskScheduler = new MicroTaskScheduler();
 
     constructor(hex: string) {
@@ -42,7 +43,7 @@ export class AVRRunner {
     }
 
     execute(callback: (cpu: CPU) => void) {
-        const cyclesToRun = this.cpu.cycles + this.workUnitCycles;
+        const cyclesToRun = this.cpu.cycles + this.getWorkUnitCycles();
         while(this.cpu.cycles < cyclesToRun) {
             avrInstruction(this.cpu);
             this.cpu.tick();
@@ -61,6 +62,12 @@ export class AVRRunner {
     }
     get pause(){
         return this.taskScheduler.stopped;
+    }
+    setSimulationSpeed(speed: number) {
+        this.simulationSpeedMultiplier = Number.isFinite(speed) && speed > 0 ? speed : 1;
+    }
+    private getWorkUnitCycles() {
+        return Math.max(10000, Math.round(this.baseWorkUnitCycles * this.simulationSpeedMultiplier));
     }
     stop(){
         this.taskScheduler.stop();

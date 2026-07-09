@@ -20,6 +20,7 @@ export class EmulatorManager {
     private runner: AVRRunner | undefined;
     private loadingRunner: AVRRunner | undefined;
     private boardType: 'arduino' | 'esp32' = 'arduino';
+    private simulationSpeedMultiplier = 1;
 
     // Context for C++ to Python conversion
     private currentConversionContext: {
@@ -62,6 +63,7 @@ export class EmulatorManager {
 
     loadCode(hexCode: string) {
         this.loadingRunner = new AVRRunner(hexCode.replace(/\n\n/g, "\n"));
+        this.loadingRunner.setSimulationSpeed(this.simulationSpeedMultiplier);
     }
 
     async run(code?: string) {
@@ -81,6 +83,7 @@ export class EmulatorManager {
         // Run AVR for Arduino
         this.stop();
         this.runner = this.loadingRunner;
+        this.runner?.setSimulationSpeed(this.simulationSpeedMultiplier);
         console.log('[EmulatorManager] Runner loaded:', this.runner ? 'YES' : 'NO');
         this.setupHardware();
         // Callback called every 500 000 cpu cycles
@@ -1670,6 +1673,12 @@ export class EmulatorManager {
 
     isPosed() {
         return this.isPaused();
+    }
+
+    setSimulationSpeed(speed: number) {
+        this.simulationSpeedMultiplier = Number.isFinite(speed) && speed > 0 ? speed : 1;
+        this.runner?.setSimulationSpeed(this.simulationSpeedMultiplier);
+        this.loadingRunner?.setSimulationSpeed(this.simulationSpeedMultiplier);
     }
 
     stop() {

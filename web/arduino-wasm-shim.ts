@@ -31,7 +31,9 @@ export class ArduinoWasmShim {
     private pinModes    = new Map<number, number>();
     private analogValues = new Map<number, number>();
     private wasmMemory: WebAssembly.Memory | null = null;
-    private startTimeMs = performance.now();
+    private simulationSpeedMultiplier = 1;
+    private timeAnchorRealMs = performance.now();
+    private timeAnchorSimMs = 0;
     private loopTimelineActive = false;
     private loopTimelineMs = 0;
     private scheduledPinEvents: QueuedPinEvent[] = [];
@@ -52,6 +54,23 @@ export class ArduinoWasmShim {
     /** Must be called after WebAssembly.instantiate() to enable string reads */
     setWasmMemory(mem: WebAssembly.Memory) {
         this.wasmMemory = mem;
+    }
+
+    setSimulationSpeed(speed: number): void {
+        const now = performance.now();
+        const previousSpeed = Math.max(0.01, this.simulationSpeedMultiplier);
+        const nextSpeed = Number.isFinite(speed) && speed > 0 ? speed : 1;
+        this.timeAnchorSimMs = this.getSimulatedTimeMs(now);
+        this.timeAnchorRealMs = now;
+        this.pendingPinEvents = this.pendingPinEvents.map((event) => {
+            const remainingSimMs = Math.max(0, event.dueAtMs - now) * previousSpeed;
+            return { ...event, dueAtMs: now + remainingSimMs / nextSpeed };
+        });
+        if (this.loopDelayUntilMs > now) {
+            const remainingSimMs = (this.loopDelayUntilMs - now) * previousSpeed;
+            this.loopDelayUntilMs = now + remainingSimMs / nextSpeed;
+        }
+        this.simulationSpeedMultiplier = nextSpeed;
     }
 
     /** Inject a simulated digital input value */
@@ -80,12 +99,12 @@ export class ArduinoWasmShim {
         const now = performance.now();
         this.pendingPinEvents = events
             .map((event) => ({
-                dueAtMs: now + Math.max(0, event.atMs),
+                dueAtMs: now + this.getScaledRealDurationMs(Math.max(0, event.atMs)),
                 pin: event.pin,
                 value: event.value,
             }))
             .sort((left, right) => left.dueAtMs - right.dueAtMs);
-        this.loopDelayUntilMs = now + Math.max(0, durationMs);
+        this.loopDelayUntilMs = now + this.getScaledRealDurationMs(Math.max(0, durationMs));
         this.flushDuePinEvents(now);
         return durationMs;
     }
@@ -171,10 +190,10 @@ export class ArduinoWasmShim {
                     self.advanceDelay(ms);
                 },
                 millis(): number {
-                    return Math.floor(performance.now() - self.startTimeMs);
+                    return Math.floor(self.getSimulatedTimeMs());
                 },
                 micros(): number {
-                    return Math.floor((performance.now() - self.startTimeMs) * 1000);
+                    return Math.floor(self.getSimulatedTimeMs() * 1000);
                 },
                 delayMicroseconds(us: number) {
                     self.advanceDelay(us / 1000);
@@ -271,6 +290,14 @@ export class ArduinoWasmShim {
         if (this.loopTimelineActive) {
             this.loopTimelineMs += Math.min(ms, 60000);
         }
+    }
+
+    private getScaledRealDurationMs(simulatedMs: number): number {
+        return simulatedMs / Math.max(0.01, this.simulationSpeedMultiplier);
+    }
+
+    private getSimulatedTimeMs(now = performance.now()): number {
+        return this.timeAnchorSimMs + (now - this.timeAnchorRealMs) * this.simulationSpeedMultiplier;
     }
 
     private flushDuePinEvents(now: number): void {

@@ -179,11 +179,14 @@ const simulationAudioFeedback = new SimulationAudioFeedback();
 const SIM_FIXED_STEP_MS = 16;
 const SIM_MAX_STEPS_PER_TICK = 240;
 const SIM_MAX_PENDING_STEPS = 12000;
+const SIMULATION_SPEED_OPTIONS = [0.2, 0.5, 1, 1.5, 2, 5, 10] as const;
+let simulationSpeedMultiplier = 1;
 
 function startFixedStepSimulationLoop(
     step: () => void,
     onError: (error: unknown) => void,
     isPaused: () => boolean = () => false,
+    getSpeedMultiplier: () => number = () => 1,
 ): ReturnType<typeof setInterval> {
     let pendingSteps = 0;
     let lastTimestamp = performance.now();
@@ -202,8 +205,8 @@ function startFixedStepSimulationLoop(
             elapsedMs = SIM_FIXED_STEP_MS;
         }
 
-        const computedSteps = Math.max(1, Math.floor(elapsedMs / SIM_FIXED_STEP_MS));
-        pendingSteps += computedSteps;
+        const speedMultiplier = Math.max(0.01, getSpeedMultiplier());
+        pendingSteps += elapsedMs * speedMultiplier / SIM_FIXED_STEP_MS;
 
         if (pendingSteps > SIM_MAX_PENDING_STEPS) {
             pendingSteps = SIM_MAX_PENDING_STEPS;
@@ -213,7 +216,8 @@ function startFixedStepSimulationLoop(
             }
         }
 
-        const stepsThisTick = Math.min(pendingSteps, SIM_MAX_STEPS_PER_TICK);
+        const stepsThisTick = Math.min(Math.floor(pendingSteps), SIM_MAX_STEPS_PER_TICK);
+        if (stepsThisTick < 1) return;
         for (let i = 0; i < stepsThisTick; i++) {
             try {
                 step();
@@ -435,6 +439,8 @@ setTimeout(() => {
 
 const compileButton = document.getElementById('compile');
 const executeButton = document.getElementById('execute');
+const simulationSpeedTrigger = document.getElementById('simulation-speed-trigger');
+const simulationSpeedMenu = document.getElementById('simulation-speed-menu');
 const stopButton = document.getElementById('stop');
 const pauseButton = document.getElementById('pause');
 const buildCircuitFromCodeButton = document.getElementById('build-circuit-from-code');
@@ -705,6 +711,50 @@ let activeCompileCancel: (() => void) | null = null;
 let codeMirrorEditor: any = null;
 const CODE_EDITOR_MIN_HEIGHT = 220;
 
+function formatSimulationSpeed(speed: number): string {
+    return `x${Number.isInteger(speed) ? speed.toFixed(0) : String(speed)}`;
+}
+
+function closeSimulationSpeedMenu(): void {
+    if (!(simulationSpeedMenu instanceof HTMLElement)) return;
+    simulationSpeedMenu.hidden = true;
+    simulationSpeedTrigger?.setAttribute('aria-expanded', 'false');
+}
+
+function toggleSimulationSpeedMenu(): void {
+    if (!(simulationSpeedMenu instanceof HTMLElement)) return;
+    const shouldOpen = simulationSpeedMenu.hidden;
+    simulationSpeedMenu.hidden = !shouldOpen;
+    simulationSpeedTrigger?.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+}
+
+function updateSimulationSpeedBadge(): void {
+    const speedLabel = formatSimulationSpeed(simulationSpeedMultiplier);
+    if (simulationSpeedTrigger instanceof HTMLElement) {
+        simulationSpeedTrigger.textContent = speedLabel;
+        simulationSpeedTrigger.title = `Simulation speed ${speedLabel}`;
+        simulationSpeedTrigger.setAttribute('aria-label', `Simulation speed ${speedLabel}`);
+    }
+    document.querySelectorAll('.simulation-speed-option').forEach((option) => {
+        if (!(option instanceof HTMLElement)) return;
+        option.classList.toggle('active', option.dataset.speed === String(simulationSpeedMultiplier));
+    });
+    if (executeButton instanceof HTMLButtonElement) {
+        const label = runControlState === 'executing'
+            ? `Change simulation speed (${speedLabel})`
+            : translateUi('ui.execute');
+        executeButton.title = label;
+        executeButton.setAttribute('aria-label', label);
+    }
+}
+
+function applySimulationSpeed(speed: number): void {
+    simulationSpeedMultiplier = speed;
+    activeClangShim?.setSimulationSpeed(speed);
+    hackCable.emulatorManager.setSimulationSpeed(speed);
+    updateSimulationSpeedBadge();
+}
+
 function setEsp32RuntimeInputPin(pin: number, value: boolean): void {
     hackCable.emulatorManager.setInputPin(pin, value);
     activeClangShim?.setInputPin(pin, value);
@@ -814,6 +864,7 @@ function setRunControlState(state: RunControlState) {
 
     runControlState = state;
     updateCompileButtonMode(state === 'compiling' && activeCompileCancel !== null);
+    updateSimulationSpeedBadge();
 
     switch (state) {
         case 'needs-compile':
@@ -933,11 +984,48 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
     if(hex) hexInput.value = hex;
 
     setRunControlState('needs-compile');
+    applySimulationSpeed(1);
     registerSerialDataCallback();
 
     compileButton.addEventListener("click", () => compile());
     executeButton.addEventListener("click", () => {
+        if (runControlState === 'executing') {
+            toggleSimulationSpeedMenu();
+            return;
+        }
+        closeSimulationSpeedMenu();
         if (execute()) setTimeout(startIOMonitor, 200);
+    });
+    simulationSpeedTrigger?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        toggleSimulationSpeedMenu();
+    });
+    simulationSpeedMenu?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const option = (event.target as HTMLElement | null)?.closest('.simulation-speed-option');
+        if (!(option instanceof HTMLElement)) return;
+        const nextSpeed = Number(option.dataset.speed);
+        if (!SIMULATION_SPEED_OPTIONS.includes(nextSpeed as typeof SIMULATION_SPEED_OPTIONS[number])) return;
+        applySimulationSpeed(nextSpeed);
+        closeSimulationSpeedMenu();
+        showPlainStatus(`Simulation speed ${formatSimulationSpeed(nextSpeed)}`, 'info', 1200);
+    });
+    document.addEventListener('click', (event) => {
+        const target = event.target as Node | null;
+        if (
+            target
+            && (
+                simulationSpeedMenu?.contains(target)
+                || simulationSpeedTrigger?.contains(target)
+                || executeButton.contains(target)
+            )
+        ) {
+            return;
+        }
+        closeSimulationSpeedMenu();
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') closeSimulationSpeedMenu();
     });
     buildCircuitFromCodeButton?.addEventListener('click', () => buildCircuitFromCurrentCode());
     clearCodeButton?.addEventListener('click', () => {
@@ -1140,6 +1228,7 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                 (pin) => readBridgeNumber('hackcable_analog_read', [pin], 0),
             );
             activeClangShim = shim;
+            shim.setSimulationSpeed(simulationSpeedMultiplier);
             if (normalizeBoardSelection(boardSelectEl?.value) === 'handysense-real') {
                 primeHandysenseRealRuntimeInputs(sourceCode);
             }
@@ -1169,6 +1258,7 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                                 appendSerial('Runtime error: ' + (e as Error).message + '\n');
                             },
                             () => activeClangLoopPaused,
+                            () => simulationSpeedMultiplier,
                         );
                     }
                     autoActivateSensorsFromCode(sourceCode);
@@ -3760,7 +3850,18 @@ uploadSessionInput?.addEventListener('change', () => {
 function syncRunButtonA11yLabels() {
     document.querySelectorAll('.run-circle-btn').forEach((element) => {
         if (!(element instanceof HTMLButtonElement)) return;
-        const label = (element.textContent || '').trim();
+        const titleKey = element.getAttribute('data-i18n-title');
+        const translatedTitle = titleKey ? translateUi(titleKey) : '';
+        let label = translatedTitle && translatedTitle !== titleKey
+            ? translatedTitle
+            : (element.getAttribute('title') || '').trim();
+        if (element.id === 'compile' && element.classList.contains('is-cancel')) {
+            label = 'Cancel compile';
+        } else if (element.id === 'pause' && element.getAttribute('aria-pressed') === 'true') {
+            label = 'Resume';
+        } else if (element.id === 'execute' && runControlState === 'executing') {
+            label = `Change simulation speed (${formatSimulationSpeed(simulationSpeedMultiplier)})`;
+        }
         if (!label) return;
         element.title = label;
         element.setAttribute('aria-label', label);
