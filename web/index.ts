@@ -29,6 +29,106 @@ const languageStorageKey = 'hackCable-webExample-language';
 localStorage.setItem(languageStorageKey, 'en_us');
 let hackCable = new HackCable(mountingDiv, 'en_us');
 
+type SimulationLogActivity = 'login' | 'execute';
+
+const BFARM_WEB_LOG_ENDPOINT = 'https://bfarm-api.noip.in.th/web/log';
+const SIMULATION_LOG_WEB_NAME = 'simulation';
+const LOCAL_DEV_EMAIL = 'local@hackcable.dev';
+
+function getCookie(name: string): string {
+    const target = `${encodeURIComponent(name)}=`;
+    const cookie = document.cookie
+        .split(';')
+        .map((value) => value.trim())
+        .find((value) => value.startsWith(target));
+    if (!cookie) return '';
+
+    try {
+        return decodeURIComponent(cookie.slice(target.length));
+    } catch (_error) {
+        return cookie.slice(target.length);
+    }
+}
+
+function getLogEmail(): string {
+    return getCookie('email') || LOCAL_DEV_EMAIL;
+}
+
+async function saveLog(logData: {
+    email: string;
+    web: string;
+    activity: SimulationLogActivity;
+    lat?: number;
+    lng?: number;
+}): Promise<void> {
+    try {
+        const response = await fetch(BFARM_WEB_LOG_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(logData),
+        });
+
+        if (!response.ok) {
+            console.warn(`[web-log] API returned ${response.status}`);
+        }
+    } catch (error) {
+        console.warn('[web-log] Unable to save log:', error);
+    }
+}
+
+function saveLogWithLocation(email: string, web: string, activity: SimulationLogActivity): void {
+    const submitLog = (location?: { lat: number; lng: number }) => {
+        void saveLog({
+            email: email || LOCAL_DEV_EMAIL,
+            web,
+            activity,
+            ...location,
+        });
+    };
+
+    if (!('geolocation' in navigator)) {
+        submitLog();
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            submitLog({
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+            });
+        },
+        () => submitLog(),
+        {
+            enableHighAccuracy: false,
+            maximumAge: 5 * 60 * 1000,
+            timeout: 3000,
+        },
+    );
+}
+
+function trackSimulationActivity(activity: SimulationLogActivity): void {
+    saveLogWithLocation(getLogEmail(), SIMULATION_LOG_WEB_NAME, activity);
+}
+
+function trackSimulationLoginOnce(): void {
+    const email = getLogEmail();
+    const sessionKey = `hackCable-web-log:${SIMULATION_LOG_WEB_NAME}:login:${email}`;
+
+    try {
+        if (sessionStorage.getItem(sessionKey)) return;
+        sessionStorage.setItem(sessionKey, '1');
+    } catch (_error) {
+        // If sessionStorage is unavailable, still send the log rather than blocking the app.
+    }
+
+    saveLogWithLocation(email, SIMULATION_LOG_WEB_NAME, 'login');
+}
+
+trackSimulationLoginOnce();
+
 function notifyShellWhenInitialRenderIsReady() {
     const afterFonts = document.fonts?.ready ?? Promise.resolve();
     const fontReadyOrTimeout = Promise.race([
@@ -994,7 +1094,10 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
             return;
         }
         closeSimulationSpeedMenu();
-        if (execute()) setTimeout(startIOMonitor, 200);
+        if (execute()) {
+            trackSimulationActivity('execute');
+            setTimeout(startIOMonitor, 200);
+        }
     });
     simulationSpeedTrigger?.addEventListener('click', (event) => {
         event.stopPropagation();
@@ -1286,7 +1389,10 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
         if (!detail) return;
 
         if (detail.control === 'reset') {
-            if (execute()) setTimeout(startIOMonitor, 200);
+            if (execute()) {
+                trackSimulationActivity('execute');
+                setTimeout(startIOMonitor, 200);
+            }
             return;
         }
 
@@ -4275,7 +4381,52 @@ void loop() {
 }`,
 
     // Example 7: Relay Sequential Blink (4 relays)
-    // Example 8: MCP23008 Smart Farm Control (2 sensors + 4 MCP23008 outputs)
+    // Example 8: MCP23008 Cron real-time test on Handysense real
+    mcpSmartControlRealtime1740: `#include <HandySense.h>
+#include <Arduino.h>
+#include <WiFi.h>
+#include <Wire.h>
+#include <WiFiClient.h>
+#include <WebServer.h>
+#include "time.h"
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+#include <time.h>
+#include "cjob.h"
+#include "MCP23008.h"
+
+int CJOB_begin;
+CronID_t id_MyJob;
+void MyJob();
+MCP23008 MCP (0x24);
+
+void MyJob(){
+  
+  MCP.digitalWrite(0, HIGH);
+  delay(1000);
+  
+  MCP.digitalWrite(0, LOW);
+  delay(1000);
+}
+void setup() {
+  setPin_Relay(32, 33, 25, 26);
+  setPin_SW(36, 39, 34, 35);
+  setPin_ErrorSensor(19, 18, 5);
+  Wire.begin();
+  Wire.setClock(10000);
+  MCP.begin();
+  MCP.pinMode8(0x00);
+  
+  id_MyJob=Cron.create("0 40 17 * * *",MyJob,false);
+  
+}
+
+void loop() {
+  Cron.delay();
+  
+}`,
+
+    // Example 9: MCP23008 Smart Farm Control (manual blink)
     mcpSmartControl: `#include <HandySense.h>
 #include <Arduino.h>
 #include <WiFi.h>
@@ -7587,6 +7738,9 @@ if (codeExamplesSelect && codeInput instanceof HTMLTextAreaElement) {
                 case 'handysense_real_sensor_dt_par485_test':
                     setupHandysenseRealSensorRs485TestCircuit(70, 'DT-Par485');
                     break;
+                case 'mcpSmartControlRealtime1740':
+                    setupMcpSmartControlCircuit();
+                    break;
                 case 'mcpSmartControl':
                     setupMcpSmartControlCircuit();
                     break;
@@ -9543,25 +9697,26 @@ function setupRelayBlinkCircuit() {
     }, 500);
 }
 
-// Example 8: MCP23008 Blink - board + LED on IO25 (MCP pin 0)
+// Example 8: MCP23008 Blink on Handysense real relay0 output
 function setupMcpSmartControlCircuit() {
-    console.log("Setting up MCP23008 Blink circuit...");
+    console.log("Setting up MCP23008 Blink circuit on Handysense real...");
+    selectBoardForExample('handysense-real');
     hackCable.editor.canvas.clear();
 
-    // HandySense Pro board (id: 28)
-    const boardFigure = new ComponentFigure(wokwiComponentById[28]);
-    hackCable.editor.canvas.add(boardFigure.setX(900).setY(600));
+    const boardFigure = new ComponentFigure(wokwiComponentById[51]);
+    hackCable.editor.canvas.add(boardFigure.setX(900).setY(510));
 
-    // LED on IO25 (MCP pin 0)
     const ledFigure = new ComponentFigure(wokwiComponentById[1]);
-    hackCable.editor.canvas.add(ledFigure.setX(20).setY(60));
+    hackCable.editor.canvas.add(ledFigure.setX(995).setY(780));
 
     setTimeout(() => {
         try {
-            connectPorts(ledFigure, "A", boardFigure, "IO25");
-            connectPorts(ledFigure, "C", boardFigure, "GND_5");
+            connectPorts(boardFigure, 'RELAY5V_VIN', boardFigure, 'R1_COM');
+            connectPorts(boardFigure, 'R1_NO', ledFigure, 'A');
+            connectPorts(ledFigure, 'C', boardFigure, 'RELAY5V_GND');
+            scheduleInitialViewportCenter(150);
 
-            console.log("MCP23008 Blink circuit setup complete!");
+            console.log("MCP23008 Blink circuit setup complete on Handysense real.");
         } catch (error) {
             console.error("Error during wiring:", error);
         }

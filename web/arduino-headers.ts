@@ -166,6 +166,7 @@ extern "C" {
     float hackcable_bh1750_lux();
     float hackcable_sen55_value(int index);
     int   hackcable_modbus_read(int slaveId, int regAddr);
+    int   hackcable_local_second_of_day();
 }
 
 inline int Read4_20mA_MPC3424(int ch) { return analogRead(ch); }
@@ -739,14 +740,182 @@ export const CJOB_H = `
 
 typedef int CronID_t;
 
+enum _CronMode {
+    _CRON_INTERVAL,
+    _CRON_DAILY_FIXED
+};
+
+struct _CronField {
+    bool any;
+    int every;
+    int value;
+};
+
+struct _CronEntry {
+    void (*cb)();
+    _CronMode mode;
+    unsigned long intervalMs;
+    unsigned long lastMs;
+    bool first;
+    bool once;
+    bool enabled;
+    bool completed;
+    int second;
+    int minute;
+    int hour;
+    int lastSecondOfDay;
+};
+
+static _CronEntry _cron_entries[16] = {};
+static int _cron_n = 0;
+
+static const char* _cronSkipSpaces(const char* p) {
+    while (p && *p == ' ') p++;
+    return p;
+}
+
+static bool _cronIsDigit(char c) {
+    return c >= '0' && c <= '9';
+}
+
+static const char* _cronReadField(const char* p, _CronField& field) {
+    field.any = false;
+    field.every = 0;
+    field.value = -1;
+    p = _cronSkipSpaces(p);
+    if (!p || !*p) return p;
+
+    if (*p == '*') {
+        field.any = true;
+        p++;
+        if (*p == '/') {
+            p++;
+            int n = 0;
+            while (_cronIsDigit(*p)) {
+                n = n * 10 + (*p - '0');
+                p++;
+            }
+            field.every = n > 0 ? n : 0;
+        }
+    } else if (_cronIsDigit(*p)) {
+        int n = 0;
+        while (_cronIsDigit(*p)) {
+            n = n * 10 + (*p - '0');
+            p++;
+        }
+        field.value = n;
+    }
+
+    while (*p && *p != ' ') p++;
+    return p;
+}
+
+static bool _cronMatchesEvery(const _CronField& field) {
+    return field.any && field.every > 0;
+}
+
+static bool _cronMatchesAny(const _CronField& field) {
+    return field.any && field.every == 0;
+}
+
+static unsigned long _cronIntervalMsFromFields(const _CronField& sec, const _CronField& min) {
+    if (_cronMatchesAny(sec)) return 1000UL;
+    if (_cronMatchesEvery(sec)) return (unsigned long)sec.every * 1000UL;
+    if (sec.value == 0 && _cronMatchesEvery(min)) return (unsigned long)min.every * 60000UL;
+    return 60000UL;
+}
+
+static bool _cronParse(const char* expr, _CronEntry& entry) {
+    _CronField sec, min, hour, day, month, weekday;
+    const char* p = expr;
+    p = _cronReadField(p, sec);
+    p = _cronReadField(p, min);
+    p = _cronReadField(p, hour);
+    p = _cronReadField(p, day);
+    p = _cronReadField(p, month);
+    _cronReadField(p, weekday);
+
+    if (sec.value >= 0 && min.value >= 0 && hour.value >= 0) {
+        entry.mode = _CRON_DAILY_FIXED;
+        entry.second = sec.value;
+        entry.minute = min.value;
+        entry.hour = hour.value;
+        entry.intervalMs = 0;
+        entry.lastSecondOfDay = hackcable_local_second_of_day();
+        return true;
+    }
+
+    entry.mode = _CRON_INTERVAL;
+    entry.intervalMs = _cronIntervalMsFromFields(sec, min);
+    return true;
+}
+
+static bool _cronCrossedTarget(int previous, int current, int target) {
+    if (previous < 0) return current == target;
+    if (previous == current) return false;
+    if (previous < current) return previous < target && target <= current;
+    return target > previous || target <= current;
+}
+
 class _CronClass {
 public:
-    CronID_t create(const char* /*expr*/, void (*/*callback*/)(), bool /*runNow*/ = false) { return 1; }
-    template<typename Handler> CronID_t create(const char* /*expr*/, Handler /*callback*/, bool /*runNow*/ = false) { return 1; }
-    void enable(CronID_t /*id*/) {}
-    void disable(CronID_t /*id*/) {}
-    void free(CronID_t /*id*/) {}
-    void delay() {}
+    CronID_t create(const char* expr, void (*callback)(), bool once = false) {
+        if (_cron_n >= 16 || !callback) return -1;
+        _CronEntry entry;
+        entry.cb = callback;
+        entry.mode = _CRON_INTERVAL;
+        entry.intervalMs = 60000UL;
+        entry.lastMs = 0;
+        entry.first = true;
+        entry.once = once;
+        entry.enabled = true;
+        entry.completed = false;
+        entry.second = 0;
+        entry.minute = 0;
+        entry.hour = 0;
+        entry.lastSecondOfDay = -1;
+        _cronParse(expr, entry);
+        _cron_entries[_cron_n] = entry;
+        return _cron_n++;
+    }
+    template<typename Handler> CronID_t create(const char* expr, Handler callback, bool once = false) {
+        return create(expr, (void (*)())callback, once);
+    }
+    void enable(CronID_t id) {
+        if (id >= 0 && id < _cron_n) _cron_entries[id].enabled = true;
+    }
+    void disable(CronID_t id) {
+        if (id >= 0 && id < _cron_n) _cron_entries[id].enabled = false;
+    }
+    void free(CronID_t id) {
+        if (id >= 0 && id < _cron_n) _cron_entries[id].completed = true;
+    }
+    void delay() {
+        ::delay(10);
+        unsigned long nowMs = millis();
+        int nowSecondOfDay = hackcable_local_second_of_day();
+
+        for (int i = 0; i < _cron_n; i++) {
+            _CronEntry& entry = _cron_entries[i];
+            if (!entry.enabled || entry.completed) continue;
+
+            bool shouldRun = false;
+            if (entry.mode == _CRON_DAILY_FIXED) {
+                int target = entry.hour * 3600 + entry.minute * 60 + entry.second;
+                shouldRun = _cronCrossedTarget(entry.lastSecondOfDay, nowSecondOfDay, target);
+                entry.lastSecondOfDay = nowSecondOfDay;
+            } else if (entry.first || nowMs - entry.lastMs >= entry.intervalMs) {
+                shouldRun = true;
+                entry.first = false;
+                entry.lastMs = nowMs;
+            }
+
+            if (shouldRun && entry.cb) {
+                entry.cb();
+                if (entry.once) entry.completed = true;
+            }
+        }
+    }
 };
 
 static _CronClass Cron;

@@ -34,6 +34,7 @@ export class ArduinoWasmShim {
     private simulationSpeedMultiplier = 1;
     private timeAnchorRealMs = performance.now();
     private timeAnchorSimMs = 0;
+    private wallClockAnchorMs = Date.now();
     private loopTimelineActive = false;
     private loopTimelineMs = 0;
     private scheduledPinEvents: QueuedPinEvent[] = [];
@@ -270,6 +271,10 @@ export class ArduinoWasmShim {
                 hackcable_modbus_read(slaveId: number, regAddr: number): number {
                     return self.onModbusRead(slaveId, regAddr);
                 },
+                hackcable_local_second_of_day(): number {
+                    const now = new Date(self.getSimulatedWallClockMs());
+                    return now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+                },
             }
         };
     }
@@ -298,6 +303,10 @@ export class ArduinoWasmShim {
 
     private getSimulatedTimeMs(now = performance.now()): number {
         return this.timeAnchorSimMs + (now - this.timeAnchorRealMs) * this.simulationSpeedMultiplier;
+    }
+
+    private getSimulatedWallClockMs(now = performance.now()): number {
+        return this.wallClockAnchorMs + this.getSimulatedTimeMs(now);
     }
 
     private flushDuePinEvents(now: number): void {
