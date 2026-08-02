@@ -5,6 +5,42 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
 const webpack = require('webpack')
 
+const normalizeBasePath = (value) => {
+    const trimmed = String(value || '').trim();
+    if (!trimmed || trimmed === '/') return '';
+    return `/${trimmed.replace(/^\/+|\/+$/g, '')}`;
+};
+const routeFor = (basePath, pathSuffix = '') =>
+    `${basePath}/${String(pathSuffix).replace(/^\/+/, '')}`;
+const normalizeRoutePath = (value) => {
+    const trimmed = String(value || '').replace(/\/index\.html$/, '').replace(/\/+$/, '');
+    return trimmed || '';
+};
+
+const appBasePath = normalizeBasePath(process.env.APP_BASE_PATH);
+const publicUrl = (pathSuffix) => `${appBasePath}/${pathSuffix.replace(/^\/+/, '')}`;
+const docsPublicPath = appBasePath
+    ? publicUrl('docs')
+    : routeFor('', 'simulation/docs');
+// Blockly is a sibling application at the domain root, not a child of the
+// simulation mount (for example, /blockly rather than /simulation/blockly).
+const blocklyRedirectPath = routeFor('', 'blockly');
+const localEmailCookieValue = 'local@hackcable.dev';
+const localHostnames = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+const hasCookie = (req, name) =>
+    String(req.headers.cookie || '')
+        .split(';')
+        .some((cookie) => cookie.trim().split('=')[0] === name);
+const isLocalRequest = (req) => localHostnames.has(req.hostname);
+const rootEntryPaths = new Set([
+    normalizeRoutePath(routeFor('', '')),
+    normalizeRoutePath(routeFor('', 'index.html')),
+    normalizeRoutePath(routeFor(appBasePath, '')),
+    normalizeRoutePath(routeFor(appBasePath, 'index.html')),
+]);
+const isRootEntryRequest = (req) =>
+    req.method === 'GET' && rootEntryPaths.has(normalizeRoutePath(req.path));
+
 module.exports = {
     entry: ["@babel/polyfill", path.resolve(__dirname, 'web') + "/index.ts"],
     performance: {
@@ -14,32 +50,77 @@ module.exports = {
         asyncWebAssembly: true,
         topLevelAwait: true
     },
-    externals: {
-        // Exclude MicroPython from bundling - load it dynamically instead
-        '@micropython/micropython-webassembly-pyscript': 'micropythonModule'
-    },
     devServer: {
+        host: '0.0.0.0',
         client: {
             overlay: true,
         },
+        allowedHosts: 'all',
         compress: true,
         port: 3000,
         static: [
             {
-                directory: path.join(__dirname, 'node_modules/@micropython/micropython-webassembly-pyscript'),
-                publicPath: '/'
+                directory: path.join(__dirname, 'dist/web/docs'),
+                publicPath: docsPublicPath
+            },
+            {
+                directory: path.join(__dirname, 'web/wasm-clang'),
+                publicPath: publicUrl('wasm-clang')
             }
         ],
         headers: {
             'Cross-Origin-Opener-Policy': 'same-origin',
-            'Cross-Origin-Embedder-Policy': 'require-corp'
+            // Keeps SharedArrayBuffer available for browser-side wasm-clang.
+            'Cross-Origin-Embedder-Policy': 'credentialless'
+        },
+        onBeforeSetupMiddleware: (devServer) => {
+            devServer.app.use((req, res, next) => {
+                if (isRootEntryRequest(req) && !hasCookie(req, 'email')) {
+                    if (isLocalRequest(req)) {
+                        res.cookie('email', localEmailCookieValue, {
+                            path: '/',
+                            sameSite: 'lax',
+                        });
+                        next();
+                        return;
+                    }
+
+                    res.redirect(302, blocklyRedirectPath);
+                    return;
+                }
+                next();
+            });
+
+            if (appBasePath) {
+                devServer.app.use((req, res, next) => {
+                    if (req.path === appBasePath) {
+                        res.redirect(308, `${appBasePath}/`);
+                        return;
+                    }
+                    next();
+                });
+            }
+            devServer.app.get(`${appBasePath}/`, (_req, res) => {
+                res.sendFile(path.join(__dirname, 'web/shell.html'));
+            });
+            if (!appBasePath) {
+                devServer.app.get(routeFor('', 'simulation'), (_req, res) => {
+                    res.sendFile(path.join(__dirname, 'web/shell.html'));
+                });
+            }
         }
     },
 
     optimization: {
         minimizer: [
             new TerserPlugin({
+                exclude: /wasm-clang[\\/]/,
                 terserOptions: {
+                    compress: {
+                        // Drop noisy runtime logs in production builds to reduce
+                        // console retention pressure and client memory growth.
+                        pure_funcs: ['console.log', 'console.debug', 'console.info'],
+                    },
                     keep_classnames: true,
                     keep_fnames: true,
                 },
@@ -48,7 +129,8 @@ module.exports = {
     },
     output: {
         filename: 'bundle.js',
-        path: path.resolve(__dirname, 'dist/web'),
+        path: path.resolve(__dirname, 'dist/web/hackcable'),
+        publicPath: publicUrl('hackcable/'),
         clean: true
     },
     resolve: {
@@ -105,12 +187,12 @@ module.exports = {
                     to: 'assets'
                 },
                 {
-                    from: './node_modules/@micropython/micropython-webassembly-pyscript/micropython.wasm',
-                    to: 'micropython.wasm'
+                    from: './web/wasm-clang',
+                    to: path.resolve(__dirname, 'dist/web/wasm-clang')
                 },
                 {
-                    from: './node_modules/@micropython/micropython-webassembly-pyscript/micropython.mjs',
-                    to: 'micropython.mjs'
+                    from: './web/shell.html',
+                    to: path.resolve(__dirname, 'dist/web/index.html')
                 }
             ]
         }),
@@ -119,6 +201,9 @@ module.exports = {
             "$": "jquery",
             "jQuery": "jquery",
             "window.jQuery": "jquery"
-        })
+        }),
+        new webpack.DefinePlugin({
+            'process.env.APP_BASE_PATH': JSON.stringify(appBasePath),
+        }),
     ],
 }

@@ -12,7 +12,7 @@ This guide will help you deploy HackCable (Arduino and ESP32 simulator) to Verce
 
 ## Deployment Methods
 
-### Method 1: Deploy via Vercel CLI (Recommended)
+### Method 1: Deploy via Vercel CLI
 
 1. Install dependencies:
    ```bash
@@ -29,7 +29,7 @@ This guide will help you deploy HackCable (Arduino and ESP32 simulator) to Verce
    vercel login
    ```
 
-4. Deploy to Vercel:
+4. Deploy:
    ```bash
    vercel
    ```
@@ -41,48 +41,43 @@ This guide will help you deploy HackCable (Arduino and ESP32 simulator) to Verce
 
 ### Method 2: Deploy via Vercel Dashboard
 
-1. Push your code to a Git repository (GitHub, GitLab, or Bitbucket)
-
+1. Push your code to a Git repository
 2. Go to https://vercel.com/new
-
 3. Import your repository
-
-4. Vercel will automatically detect the configuration from `vercel.json`
-
+4. Vercel will detect the configuration from `vercel.json`
 5. Click "Deploy"
 
 ## Configuration
 
-The project is already configured with the necessary Vercel settings in `vercel.json`:
+The project is configured with the necessary Vercel settings in `vercel.json`:
 
 - **Build Command**: `npm run build:web`
 - **Output Directory**: `dist/web`
-- **Headers**: Cross-Origin headers are configured for WebAssembly support
+- **Headers**: Cross-Origin headers are configured for browser-side `wasm-clang`
+
+`npm run build:web` builds the simulation shell, HackCable web bundle, and documentation site. Blockly is deployed separately and is reached through the sibling `/blockly` route.
 
 ### Important Headers
 
-The following headers are required for MicroPython (WebAssembly) to work:
+The following headers are required for browser-side `wasm-clang`:
 - `Cross-Origin-Opener-Policy: same-origin`
-- `Cross-Origin-Embedder-Policy: require-corp`
-
-These are already configured in `vercel.json`.
+- `Cross-Origin-Embedder-Policy: credentialless`
 
 ## Build Output
 
 The build process creates the following files in `dist/web/`:
 - `index.html` - Main HTML file
 - `bundle.js` - Compiled JavaScript bundle
-- `micropython.wasm` - MicroPython WebAssembly binary
-- `micropython.mjs` - MicroPython JavaScript module
 - `assets/` - Static assets (icons, SVG files)
+- `wasm-clang/` - Self-hosted Clang/LLVM WASM toolchain assets
 
 ## Verification
 
 After deployment, verify that:
 1. The application loads without errors
 2. You can select different boards (Arduino Uno, ESP32, Handysense Pro)
-3. Code compilation and execution works properly
-4. WebAssembly modules load correctly (check browser console for errors)
+3. ESP32 code compiles and executes through Clang/LLVM
+4. `/wasm-clang` assets load correctly in the browser
 
 ## Troubleshooting
 
@@ -100,6 +95,7 @@ If the build fails:
 ### Missing Assets
 If assets are not loading:
 - Verify that the `web/assets/` directory contains all necessary files
+- Verify that the `web/wasm-clang/` directory contains the compiler assets
 - Check the browser console for 404 errors
 
 ## Local Development
@@ -111,19 +107,13 @@ npm install
 npm run serve:web
 ```
 
-This will start a development server at http://localhost:3000
+This starts a development server at http://localhost:3000
 
 ## Environment Variables
 
-This project doesn't require any environment variables for deployment.
-
-## Custom Domain
-
-To add a custom domain:
-1. Go to your project on Vercel Dashboard
-2. Navigate to Settings > Domains
-3. Add your custom domain
-4. Follow the DNS configuration instructions
+Set `APP_BASE_PATH` when the deployment is mounted below the domain root. For
+example, use `/simulation` for `https://bfarm.in.th/simulation/`. Leave it
+unset (or set it to `/`) for a root deployment.
 
 ## Support
 

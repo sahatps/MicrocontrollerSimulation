@@ -63,9 +63,9 @@ export class RelayElement extends LitElement {
         <!-- Left Output Terminal Block (green screw terminals) -->
         <rect x="0" y="12" width="14" height="44" fill="#5cb85c" stroke="#2d6d2d" stroke-width="0.4" rx="1" />
         <!-- Terminal screw holes -->
-        <circle cx="7" cy="20" r="3.5" fill="#333" stroke="#000" stroke-width="0.3" />
-        <circle cx="7" cy="32" r="3.5" fill="#333" stroke="#000" stroke-width="0.3" />
-        <circle cx="7" cy="44" r="3.5" fill="#333" stroke="#000" stroke-width="0.3" />
+        <circle cx="7" cy="20" r="3" fill="#e8e8e8" stroke="#999" stroke-width="0.5" />
+        <circle cx="7" cy="32" r="3" fill="#e8e8e8" stroke="#999" stroke-width="0.5" />
+        <circle cx="7" cy="44" r="3" fill="#e8e8e8" stroke="#999" stroke-width="0.5" />
         <!-- Screw slots -->
         <line x1="3.5" y1="20" x2="10.5" y2="20" stroke="#555" stroke-width="1" />
         <line x1="3.5" y1="32" x2="10.5" y2="32" stroke="#555" stroke-width="1" />

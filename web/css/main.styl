@@ -10,19 +10,15 @@ body
     padding 0
     min-height 100vh
     position relative
+    --controlbar-width 450px
 
 header
-    position absolute
-    top 40
-    height 40px
-    width 100%
-    background-color #30343F
-    border-bottom 1px solid black
+    display none
 
 
 main
     box-sizing: border-box
-    padding-top 40px;
+    padding-top 0
     padding-bottom 20px;
     height 100vh
     overflow hidden
@@ -229,6 +225,23 @@ main
                 background-color #f44336
                 color white
 
+            &.wiring-validation-status
+                max-height 220px
+                overflow-y auto
+                text-align left
+                line-height 1.45
+
+                strong
+                    display block
+                    margin-bottom 6px
+
+                ul
+                    margin 0
+                    padding-left 22px
+
+                li + li
+                    margin-top 4px
+
         label
             display block
             margin-top 10px
@@ -250,7 +263,7 @@ main
         flex 1
         overflow auto
         background-color #f5f5f5
-        margin-right 340px
+        margin-right var(--controlbar-width)
         transition margin-right 0.3s ease
 
 body.controlbar-hidden #hackCable
@@ -259,20 +272,27 @@ body.controlbar-hidden #hackCable
 .controlBar
     position fixed
     right 0
-    top 40px
-    bottom 20px
-    width 340px
-    background-color #30343F
-    border-left 1px solid black
-    padding 10px
+    top 0
+    width var(--controlbar-width)
+    height 100%
+    margin-bottom 10px
+    background-color #77af5a
+    border-left 1px solid #5f9447
+    padding 10px 10px
     display flex
     flex-direction column
-    gap 6px
+    gap 1rem
     overflow-x hidden
     overflow-y auto
+    -ms-overflow-style none
+    scrollbar-width none
     transition width 0.3s ease, padding 0.3s ease
     box-sizing border-box
     z-index 1000
+
+    &::-webkit-scrollbar
+        width 0
+        background transparent
 
     &.hidden
         width 0
@@ -280,13 +300,88 @@ body.controlbar-hidden #hackCable
         border-left none
         overflow hidden
 
+    .controlbar-resize-handle
+        position absolute
+        left 0
+        top 0
+        bottom 0
+        width 10px
+        transform translateX(-50%)
+        cursor ew-resize
+        z-index 1003
+
+    &.hidden .controlbar-resize-handle
+        display none
+
+    .controlbar-topright
+        display flex
+        flex-direction row
+        gap 4px
+        width 100%
+
+    .controlbar-topright-row
+        width 100%
+        display flex
+        align-items center
+        gap 6px
+
+    .controlbar-select-corner
+        width 100%
+        padding 6px 8px
+        border 1px solid rgba(255, 255, 255, 0.25)
+        border-radius 8px
+        outline none
+        background rgba(0, 0, 0, 0.18)
+        color #fff
+        font-size 0.82rem
+        font-weight 600
+        cursor pointer
+        transition background 0.2s, border-color 0.2s
+        min-width 0
+
+        &:hover
+            background rgba(0, 0, 0, 0.28)
+            border-color rgba(255, 255, 255, 0.4)
+
+        option
+            color #111
+            background #fff
+
+            &:disabled
+                color #8f98a3
+                background #eef1ec
+
+    .language-toggle-corner
+        flex-shrink 0
+        padding 6px 10px
+        border 1px solid rgba(255, 255, 255, 0.25)
+        border-radius 8px
+        outline none
+        background rgba(0, 0, 0, 0.18)
+        color #fff
+        font-size 0.82rem
+        font-weight 700
+        cursor pointer
+        transition background 0.2s
+
+        &:hover
+            background rgba(0, 0, 0, 0.28)
+        transition color 0.2s
+
+        &:hover
+            background transparent
+            color white
+
     .status-message
         padding 8px 12px
         border-radius 5px
-        font-size 14px
+        font-size 0.95rem
         font-weight 500
         text-align center
         transition all 0.3s ease
+
+        &:empty
+            display none
 
         &.status-info
             background-color #2196F3
@@ -300,11 +395,35 @@ body.controlbar-hidden #hackCable
             background-color #f44336
             color white
 
+        &.wiring-validation-status
+            max-height 220px
+            overflow-y auto
+            text-align left
+            line-height 1.45
+
+            strong
+                display block
+                margin-bottom 6px
+
+            ul
+                margin 0
+                padding-left 22px
+
+            li + li
+                margin-top 4px
+
+    .tab-bar
+        margin-top 42px
+
+    .wiring-controls,
+    .wiring-controls[hidden]
+        display none !important
+
     label
         display block
         margin-top 10px
         margin-bottom 5px
-        font-size 14px
+        font-size 0.95rem
 
     textarea
         border none
@@ -314,13 +433,35 @@ body.controlbar-hidden #hackCable
         min-height 120px
         padding 8px
         font-family monospace
-        font-size 13px
+        font-size 0.9rem
         box-sizing border-box
+        scrollbar-width thin
+        scrollbar-color rgba(229, 231, 235, 0.12) transparent
+
+        &::-webkit-scrollbar
+            width 8px
+            height 8px
+
+        &::-webkit-scrollbar-track
+            background transparent
+
+        &::-webkit-scrollbar-thumb
+            background rgba(229, 231, 235, 0.12)
+            border-radius 10px
+
+        &::-webkit-scrollbar-thumb:hover
+            background rgba(229, 231, 235, 0.22)
+
+        &::-webkit-scrollbar-corner
+            background transparent
 
     .buttonBar
         display flex
         flex-direction column
         gap 6px
+
+        &#sync-controls
+            display none !important
 
         p
             margin 0
@@ -332,7 +473,7 @@ body.controlbar-hidden #hackCable
             padding 6px 12px
             cursor pointer
             transition background-color 0.2s
-            font-size 14px
+            font-size 0.95rem
             background-color white
             color black
             width 100%
@@ -348,131 +489,1127 @@ body.controlbar-hidden #hackCable
             background-color white
             color black
             cursor pointer
-            font-size 14px
+            font-size 0.95rem
             width 100%
 
             option
                 color black
 
-    .tab-bar
-        display flex
-        gap 4px
-        flex-shrink 0
+    .buttonBar.run-controls
+        position sticky
+        top 0
+        flex-direction column
+        align-items stretch
+        gap 8px
+        z-index 25
+        margin -10px -10px 0
+        padding 10px
+        background-color #77af5a
+        border-bottom 1px solid rgba(41, 64, 28, 0.18)
+        box-shadow 0 6px 16px rgba(24, 36, 12, 0.12)
 
-        .tab-btn
+        p
+            width 100%
+            margin 0
+
+        .run-controls-row
+            display flex
+            flex-direction row
+            flex-wrap nowrap
+            align-items center
+            justify-content space-between
+            gap 0
+
+        .sim-http-toggle-btn
+            width 38px
+            min-width 38px
+            height 44px
+            padding 0
+            border none
+            outline none
+            background transparent
+            color #d3d7df
+            font-size 20px
+            line-height 1
+            text-align center
+            cursor pointer
+            flex 0 0 auto
+            display flex
+            align-items center
+            justify-content center
+            transition color 0.2s, transform 0.2s
+
+            &:hover
+                background transparent
+                color white
+
+            &:active
+                transform scale(0.95)
+
+            &.active
+                color #7dd3fc
+
+            .sim-http-icon
+                width 23px
+                height 23px
+                display block
+                fill currentColor
+
+        .session-circle-btn
+            font-size 1.2em
+            font-weight bold
+            outline #ffffff88 4px solid
+            border #77af5a 2px solid
+            background #ffffff
+            border-radius 50%
+            overflow hidden
+            height 80%
+            width 80%
+            aspect-ratio 1
+            display flex
+            justify-content center
+            align-items center
+            color #77af5a
+            cursor pointer
+            transition all 0.3s ease
+
+            &:hover:not(:disabled)
+                background #77af5a
+                color #fff
+                outline: #ffffff88 4px solid
+
+            &:active:not(:disabled)
+                transform scale(0.95)
+
+            &:disabled
+                opacity 0.45
+                cursor not-allowed
+
+            .session-action-icon
+                width auto
+                height auto
+                display block
+                font-size 40px
+                font-weight 400
+                line-height 1
+                font-variation-settings 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24
+
+        .sim-http-settings
+            position absolute
+            right 0
+            top calc(100% + 6px)
+            width 300px
+            max-width 320px
+            padding 8px
+            border 1px solid #4b5563
+            border-radius 8px
+            background-color rgba(17, 24, 39, 0.95)
+            box-shadow 0 10px 24px rgba(0, 0, 0, 0.35)
+            gap 6px
+            z-index 1010
+
+            &[hidden]
+                display none !important
+
+        .execute-speed-control
+            position relative
+            width 50px
+            height 50px
+            min-width 50px
+            aspect-ratio 1
+            overflow visible
+            flex 0 0 auto
+
+            .run-circle-btn
+                height 100%
+                width 100%
+                min-width 100%
+
+            .simulation-speed-badge
+                position absolute
+                top -8px
+                right -10px
+                width auto
+                min-width 25px
+                height 18px
+                padding 0 5px
+                border 1px solid rgba(255, 255, 255, 0.9)
+                border-radius 999px
+                background-color #1f2937
+                color #ffffff
+                display inline-flex
+                align-items center
+                justify-content center
+                font-size 10px
+                font-weight 800
+                line-height 1
+                text-align center
+                cursor pointer
+                z-index 3
+                box-shadow 0 2px 6px rgba(0, 0, 0, 0.18)
+
+                &:hover
+                    background-color #111827
+
+            .simulation-speed-menu
+                position absolute
+                top -8px
+                right -10px
+                display grid
+                grid-template-columns repeat(2, minmax(46px, 1fr))
+                gap 4px
+                padding 8px
+                border 1px solid rgba(31, 41, 55, 0.2)
+                border-radius 8px
+                background-color #ffffff
+                box-shadow 0 12px 28px rgba(17, 24, 39, 0.28)
+                z-index 1020
+
+                &[hidden]
+                    display none !important
+
+            .simulation-speed-option
+                width auto
+                border 1px solid #d1d5db
+                border-radius 6px
+                background-color #f9fafb
+                color #1f2937
+                font-size 11px
+                font-weight 800
+                line-height 1
+                text-align center
+                padding 7px 8px
+                cursor pointer
+
+                &:hover
+                    background-color #e8f3df
+                    border-color #77af5a
+                    color #365f25
+
+                &.active
+                    background-color #77af5a
+                    border-color #77af5a
+                    color #ffffff
+
+        .run-circle-btn
+            position relative
+            font-size 1.2em
+            font-weight bold
+            outline #ffffff88 4px solid
+            border #77af5a 2px solid
+            background #ffffff
+            border-radius 50%
+            overflow hidden
+            height 80%
+            width 80%
+            aspect-ratio 1
+            display flex
+            justify-content center
+            align-items center
+            color #77af5a
+            cursor pointer
+            transition all 0.3s ease
+
+            &:hover:not(:disabled)
+                background #77af5a
+                color #fff
+                outline: #ffffff88 4px solid
+
+            &:active:not(:disabled)
+                transform scale(0.95)
+
+            &:disabled
+                opacity 0.45
+                cursor not-allowed
+
+        #compile.run-circle-btn
+            border-color #77af5a
+            background-color #ffffff
+            color #77af5a    
+            outline: #ffffff88 4px solid
+
+
+            &:hover:not(:disabled)
+                background-color #62c8ce
+                color #0d7380
+                outline-color rgba(150, 228, 233, 0.75)
+
+            &.is-cancel
+                border-color #ef6f6c
+                background-color #ff8a86
+                color #7f1d1d
+                outline-color rgba(255, 183, 178, 0.55)
+
+                &:hover:not(:disabled)
+                    background-color #f27571
+                    color #6b1717
+                    outline-color rgba(255, 183, 178, 0.8)
+
+        .run-circle-btn
+            .run-btn-icon
+                font-size 22px
+                line-height 1
+                user-select none
+
+            .run-btn-svg
+                width 22px
+                height 22px
+                display block
+                flex-shrink 0
+
+        #compile.run-circle-btn
+            .icon-cancel
+                display none
+
+            &.is-cancel
+                .icon-default
+                    display none
+
+                .icon-cancel
+                    display block
+
+    #sim-http-container
+        input
+            border none
+            border-radius 5px
+            padding 6px 10px
+            font-size 0.9rem
+            font-family monospace
+            width 100%
+            box-sizing border-box
+
+        #sim-http-send
+            text-align center
+
+    #editor-code-mock-container
+        gap 0
+        margin-top 6px
+
+        .editor-tab-buttons
+            display flex
+            gap 4px
+
+        .editor-tab-btn
             flex 1
             border none
             border-radius 5px 5px 0 0
-            padding 7px 8px
+            padding 6px 10px
+            background-color #a8cd8b
+            color #f4fff0
+            font-size 1rem
+            font-weight 600
+            text-align center
             cursor pointer
-            background-color #3d4150
-            color #aaa
-            font-size 13px
-            font-weight 500
-            transition background-color 0.2s, color 0.2s
 
             &:hover
-                background-color #4a4e5a
-                color white
+                background-color #b7d79f
 
             &.active
-                background-color #4CAF50
-                color white
+                background-color #ffffff
+                color #77af5a
 
-    .tab-panel
-        display none
-        flex-direction column
-        gap 6px
+        .editor-tab-panel
+            display block
 
-        &.active
-            display flex
+            &[hidden]
+                display none
 
-    .io-section
-        .io-section-title
-            margin 0 0 6px 0
-            font-size 11px
-            font-weight 700
-            color #888
-            text-transform uppercase
-            letter-spacing 0.5px
-            border-bottom 1px solid #444
-            padding-bottom 4px
+            .code-editor-shell
+                display flex
+                align-items stretch
+                position relative
+                height 260px
+                min-height 220px
+                border-radius 0 0 5px 5px
+                border 1px solid #3a3f4b
+                background-color #1b1d23
+                overflow hidden
 
-    .io-list
-        display flex
-        flex-direction column
-        gap 4px
-        margin-bottom 8px
+                .code-editor-actions
+                    position absolute
+                    top 0
+                    right 0
+                    z-index 5
+                    display flex
+                    gap 0 !important
 
-        .io-item
+                    button
+                        display block
+                        margin 0 !important
+                        min-width 52px
+                        padding 5px 10px
+                        border 1px solid #4fa75d
+                        border-radius 0
+                        background-color rgba(27, 29, 35, 0.92)
+                        color #dff4d8
+                        font-size 0.78rem
+                        font-weight 600
+                        cursor pointer
+                        transition background-color 0.15s, color 0.15s
+
+                        &:hover
+                            background-color #4fa75d
+                            color #fff
+
+                        &:focus-visible
+                            outline 2px solid #a8cd8b
+                            outline-offset 2px
+
+                        &:first-child
+                            border-bottom-left-radius 4px
+
+                        &:last-child
+                            border-left 0
+                            margin-left -1px !important
+
+            &[data-editor-panel="code"] .CodeMirror
+                width 100%
+                height 100%
+                min-height 100%
+                background-color #1b1d23
+                color #f4efcf
+                font-family Consolas, 'Courier New', monospace
+                font-size 0.9rem
+                line-height 1.6
+
+            &[data-editor-panel="code"] .CodeMirror-gutters
+                background-color #16181d
+                border-right 1px solid #2b303b
+
+            &[data-editor-panel="code"] .CodeMirror-linenumber
+                color #4fa75d
+
+            &[data-editor-panel="code"] .CodeMirror-cursor
+                border-left 1px solid #f5f9a6
+
+            &[data-editor-panel="code"] .CodeMirror-scroll
+                scrollbar-width thin
+                scrollbar-color rgba(229, 231, 235, 0.12) transparent
+
+                &::-webkit-scrollbar
+                    width 8px
+                    height 8px
+
+                &::-webkit-scrollbar-track
+                    background transparent
+
+                &::-webkit-scrollbar-thumb
+                    background rgba(229, 231, 235, 0.12)
+                    border-radius 10px
+
+                &::-webkit-scrollbar-thumb:hover
+                    background rgba(229, 231, 235, 0.22)
+
+                &::-webkit-scrollbar-corner
+                    background transparent
+
+            &[data-editor-panel="code"] .CodeMirror-vscrollbar,
+            &[data-editor-panel="code"] .CodeMirror-hscrollbar
+                scrollbar-width thin
+                scrollbar-color rgba(229, 231, 235, 0.12) transparent
+                background transparent !important
+
+                &::-webkit-scrollbar
+                    width 8px
+                    height 8px
+
+                &::-webkit-scrollbar-track
+                    background transparent
+
+                &::-webkit-scrollbar-thumb
+                    background rgba(229, 231, 235, 0.12)
+                    border-radius 10px
+
+                &::-webkit-scrollbar-thumb:hover
+                    background rgba(229, 231, 235, 0.22)
+
+                &::-webkit-scrollbar-corner
+                    background transparent
+
+            &[data-editor-panel="code"] .CodeMirror-scrollbar-filler,
+            &[data-editor-panel="code"] .CodeMirror-gutter-filler
+                background transparent !important
+
+            .code-editor-resize-handle
+                position absolute
+                left 0
+                right 0
+                // Keep the resize hit area above the horizontal scrollbar.
+                bottom 8px
+                height 8px
+                cursor ns-resize
+                z-index 4
+                background linear-gradient(to top, rgba(79, 167, 93, 0.25), rgba(79, 167, 93, 0))
+                opacity 0.45
+                transition opacity 0.2s
+
+                &:hover
+                    opacity 0.9
+
+            &[data-editor-panel="mock"]
+                border 1px solid #3a3f4b
+                border-radius 0 0 5px 5px
+                background-color #1b1d23
+                padding 10px
+                display flex
+                flex-direction column
+                gap 10px
+
+                &[hidden]
+                    display none !important
+
+                .mock-source-toggle
+                    display flex
+                    gap 4px
+                    align-self flex-start
+                    padding 3px
+                    border 1px solid #343b47
+                    border-radius 8px
+                    background-color #151922
+
+                .mock-source-btn
+                    min-width 78px
+                    border 1px solid transparent
+                    border-radius 6px
+                    background-color transparent
+                    color #aeb7c4
+                    font-size 0.82rem
+                    font-weight 600
+                    padding 5px 12px
+                    line-height 1.1
+                    cursor pointer
+                    transition background-color 120ms ease, color 120ms ease, border-color 120ms ease
+
+                    &:hover
+                        background-color #1f2530
+                        color #e5e7eb
+
+                    &.active
+                        border-color #5e7f4a
+                        background-color #a8cd8b
+                        color #182111
+
+                .mock-source-panel
+                    display flex
+                    flex-direction column
+                    gap 10px
+
+                    &[hidden]
+                        display none !important
+
+                .mock-device-config
+                    border 1px solid #3a4658
+                    background linear-gradient(135deg, #182331, #121922)
+                    border-radius 8px
+                    padding 10px
+                    margin-bottom 10px
+
+                    &[hidden]
+                        display none !important
+
+                .mock-device-config-header
+                    display flex
+                    justify-content space-between
+                    gap 12px
+                    align-items baseline
+                    margin-bottom 8px
+
+                    h4
+                        margin 0
+                        color #f3f4f6
+
+                    span
+                        color #a7b0bf
+                        font-size .82rem
+
+                .mock-device-config-list
+                    display flex
+                    flex-direction column
+                    gap 6px
+
+                .mock-device-config-row
+                    display grid
+                    grid-template-columns minmax(0, 1fr) 130px
+                    gap 8px
+
+                    input
+                        min-width 0
+                        background #0f141c
+                        border 1px solid #3a4658
+                        color #f3f4f6
+                        border-radius 5px
+                        padding 5px 7px
+
+                    label
+                        color #a7b0bf
+                        font-size .78rem
+                        display flex
+                        flex-direction column
+                        gap 3px
+
+                .mock-device-config-errors
+                    margin-bottom 8px
+                    padding 7px 8px
+                    border-radius 5px
+                    background rgba(127, 29, 29, .35)
+                    border 1px solid #b45309
+                    color #fed7aa
+                    font-size .83rem
+
+                .mock-source-panel[data-mock-source-panel="text"]
+                    .mock-text-toolbar
+                        display flex
+                        justify-content flex-start
+
+                    .mock-text-toggle
+                        border 1px solid #343b47
+                        border-radius 8px
+                        background-color #151922
+                        color #c8d0db
+                        min-height 30px
+                        padding 5px 12px
+                        font-size 0.78rem
+                        font-weight 600
+                        line-height 1.1
+                        cursor pointer
+                        transition background-color 120ms ease, color 120ms ease, border-color 120ms ease
+
+                        &:hover
+                            background-color #1f2530
+                            color #f3f4f6
+                            border-color #475163
+
+                        &:focus
+                            outline 2px solid rgba(168, 205, 139, 0.28)
+                            outline-offset 2px
+
+                    .mock-text-layout
+                        display grid
+                        grid-template-columns repeat(auto-fit, minmax(240px, 1fr))
+                        gap 10px
+                        align-items stretch
+
+                    textarea
+                        margin-top 0
+                        border-radius 6px
+                        min-height 150px
+                        background-color #13161d
+                        color #f9fafb
+                        border 1px solid #2f3644
+                        resize vertical
+
+                        &[hidden]
+                            display none !important
+
+                    .mock-text-sliders
+                        max-height 342px
+                        overflow-y auto
+                        border 1px solid #2f3644
+                        border-radius 6px
+                        background-color #151922
+                        padding 8px
+                        display flex
+                        flex-direction column
+                        gap 8px
+
+                        &[hidden]
+                            display none !important
+
+                    .mock-text-slider-row
+                        display flex
+                        flex-direction column
+                        gap 5px
+                        border 1px solid #273041
+                        border-radius 6px
+                        background-color #10141c
+                        padding 7px 8px
+
+                    .mock-text-slider-header
+                        display flex
+                        justify-content space-between
+                        align-items center
+                        gap 8px
+                        color #e5e7eb
+                        font-size 0.82rem
+                        font-weight 600
+
+                    .mock-text-slider-name
+                        min-width 0
+                        overflow hidden
+                        text-overflow ellipsis
+                        white-space nowrap
+
+                    .mock-text-slider-value
+                        flex-shrink 0
+                        min-width 44px
+                        width 64px
+                        border 1px solid transparent
+                        border-radius 4px
+                        background-color #20283a
+                        color #d7f3c5
+                        padding 2px 6px
+                        text-align right
+                        font-family monospace
+                        font-size 0.82rem
+                        outline none
+
+                        &:focus
+                            border-color #a8cd8b
+                            box-shadow 0 0 0 2px rgba(168, 205, 139, 0.18)
+
+                        &::-webkit-outer-spin-button,
+                        &::-webkit-inner-spin-button
+                            -webkit-appearance none
+                            margin 0
+
+                        &[type="number"]
+                            -moz-appearance textfield
+
+                    .mock-text-slider-row input[type="range"]
+                        width 100%
+                        accent-color #a8cd8b
+                        cursor pointer
+
+                .mock-timeline-toolbar
+                    display flex
+                    justify-content space-between
+                    align-items center
+                    gap 10px
+                    flex-wrap wrap
+
+                .mock-editor-mode-toolbar
+                    display flex
+                    justify-content flex-end
+                    gap 8px
+
+                .mock-editor-mode-btn
+                    border 1px solid #3a4355
+                    border-radius 6px
+                    padding 4px 10px
+                    background-color #20283a
+                    color #d1d5db
+                    font-size 0.9rem
+                    font-weight 600
+                    cursor pointer
+
+                    &:hover
+                        background-color #2b3446
+
+                .mock-graph-editor
+                    display flex
+                    flex-direction column
+                    gap 10px
+
+                    &[hidden]
+                        display none !important
+
+                .mock-graph-controls
+                    display flex
+                    gap 8px
+                    flex-wrap wrap
+                    align-items flex-end
+
+                .mock-graph-control
+                    display inline-flex
+                    flex-direction column
+                    gap 4px
+                    color #e5e7eb
+                    font-size 0.9rem
+                    font-weight 600
+
+                    select,
+                    input
+                        min-width 90px
+                        border 1px solid #3b4456
+                        border-radius 6px
+                        background-color #10141c
+                        color #f9fafb
+                        padding 4px 8px
+                        font-size 0.9rem
+
+                .mock-delete-point-btn
+                    border 1px solid #6b2f35
+                    border-radius 6px
+                    background-color #3b1f24
+                    color #fecaca
+                    font-size 0.9rem
+                    font-weight 600
+                    padding 5px 10px
+                    cursor pointer
+
+                    &:hover:not(:disabled)
+                        background-color #4a252d
+
+                    &:disabled
+                        opacity 0.45
+                        cursor not-allowed
+
+                .mock-graph-canvas-wrap
+                    border 1px solid #2f3a4f
+                    border-radius 8px
+                    background linear-gradient(180deg, #0f172a, #111827)
+                    overflow hidden
+
+                .mock-graph-canvas
+                    width 100%
+                    height 240px
+                    display block
+
+                .mock-graph-hint
+                    font-size 0.9rem
+                    color #a7b0bf
+
+                .mock-timeline-editor
+                    &[hidden]
+                        display none !important
+
+                .mock-duration-label
+                    display inline-flex
+                    align-items center
+                    gap 8px
+                    color #e5e7eb
+                    font-size 0.9rem
+                    font-weight 600
+
+                    input
+                        width 90px
+                        border 1px solid #3b4456
+                        border-radius 6px
+                        background-color #13161d
+                        color #f9fafb
+                        padding 4px 8px
+                        font-size 0.9rem
+
+                .mock-loop-pill
+                    border 1px solid #325f88
+                    background-color rgba(59, 130, 246, 0.16)
+                    color #bfdbfe
+                    border-radius 999px
+                    padding 4px 10px
+                    font-size 0.9rem
+                    font-weight 700
+
+                .mock-timeline-tracks
+                    display flex
+                    flex-direction column
+                    gap 10px
+
+                .mock-timeline-track
+                    border 1px solid #303848
+                    background-color #141922
+                    border-radius 8px
+                    padding 8px
+                    display flex
+                    flex-direction column
+                    gap 8px
+
+                .mock-timeline-track-header
+                    display flex
+                    justify-content space-between
+                    align-items center
+                    gap 10px
+
+                .mock-timeline-track-title
+                    margin 0
+                    font-size 0.95rem
+                    color #f3f4f6
+                    font-weight 700
+
+                .mock-timeline-add-btn
+                    border 1px solid #3a4355
+                    border-radius 6px
+                    padding 4px 8px
+                    background-color #222938
+                    color #d1d5db
+                    font-size 0.9rem
+                    font-weight 600
+                    cursor pointer
+
+                    &:hover
+                        background-color #2b3446
+
+                .mock-timeline-track-axis
+                    position relative
+                    height 28px
+                    border-radius 6px
+                    background linear-gradient(90deg, #0f172a, #1e293b)
+                    border 1px solid #2f3a4f
+                    overflow hidden
+
+                .mock-timeline-segment-bar
+                    position absolute
+                    top 4px
+                    bottom 4px
+                    border-radius 4px
+                    background linear-gradient(90deg, #22d3ee, #0ea5e9)
+                    color #082f49
+                    font-size 0.9rem
+                    font-weight 700
+                    display flex
+                    align-items center
+                    justify-content center
+                    padding 0 4px
+                    overflow hidden
+                    white-space nowrap
+
+                .mock-timeline-segment-list
+                    display flex
+                    flex-direction column
+                    gap 6px
+
+                .mock-timeline-segment-item
+                    display grid
+                    grid-template-columns repeat(3, minmax(0, 1fr)) auto
+                    gap 6px
+
+                    input
+                        border 1px solid #3b4456
+                        border-radius 6px
+                        background-color #10141c
+                        color #f9fafb
+                        padding 4px 6px
+                        font-size 0.9rem
+
+                .mock-timeline-delete-btn
+                    border 1px solid #6b2f35
+                    border-radius 6px
+                    background-color #3b1f24
+                    color #fecaca
+                    font-size 0.9rem
+                    font-weight 600
+                    padding 4px 8px
+                    cursor pointer
+
+                    &:hover
+                        background-color #4a252d
+
+                .mock-timeline-empty
+                    font-size 0.9rem
+                    color #9ca3af
+                    padding 2px 0
+
+                .mock-timeline-error
+                    border 1px solid #7f1d1d
+                    background-color rgba(127, 29, 29, 0.2)
+                    border-radius 6px
+                    color #fecaca
+                    font-size 0.9rem
+                    padding 6px 8px
+
+    #compiled-io-container
+        position relative
+        gap 0
+
+        &.floating
+            position fixed
+            left 40px
+            top 80px
+            width 440px
+            height 340px
+            max-width calc(100vw - 20px)
+            max-height calc(100vh - 20px)
+            padding 8px
+            border 1px solid #4b5563
+            border-radius 8px
+            background-color #30343F
+            box-shadow 0 12px 28px rgba(0, 0, 0, 0.45)
+            resize both
+            overflow auto
+            z-index 3500
+            gap 6px
+
+        .compiled-tab-toolbar
             display flex
             align-items center
-            gap 6px
+            justify-content flex-start
+            gap 4px
+
+        .compiled-tab-buttons
+            display flex
+            flex 1
+            min-width 0
+            gap 4px
+
+        .compiled-tab-btn
+            flex 1
+            border none
+            border-radius 5px 5px 0 0
             padding 6px 8px
-            background-color #3d4150
-            border-radius 5px
-            font-size 12px
-
-            .io-item-name
-                flex 1
-                color #ddd
-                overflow hidden
-                text-overflow ellipsis
-                white-space nowrap
-
-            .io-item-pin
-                color #777
-                font-size 11px
-                flex-shrink 0
-
-            .io-item-state
-                flex-shrink 0
-                padding 2px 8px
-                border-radius 10px
-                font-size 11px
-                font-weight bold
-
-                &.state-on
-                    background-color #4CAF50
-                    color white
-
-                &.state-off
-                    background-color #555
-                    color #aaa
-
-        .io-empty
-            color #666
-            font-size 12px
+            background-color #a8cd8b
+            color #f4fff0
+            font-size 1rem
+            font-weight 600
             text-align center
-            padding 16px
-            font-style italic
+            cursor pointer
+            min-width 0
 
-.serial-monitor-header
+            &:hover
+                background-color #b7d79f
+
+            &.active
+                background-color #ffffff
+                color #77af5a
+
+        .compiled-window-actions
+            position absolute
+            top 36px
+            right 8px
+            transform none
+            display flex
+            align-items center
+            gap 4px
+            margin 0
+            z-index 5
+
+        .compiled-window-icon-btn
+            border none
+            outline none
+            background transparent
+            color #e5e7eb
+            padding 0
+            width 26px
+            min-width 26px
+            height 26px
+            display flex
+            align-items center
+            justify-content center
+            cursor pointer
+
+            svg
+                width 22px
+                height 22px
+                fill currentColor
+
+            &:hover
+                color white
+
+        .compiled-window-btn,
+        .compiled-window-drag
+            border none
+            border-radius 4px
+            padding 4px 8px
+            background-color #4b5563
+            color #e5e7eb
+            font-size 0.9rem
+            font-weight 600
+            line-height 1
+            width auto
+            min-width 0
+            text-align center
+            cursor pointer
+
+            &:hover
+                background-color #5b6776
+
+        .compiled-window-drag
+            cursor move
+            letter-spacing 1px
+
+        .compiled-tab-panel
+            display block
+
+            &[hidden]
+                display none
+
+            #code-compiled
+                margin-top 0
+                border-radius 0 0 5px 5px
+                min-height 150px
+                background-color #1a1a1a
+                color #f9fafb
+
+.sim-http-response
+    margin 0
+    padding 8px
+    min-height 52px
+    max-height 140px
+    overflow auto
+    background-color #1a1a1a
+    color #d9f99d
+    border-radius 5px
+    border 1px solid #3f4754
+    font-size 0.9rem
+    line-height 1.3
+    white-space pre-wrap
+    word-break break-word
+
+.tab-panel.io-panel
     display flex
-    justify-content space-between
-    align-items center
-    flex-shrink 0
-    padding 4px 0
+    flex-direction column
+    gap 1rem
 
-    .serial-monitor-title
+.io-section
+    display flex
+    align-items center
+    flex-wrap wrap
+    gap 6px
+
+    .io-section-header
+        display flex
+        align-items center
+        gap 6px
+        margin-bottom 0
+        flex-shrink 0
+
+    .io-section-title
+        margin 0
         font-size 11px
         font-weight 700
-        color #888
+        color #111
         text-transform uppercase
         letter-spacing 0.5px
 
-    #serial-clear
-        padding 3px 10px
-        font-size 11px
-        border none
-        border-radius 4px
-        background-color #555
-        color #ddd
-        cursor pointer
+.io-list
+    display inline-flex
+    flex-direction row
+    flex-wrap wrap
+    gap 6px
+    margin-bottom 0
 
-        &:hover
-            background-color #666
-            color white
+    .io-item
+        display flex
+        align-items center
+        justify-content flex-start
+        gap 6px
+        padding 0
+        background-color transparent
+        border-radius 0
+        font-size 12px
+
+        .io-item-name
+            flex 0 1 auto
+            color #f4f6f8
+            overflow hidden
+            text-overflow ellipsis
+            white-space nowrap
+
+        .io-item-pin
+            display inline-flex
+            align-items center
+            justify-content center
+            gap 6px
+            padding 3px 10px
+            border-radius 999px
+            border 1px solid #778090
+            background-color #5f6775
+            color #edf1f6
+            font-size 10px
+            font-weight 700
+            line-height 1
+            flex-shrink 0
+
+        &.state-on
+            .io-item-pin
+                background-color #f4d03f
+                color #342700
+                border-color #ffe082
+
+    .io-empty
+        color #666
+        font-size 12px
+        text-align center
+        padding 16px
+        font-style italic
 
 .serial-output
     height 200px
@@ -486,6 +1623,13 @@ body.controlbar-hidden #hackCable
     word-break break-all
     border-radius 4px
 
+.serial-plotter-canvas
+    display block
+    width 100%
+    height 150px
+    border-radius 4px
+    background-color #1a1a1a
+
 footer
     position absolute
     bottom 0
@@ -498,8 +1642,8 @@ footer
 @media screen and (max-width: 1024px)
     main
         .controlBar
-            width 300px
-            min-width 260px
+            width var(--controlbar-width)
+            min-width 0
 
             .buttonBar
                 button
@@ -516,11 +1660,21 @@ footer
         flex-direction column
 
         .controlBar
-            width 100%
-            min-width 100%
+            width var(--controlbar-width)
+            min-width 0
             height auto
             border-left none
             border-top 1px solid black
+
+            .controlbar-topright
+                gap 4px
+
+            .controlbar-select-corner
+                font-size 11px
+                padding 5px 7px
+
+            .tab-bar
+                margin-top 0
 
             label
                 font-size 13px
@@ -529,6 +1683,14 @@ footer
             textarea
                 min-height 80px
                 font-size 12px
+
+            .editor-tab-panel[data-editor-panel="mock"]
+                .mock-source-panel[data-mock-source-panel="text"]
+                    .mock-text-layout
+                        grid-template-columns 1fr
+
+                    .mock-text-sliders
+                        max-height 220px
 
             .buttonBar
                 flex-direction row
@@ -550,20 +1712,60 @@ footer
                     font-size 12px
                     padding 5px 8px
 
+            .buttonBar.run-controls
+                flex-direction column
+                align-items stretch
+
+                .run-controls-row
+                    flex-wrap nowrap
+                    gap 0
+
+                .run-circle-btn
+                    width 40px
+                    height 40px
+                    min-width 40px
+                    flex 0 0 auto
+
+                .execute-speed-control
+                    width 40px
+                    height 40px
+                    min-width 40px
+
+                .sim-http-toggle-btn
+                    width 34px
+                    min-width 34px
+                    height 40px
+                    font-size 18px
+
+                .session-circle-btn
+                    width 200px
+                    min-width 40px
+                    height 200px
+
+                .sim-http-settings
+                    width 280px
+
         #hackCable
             height 50vh
             overflow auto
 
+body.controlbar-resizing
+    #hackCable
+        transition none
+
+    .controlBar
+        transition none
+
 // Responsive design for small mobile devices
 @media screen and (max-width: 480px)
     header
-        height 35px
+        display none
 
     main
-        padding-top 35px
+        padding-top 0
 
         .controlBar
-            padding 8px
+            padding 52px 8px 8px
 
             label
                 font-size 12px
@@ -587,8 +1789,40 @@ footer
                     font-size 11px
                     padding 6px 8px
 
+            .buttonBar.run-controls
+                .run-controls-row
+                    flex-wrap nowrap
+                    gap 0
+
+                .run-circle-btn
+                    width 36px
+                    height 36px
+                    min-width 36px
+                    outline-width 3px
+
+                .execute-speed-control
+                    width 36px
+                    height 36px
+                    min-width 36px
+
+                .sim-http-toggle-btn
+                    width 30px
+                    min-width 30px
+                    height 36px
+                    font-size 16px
+
+                .session-circle-btn
+                    width 36px
+                    min-width 36px
+                    height 36px
+
+                .sim-http-settings
+                    width 240px
+
+
 // Control bar toggle button — always fixed to right edge, independent of controlBar state
 .toggle-controlbar
+    display none !important
     position fixed
     right 0
     top 50%

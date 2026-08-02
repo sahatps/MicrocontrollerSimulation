@@ -1,8 +1,36 @@
 {
-  "buildCommand": "npm run build:web",
+  "buildCommand": "npm run build:all",
   "outputDirectory": "dist/web",
   "framework": null,
+  "rewrites": [
+    {
+      "source": "/simulation",
+      "destination": "/"
+    },
+    {
+      "source": "/simulation/:path*",
+      "destination": "/:path*"
+    }
+  ],
   "headers": [
+    {
+      "source": "/wasm-clang/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=600"
+        }
+      ]
+    },
+    {
+      "source": "/simulation/wasm-clang/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=600"
+        }
+      ]
+    },
     {
       "source": "/(.*)",
       "headers": [
@@ -12,7 +40,7 @@
         },
         {
           "key": "Cross-Origin-Embedder-Policy",
-          "value": "require-corp"
+          "value": "credentialless"
         }
       ]
     }

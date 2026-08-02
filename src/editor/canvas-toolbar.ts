@@ -13,6 +13,9 @@ const ICONS = {
     backward: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
         <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm10 6l4 4 4-4h-3v-6h-2v6h-3z"/>
     </svg>`,
+    rotate: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+        <path d="M12 6V3L8 7l4 4V8c2.21 0 4 1.79 4 4s-1.79 4-4 4-4-1.79-4-4H6c0 3.31 2.69 6 6 6s6-2.69 6-6-2.69-6-6-6z"/>
+    </svg>`,
     color: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
         <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
     </svg>`
@@ -24,6 +27,7 @@ export class CanvasToolbar {
     private binElement!: HTMLDivElement;
     private forwardButton!: HTMLButtonElement;
     private backwardButton!: HTMLButtonElement;
+    private rotateButton!: HTMLButtonElement;
     private isDraggingOverBin: boolean = false;
     private draggingFigure: ComponentFigure | null = null;
     private draggingLine: any = null;
@@ -62,6 +66,13 @@ export class CanvasToolbar {
         this.backwardButton.title = 'Send to back';
         this.backwardButton.disabled = true;
 
+        // Create rotate button
+        this.rotateButton = document.createElement('button');
+        this.rotateButton.className = 'hackCable-toolbar-btn';
+        this.rotateButton.innerHTML = ICONS.rotate;
+        this.rotateButton.title = 'Rotate 90 deg';
+        this.rotateButton.disabled = true;
+
         // Create hidden native color input
         this.colorInput = document.createElement('input');
         this.colorInput.type = 'color';
@@ -80,6 +91,7 @@ export class CanvasToolbar {
         this.toolbarElement.appendChild(this.binElement);
         this.toolbarElement.appendChild(this.forwardButton);
         this.toolbarElement.appendChild(this.backwardButton);
+        this.toolbarElement.appendChild(this.rotateButton);
         this.toolbarElement.appendChild(this.colorButton);
 
         // Insert toolbar into editor container (fixed position, not affected by zoom/pan)
@@ -109,6 +121,17 @@ export class CanvasToolbar {
         // Color button opens native color picker
         this.colorButton.addEventListener('click', () => {
             this.colorInput.click();
+        });
+
+        // Rotate selected component by 90 degrees
+        this.rotateButton.addEventListener('click', () => {
+            const selected = this.canvas.getSelected();
+            if (selected instanceof ComponentFigure) {
+                const currentAngle = Number(selected.getRotationAngle?.() ?? 0);
+                const nextAngle = (currentAngle + 90) % 360;
+                const cmd = new draw2d.command.CommandRotate(selected, nextAngle);
+                this.canvas.getCommandStack().execute(cmd);
+            }
         });
 
         // When a color is picked, apply to selected cable line
@@ -194,6 +217,7 @@ export class CanvasToolbar {
         const isCableSelected = selected !== null && !isComponentSelected;
         this.forwardButton.disabled = !isComponentSelected;
         this.backwardButton.disabled = !isComponentSelected;
+        this.rotateButton.disabled = !isComponentSelected;
         this.colorButton.disabled = !isCableSelected;
         if (isCableSelected) {
             const col = selected.getColor?.();
