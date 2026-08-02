@@ -10,8 +10,8 @@
 export type PinChangeCallback = (pin: number, value: boolean) => void;
 export type SerialCallback = (text: string) => void;
 export type ModbusReadCallback = (slaveId: number, regAddr: number) => number;
-export type SensorCallback = () => number;
-export type IndexedSensorCallback = (index: number) => number;
+export type AddressedSensorCallback = (address: number) => number;
+export type AddressedIndexedSensorCallback = (address: number, index: number) => number;
 export type AnalogReadCallback = (pin: number) => number;
 
 type QueuedPinEvent = {
@@ -45,10 +45,10 @@ export class ArduinoWasmShim {
         private onPinChange:   PinChangeCallback,
         private onSerial:      SerialCallback,
         private onModbusRead:  ModbusReadCallback,
-        private onSht31Temp:   SensorCallback,
-        private onSht31Hum:    SensorCallback,
-        private onBh1750Lux:   SensorCallback,
-        private onSen55Value:  IndexedSensorCallback,
+        private onSht31Temp:   AddressedSensorCallback,
+        private onSht31Hum:    AddressedSensorCallback,
+        private onBh1750Lux:   AddressedSensorCallback,
+        private onSen55Value:  AddressedIndexedSensorCallback,
         private onAnalogRead?: AnalogReadCallback,
     ) {}
 
@@ -264,10 +264,10 @@ export class ArduinoWasmShim {
                 },
 
                 // ---- HackCable sensor bridge ----
-                hackcable_sht31_temp():     number { return self.onSht31Temp(); },
-                hackcable_sht31_humidity(): number { return self.onSht31Hum(); },
-                hackcable_bh1750_lux():     number { return self.onBh1750Lux(); },
-                hackcable_sen55_value(index: number): number { return self.onSen55Value(index); },
+                hackcable_sht31_temp(address: number):     number { return self.onSht31Temp(address); },
+                hackcable_sht31_humidity(address: number): number { return self.onSht31Hum(address); },
+                hackcable_bh1750_lux(address: number):     number { return self.onBh1750Lux(address); },
+                hackcable_sen55_value(address: number, index: number): number { return self.onSen55Value(address, index); },
                 hackcable_modbus_read(slaveId: number, regAddr: number): number {
                     return self.onModbusRead(slaveId, regAddr);
                 },

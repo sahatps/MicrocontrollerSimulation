@@ -572,16 +572,34 @@ let activeHandysenseRealRuntimeInputPins = HANDYSENSE_REAL_RUNTIME_INPUT_PINS_LE
 
 type MockSource = 'text' | 'timeline';
 type SensorKey = 'humidity' | 'temperature' | 'ph' | 'lux' | 'soil' | 'co2' | 'pressure' | 'ec' | 'nitrogen' | 'phosphorus' | 'potassium' | 'ammonia' | 'pm1' | 'pm25' | 'pm4' | 'pm10' | 'voc' | 'nox' | 'distance' | 'turbidity' | 'nitrate_vout' | 'nitrate_vout_temp' | 'nitrate_sample' | 'nitrate_error' | 'nitrate_r_square' | 'nitrate_sensitivity' | 'nitrate_std1' | 'nitrate_std2' | 'nitrate_std3' | 'voltage' | 'tmec_analog_uv' | 'water_level' | 'water_temperature' | 'dissolved_oxygen' | 'do_temperature' | 'ammonia_temperature' | 'tubular_moisture_10' | 'tubular_temperature_10' | 'tubular_moisture_20' | 'tubular_temperature_20' | 'tubular_moisture_30' | 'tubular_temperature_30' | 'tubular_moisture_40' | 'tubular_temperature_40' | 'tubular_moisture_50' | 'tubular_temperature_50' | 'air_velocity' | 'noise' | 'weight' | 'wind_direction' | 'wind_speed' | 'rain' | 'par';
+type MockChannelKey = string;
+type SensorTransport = 'rs485' | 'i2c' | 'analog';
 type ModbusMockProfile = 'sensor-weather-htco2plx' | 'sensor-ph-rs485' | 'sensor-rain-rs485' | 'sensor-wind-pair-rs485' | 'sensor-wind-speed-rs485' | 'sensor-sht31-rs485' | 'sensor-weight-3kg-rs485' | 'sensor-wind-direction-rs485' | 'sensor-dt-par485' | 'bfarm-7in1-soil' | 'bfarm-ammonia-rs485' | 'bfarm-soil-temp-multiread-rs485' | 'bfarm-ultrasonic-rs485' | 'bfarm-turbidity-xm3318b-rs485' | 'bfarm-turbidity-xm8518-rs485' | 'bfarm-nitrate-isfet-rs485' | 'bfarm-tmec-tensio-rs485' | 'bfarm-water-quality-suite-rs485' | 'bfarm-tubular-soil-probe-rs485' | 'bfarm-air-velocity-sm3789' | 'bfarm-lux120k-rs485' | 'bfarm-weather-sensor-rs485' | 'default-weather';
 type MockSegment = { startSec: number; endSec: number; value: number };
-type MockTimelineConfig = { durationSec: number; tracks: Record<SensorKey, MockSegment[]> };
+type MockTimelineConfig = { durationSec: number; tracks: Record<MockChannelKey, MockSegment[]> };
 type GraphPoint = { tSec: number; value: number };
 type MockEditorMode = 'graph' | 'timeline';
 type SensorRange = { min: number; max: number };
 type MockGraphUiPrefs = {
-    selectedSensor: SensorKey;
+    selectedSensor: MockChannelKey;
     editorMode: MockEditorMode;
-    yRanges: Partial<Record<SensorKey, SensorRange>>;
+    yRanges: Record<MockChannelKey, SensorRange>;
+};
+type MockSensorProfile = {
+    componentId: number;
+    transport: SensorTransport;
+    metrics: SensorKey[];
+    defaultId: number;
+    modbusProfile?: ModbusMockProfile;
+};
+type MockSensorDevice = {
+    figureId: string;
+    componentId: number;
+    label: string;
+    profile: MockSensorProfile;
+    slaveId?: number;
+    i2cAddress?: number;
+    analogPin?: number;
 };
 type CircuitSessionMockState = {
     source: MockSource;
@@ -669,6 +687,14 @@ const SENSOR_DEFAULT_RANGES: Record<SensorKey, SensorRange> = {
     rain: { min: 0, max: 500 },
     par: { min: 0, max: 3000 },
 };
+const SENSOR_DEFAULT_VALUES: Partial<Record<SensorKey, number>> = {
+    humidity: 60,
+    temperature: 25,
+    ph: 7.0,
+    lux: 500,
+    co2: 400,
+    pressure: 1013,
+};
 const SENSOR_LABEL_KEYS: Record<SensorKey, string> = {
     humidity: 'ui.mock.sensor.humidity',
     temperature: 'ui.mock.sensor.temperature',
@@ -749,10 +775,50 @@ const MODBUS_MOCK_PROFILE_SENSOR_KEYS: Record<ModbusMockProfile, SensorKey[]> = 
     'bfarm-weather-sensor-rs485': ['humidity', 'temperature', 'noise', 'co2', 'pressure', 'lux'],
     'default-weather': ['temperature', 'humidity', 'co2', 'pressure', 'ph'],
 };
+
+// Every project sensor is represented by its canvas figure, not by its metric.
+// The transport identity is the same one the compiled program uses to read it.
+const MOCK_SENSOR_PROFILES: Record<number, MockSensorProfile> = {
+    29: { componentId: 29, transport: 'analog', metrics: ['ph'], defaultId: 34 },
+    30: { componentId: 30, transport: 'analog', metrics: ['humidity'], defaultId: 35 },
+    35: { componentId: 35, transport: 'rs485', metrics: ['temperature', 'ph'], defaultId: 1, modbusProfile: 'sensor-ph-rs485' },
+    36: { componentId: 36, transport: 'rs485', metrics: ['lux'], defaultId: 1, modbusProfile: 'bfarm-lux120k-rs485' },
+    37: { componentId: 37, transport: 'rs485', metrics: ['rain'], defaultId: 1, modbusProfile: 'sensor-rain-rs485' },
+    38: { componentId: 38, transport: 'rs485', metrics: ['wind_speed'], defaultId: 1, modbusProfile: 'sensor-wind-speed-rs485' },
+    39: { componentId: 39, transport: 'rs485', metrics: ['par'], defaultId: 1, modbusProfile: 'sensor-dt-par485' },
+    40: { componentId: 40, transport: 'rs485', metrics: MODBUS_MOCK_PROFILE_SENSOR_KEYS['sensor-weather-htco2plx'], defaultId: 1, modbusProfile: 'sensor-weather-htco2plx' },
+    41: { componentId: 41, transport: 'i2c', metrics: ['temperature', 'humidity'], defaultId: 0x44 },
+    42: { componentId: 42, transport: 'i2c', metrics: ['lux'], defaultId: 0x23 },
+    43: { componentId: 43, transport: 'analog', metrics: ['voltage'], defaultId: 32 },
+    44: { componentId: 44, transport: 'analog', metrics: ['soil'], defaultId: 36 },
+    46: { componentId: 46, transport: 'analog', metrics: ['ph'], defaultId: 34 },
+    47: { componentId: 47, transport: 'analog', metrics: ['ec'], defaultId: 35 },
+    48: { componentId: 48, transport: 'analog', metrics: ['temperature'], defaultId: 39 },
+    52: { componentId: 52, transport: 'rs485', metrics: MODBUS_MOCK_PROFILE_SENSOR_KEYS['bfarm-7in1-soil'], defaultId: 1, modbusProfile: 'bfarm-7in1-soil' },
+    53: { componentId: 53, transport: 'rs485', metrics: MODBUS_MOCK_PROFILE_SENSOR_KEYS['bfarm-ammonia-rs485'], defaultId: 1, modbusProfile: 'bfarm-ammonia-rs485' },
+    54: { componentId: 54, transport: 'rs485', metrics: MODBUS_MOCK_PROFILE_SENSOR_KEYS['bfarm-soil-temp-multiread-rs485'], defaultId: 1, modbusProfile: 'bfarm-soil-temp-multiread-rs485' },
+    55: { componentId: 55, transport: 'i2c', metrics: ['pm1', 'pm25', 'pm4', 'pm10', 'humidity', 'temperature', 'voc', 'nox'], defaultId: 0x69 },
+    56: { componentId: 56, transport: 'rs485', metrics: MODBUS_MOCK_PROFILE_SENSOR_KEYS['bfarm-ultrasonic-rs485'], defaultId: 1, modbusProfile: 'bfarm-ultrasonic-rs485' },
+    57: { componentId: 57, transport: 'rs485', metrics: MODBUS_MOCK_PROFILE_SENSOR_KEYS['bfarm-turbidity-xm3318b-rs485'], defaultId: 1, modbusProfile: 'bfarm-turbidity-xm3318b-rs485' },
+    58: { componentId: 58, transport: 'rs485', metrics: MODBUS_MOCK_PROFILE_SENSOR_KEYS['bfarm-turbidity-xm8518-rs485'], defaultId: 1, modbusProfile: 'bfarm-turbidity-xm8518-rs485' },
+    59: { componentId: 59, transport: 'rs485', metrics: MODBUS_MOCK_PROFILE_SENSOR_KEYS['bfarm-nitrate-isfet-rs485'], defaultId: 1, modbusProfile: 'bfarm-nitrate-isfet-rs485' },
+    60: { componentId: 60, transport: 'rs485', metrics: MODBUS_MOCK_PROFILE_SENSOR_KEYS['bfarm-tmec-tensio-rs485'], defaultId: 1, modbusProfile: 'bfarm-tmec-tensio-rs485' },
+    61: { componentId: 61, transport: 'analog', metrics: ['tmec_analog_uv'], defaultId: 1 },
+    62: { componentId: 62, transport: 'rs485', metrics: MODBUS_MOCK_PROFILE_SENSOR_KEYS['bfarm-water-quality-suite-rs485'], defaultId: 1, modbusProfile: 'bfarm-water-quality-suite-rs485' },
+    63: { componentId: 63, transport: 'rs485', metrics: MODBUS_MOCK_PROFILE_SENSOR_KEYS['bfarm-tubular-soil-probe-rs485'], defaultId: 1, modbusProfile: 'bfarm-tubular-soil-probe-rs485' },
+    64: { componentId: 64, transport: 'rs485', metrics: MODBUS_MOCK_PROFILE_SENSOR_KEYS['bfarm-air-velocity-sm3789'], defaultId: 1, modbusProfile: 'bfarm-air-velocity-sm3789' },
+    65: { componentId: 65, transport: 'rs485', metrics: MODBUS_MOCK_PROFILE_SENSOR_KEYS['bfarm-lux120k-rs485'], defaultId: 1, modbusProfile: 'bfarm-lux120k-rs485' },
+    66: { componentId: 66, transport: 'rs485', metrics: MODBUS_MOCK_PROFILE_SENSOR_KEYS['bfarm-weather-sensor-rs485'], defaultId: 1, modbusProfile: 'bfarm-weather-sensor-rs485' },
+    67: { componentId: 67, transport: 'rs485', metrics: MODBUS_MOCK_PROFILE_SENSOR_KEYS['sensor-sht31-rs485'], defaultId: 1, modbusProfile: 'sensor-sht31-rs485' },
+    68: { componentId: 68, transport: 'rs485', metrics: MODBUS_MOCK_PROFILE_SENSOR_KEYS['sensor-weight-3kg-rs485'], defaultId: 1, modbusProfile: 'sensor-weight-3kg-rs485' },
+    69: { componentId: 69, transport: 'rs485', metrics: MODBUS_MOCK_PROFILE_SENSOR_KEYS['sensor-wind-direction-rs485'], defaultId: 1, modbusProfile: 'sensor-wind-direction-rs485' },
+    70: { componentId: 70, transport: 'rs485', metrics: MODBUS_MOCK_PROFILE_SENSOR_KEYS['sensor-dt-par485'], defaultId: 1, modbusProfile: 'sensor-dt-par485' },
+};
 const MOCK_SOURCE_STORAGE_KEY = 'hackCable-mock-source';
 const MOCK_TIMELINE_STORAGE_KEY = 'hackCable-mock-timeline';
 const MOCK_GRAPH_UI_STORAGE_KEY = 'hackCable-mock-graph-ui';
 const MOCK_TEXT_STORAGE_KEY = 'hackCable-mock-text';
+const SESSION_EXPORT_STORAGE_KEY = 'hackCable-last-session-export';
 const DEFAULT_MOCK_TIMELINE_DURATION_SEC = 20;
 const GRAPH_TIME_SNAP_SEC = 0.5;
 const GRAPH_AXIS_PADDING_LEFT = 46;
@@ -777,6 +843,9 @@ const mockTimelineError = document.getElementById('mock-timeline-error') as HTML
 const mockTextInput = document.getElementById('sensor-mock-input') as HTMLTextAreaElement | null;
 const mockTextToggleButton = document.getElementById('mock-text-toggle') as HTMLButtonElement | null;
 const mockTextSliders = document.getElementById('mock-text-sliders') as HTMLDivElement | null;
+const mockDeviceConfig = document.getElementById('mock-device-config') as HTMLElement | null;
+const mockDeviceConfigList = document.getElementById('mock-device-config-list') as HTMLDivElement | null;
+const mockDeviceConfigErrors = document.getElementById('mock-device-config-errors') as HTMLDivElement | null;
 const downloadSessionButton = document.getElementById('download-session') as HTMLButtonElement | null;
 const uploadSessionButton = document.getElementById('upload-session') as HTMLButtonElement | null;
 const uploadSessionInput = document.getElementById('upload-session-input') as HTMLInputElement | null;
@@ -786,9 +855,10 @@ let mockRunStartMs = Date.now();
 let mockTimelineConfig: MockTimelineConfig = createDefaultMockTimelineConfig();
 let mockTimelineErrorKey: string | null = null;
 let activeMockEditorMode: MockEditorMode = 'graph';
-let activeGraphSensor: SensorKey = 'ph';
-let graphRangeOverrides: Partial<Record<SensorKey, SensorRange>> = {};
-let compiledMockSensorKeys: Set<SensorKey> | null = null;
+let activeGraphSensor: MockChannelKey = 'ph';
+let graphRangeOverrides: Record<MockChannelKey, SensorRange> = {};
+let compiledMockSensorKeys: Set<MockChannelKey> | null = null;
+let activeMockDevice: MockSensorDevice | null = null;
 let isMockTextInputVisible = false;
 let selectedGraphPointIndex: number | null = null;
 let graphDragPointIndex: number | null = null;
@@ -1043,7 +1113,7 @@ function markCompileStale() {
     if (isCompilingCode) return;
     if (compiledMockSensorKeys !== null) {
         compiledMockSensorKeys = null;
-        renderMockTextSliders();
+        renderMockEditors();
     }
     setRunControlState('needs-compile');
 }
@@ -1274,6 +1344,22 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
         const boardType = hackCable.editor.canvas.getBoardType();
         if (boardType) hackCable.emulatorManager.setBoardType(boardType);
 
+        const activeMockChannelKeys = getMockChannelKeysForCode(sourceCode);
+        const activeMockDevices = getMockDevices().filter((device) => {
+            return device.profile.metrics.some((metric) => activeMockChannelKeys.has(getMockChannelKey(device, metric)));
+        });
+        const mockConfigErrors = getMockDeviceConfigurationErrors(activeMockDevices);
+        if (activeMockChannelKeys.size > 0 && mockConfigErrors.length > 0) {
+            clearSerialOutputs();
+            switchEditorTab('mock');
+            switchOutputTab('serial');
+            mockConfigErrors.forEach((message) => appendSerial(`Mock sensor configuration error: ${message}\n`));
+            renderMockDeviceConfiguration();
+            setRunControlState('compiled');
+            showPlainStatus('Mock sensor hardware IDs must be unique before running.', 'error', 4000);
+            return false;
+        }
+
         if (normalizeBoardSelection(boardSelectEl?.value) === 'handysense-real') {
             const validation = validateHandysenseRealWiring(sourceCode, hackCable.editor.canvas);
             if (!validation.canExecute) {
@@ -1324,10 +1410,10 @@ if(compileButton && executeButton && stopButton && pauseButton && codeInput inst
                 },
                 (text) => routeIncomingSerialData(text, 'internal'),
                 (slaveId, regAddr) => readBridgeNumber('hackcable_modbus_read', [slaveId, regAddr], 0),
-                () => readBridgeNumber('hackcable_sht31_temp', [], 25),
-                () => readBridgeNumber('hackcable_sht31_humidity', [], 60),
-                () => readBridgeNumber('hackcable_bh1750_lux', [], 500),
-                (index) => readBridgeNumber('hackcable_sen55_value', [index], 0),
+                (address) => readBridgeNumber('hackcable_sht31_temp', [address], 25),
+                (address) => readBridgeNumber('hackcable_sht31_humidity', [address], 60),
+                (address) => readBridgeNumber('hackcable_bh1750_lux', [address], 500),
+                (address, index) => readBridgeNumber('hackcable_sen55_value', [address, index], 0),
                 (pin) => readBridgeNumber('hackcable_analog_read', [pin], 0),
             );
             activeClangShim = shim;
@@ -1457,11 +1543,11 @@ function translateUi(key: string): string {
     return String(i18n.t(key));
 }
 
-function createEmptyTimelineTracks(): Record<SensorKey, MockSegment[]> {
+function createEmptyTimelineTracks(): Record<MockChannelKey, MockSegment[]> {
     return SENSOR_KEYS.reduce((acc, key) => {
         acc[key] = [];
         return acc;
-    }, {} as Record<SensorKey, MockSegment[]>);
+    }, {} as Record<MockChannelKey, MockSegment[]>);
 }
 
 function createDefaultMockTimelineConfig(): MockTimelineConfig {
@@ -1471,12 +1557,13 @@ function createDefaultMockTimelineConfig(): MockTimelineConfig {
     };
 }
 
-function getDefaultSensorRange(sensorKey: SensorKey): SensorRange {
-    const preset = SENSOR_DEFAULT_RANGES[sensorKey];
+function getDefaultSensorRange(sensorKey: MockChannelKey): SensorRange {
+    const metric = getMockChannelMetric(sensorKey);
+    const preset = metric ? SENSOR_DEFAULT_RANGES[metric] : SENSOR_DEFAULT_RANGES.ph;
     return { min: preset.min, max: preset.max };
 }
 
-function getSensorRange(sensorKey: SensorKey): SensorRange {
+function getSensorRange(sensorKey: MockChannelKey): SensorRange {
     const override = graphRangeOverrides[sensorKey];
     if (!override) return getDefaultSensorRange(sensorKey);
     if (!Number.isFinite(override.min) || !Number.isFinite(override.max) || override.min >= override.max) {
@@ -1485,7 +1572,7 @@ function getSensorRange(sensorKey: SensorKey): SensorRange {
     return { min: override.min, max: override.max };
 }
 
-function clampToSensorRange(sensorKey: SensorKey, value: number): number {
+function clampToSensorRange(sensorKey: MockChannelKey, value: number): number {
     const range = getSensorRange(sensorKey);
     return Math.max(range.min, Math.min(range.max, value));
 }
@@ -1497,7 +1584,7 @@ function snapTimeSec(rawValue: number, durationSec: number): number {
     return roundSeconds(Math.round(clamped / GRAPH_TIME_SNAP_SEC) * GRAPH_TIME_SNAP_SEC);
 }
 
-function normalizeGraphPoints(points: GraphPoint[], sensorKey: SensorKey): GraphPoint[] {
+function normalizeGraphPoints(points: GraphPoint[], sensorKey: MockChannelKey): GraphPoint[] {
     const dedup = new Map<number, GraphPoint>();
     points.forEach((point) => {
         const tSec = snapTimeSec(point.tSec, mockTimelineConfig.durationSec);
@@ -1506,13 +1593,13 @@ function normalizeGraphPoints(points: GraphPoint[], sensorKey: SensorKey): Graph
     return Array.from(dedup.values()).sort((a, b) => a.tSec - b.tSec);
 }
 
-function segmentsToGraphPoints(sensorKey: SensorKey): GraphPoint[] {
-    const segments = [...mockTimelineConfig.tracks[sensorKey]].sort((a, b) => a.startSec - b.startSec);
+function segmentsToGraphPoints(sensorKey: MockChannelKey): GraphPoint[] {
+    const segments = [...(mockTimelineConfig.tracks[sensorKey] || [])].sort((a, b) => a.startSec - b.startSec);
     const points: GraphPoint[] = segments.map((segment) => ({ tSec: segment.startSec, value: segment.value }));
     return normalizeGraphPoints(points, sensorKey);
 }
 
-function graphPointsToSegments(sensorKey: SensorKey, rawPoints: GraphPoint[]): MockSegment[] {
+function graphPointsToSegments(sensorKey: MockChannelKey, rawPoints: GraphPoint[]): MockSegment[] {
     const points = normalizeGraphPoints(rawPoints, sensorKey);
     if (points.length === 0) return [];
 
@@ -1552,16 +1639,15 @@ function applyMockGraphUiPrefs(raw: unknown) {
         editorMode?: string;
         yRanges?: Record<string, { min?: unknown; max?: unknown }>;
     };
-    if (parsed.selectedSensor && isSensorKey(parsed.selectedSensor)) {
+    if (parsed.selectedSensor && typeof parsed.selectedSensor === 'string') {
         activeGraphSensor = parsed.selectedSensor;
     }
     if (parsed.editorMode === 'graph' || parsed.editorMode === 'timeline') {
         activeMockEditorMode = parsed.editorMode;
     }
     if (parsed.yRanges && typeof parsed.yRanges === 'object') {
-        const nextRanges: Partial<Record<SensorKey, SensorRange>> = {};
-        SENSOR_KEYS.forEach((sensorKey) => {
-            const candidate = parsed.yRanges?.[sensorKey];
+        const nextRanges: Record<MockChannelKey, SensorRange> = {};
+        Object.entries(parsed.yRanges).forEach(([sensorKey, candidate]) => {
             if (!candidate) return;
             const min = asFiniteNumber(candidate.min);
             const max = asFiniteNumber(candidate.max);
@@ -1591,7 +1677,7 @@ function setActiveMockEditorMode(mode: MockEditorMode, persist = true) {
     if (persist) saveMockGraphUiPrefs();
 }
 
-function setActiveGraphSensor(sensorKey: SensorKey, persist = true) {
+function setActiveGraphSensor(sensorKey: MockChannelKey, persist = true) {
     activeGraphSensor = sensorKey;
     selectedGraphPointIndex = null;
     if (mockGraphSensorSelect) mockGraphSensorSelect.value = sensorKey;
@@ -1606,7 +1692,7 @@ function setSelectedGraphPoint(index: number | null) {
     if (mockDeletePointBtn) mockDeletePointBtn.disabled = index === null;
 }
 
-function updateTrackFromGraphPoints(sensorKey: SensorKey, points: GraphPoint[]): boolean {
+function updateTrackFromGraphPoints(sensorKey: MockChannelKey, points: GraphPoint[]): boolean {
     const segments = graphPointsToSegments(sensorKey, points);
     const ok = updateTrackSegments(sensorKey, segments);
     if (!ok) return false;
@@ -1618,7 +1704,7 @@ function updateTrackFromGraphPoints(sensorKey: SensorKey, points: GraphPoint[]):
     return true;
 }
 
-function updateGraphPoint(sensorKey: SensorKey, index: number, nextPoint: GraphPoint): boolean {
+function updateGraphPoint(sensorKey: MockChannelKey, index: number, nextPoint: GraphPoint): boolean {
     const points = segmentsToGraphPoints(sensorKey);
     if (!points[index]) return false;
     points[index] = nextPoint;
@@ -1631,7 +1717,7 @@ function updateGraphPoint(sensorKey: SensorKey, index: number, nextPoint: GraphP
     return true;
 }
 
-function addOrReplaceGraphPoint(sensorKey: SensorKey, nextPoint: GraphPoint): boolean {
+function addOrReplaceGraphPoint(sensorKey: MockChannelKey, nextPoint: GraphPoint): boolean {
     const points = segmentsToGraphPoints(sensorKey);
     const snappedT = snapTimeSec(nextPoint.tSec, mockTimelineConfig.durationSec);
     const existingIndex = points.findIndex((point) => point.tSec === snappedT);
@@ -1709,10 +1795,10 @@ function setMockTextInputVisible(isVisible: boolean): void {
     updateMockTextInputVisibility();
 }
 
-const MOCK_TEXT_VALUE_LINE_RE = /^(\s*)(\w+)(\s*=\s*)([+-]?(?:\d+\.?\d*|\.\d+))(\s*)$/;
+const MOCK_TEXT_VALUE_LINE_RE = /^(\s*)([A-Za-z0-9_.-]+)(\s*=\s*)([+-]?(?:\d+\.?\d*|\.\d+))(\s*)$/;
 
 type MockTextSensorEntry = {
-    key: SensorKey;
+    key: MockChannelKey;
     value: number;
     lineIndex: number;
 };
@@ -1727,7 +1813,7 @@ function getDecimalPlaces(value: number): number {
     return decimal ? decimal.length : 0;
 }
 
-function getMockTextSliderStep(sensorKey: SensorKey, currentValue: number): number {
+function getMockTextSliderStep(sensorKey: MockChannelKey, currentValue: number): number {
     const range = getDefaultSensorRange(sensorKey);
     const span = range.max - range.min;
     let step = span <= 2 ? 0.01 : span <= 100 ? 0.1 : 1;
@@ -1751,12 +1837,11 @@ function getEditableMockTextNumber(input: HTMLInputElement): number | null {
 }
 
 function parseMockTextSensorEntries(text: string): MockTextSensorEntry[] {
-    const entries = new Map<SensorKey, MockTextSensorEntry>();
+    const entries = new Map<MockChannelKey, MockTextSensorEntry>();
     text.split('\n').forEach((line, lineIndex) => {
         const match = line.match(MOCK_TEXT_VALUE_LINE_RE);
         if (!match) return;
         const key = match[2].toLowerCase();
-        if (!isSensorKey(key)) return;
         const value = Number(match[4]);
         if (!Number.isFinite(value)) return;
         entries.set(key, { key, value, lineIndex });
@@ -1764,7 +1849,36 @@ function parseMockTextSensorEntries(text: string): MockTextSensorEntry[] {
     return [...entries.values()].sort((a, b) => a.lineIndex - b.lineIndex);
 }
 
-function replaceMockTextSensorValue(sensorKey: SensorKey, nextValueText: string, lineIndex: number): void {
+function getDefaultMockTextValue(sensorKey: MockChannelKey): number {
+    const metric = getMockChannelMetric(sensorKey);
+    const defaultValue = metric ? SENSOR_DEFAULT_VALUES[metric] : undefined;
+    if (defaultValue !== undefined) return defaultValue;
+    const range = getDefaultSensorRange(sensorKey);
+    return (range.min + range.max) / 2;
+}
+
+function getVisibleMockTextSensorEntries(): MockTextSensorEntry[] {
+    const entries = parseMockTextSensorEntries(getMockTextValue());
+    const filterKeys = compiledMockSensorKeys;
+    if (!filterKeys) return entries;
+
+    const entryKeys = new Set(entries.map((entry) => entry.key));
+    const visibleEntries = entries.filter((entry) => filterKeys.has(entry.key));
+
+    filterKeys.forEach((key) => {
+        if (!entryKeys.has(key)) {
+            visibleEntries.push({
+                key,
+                value: getDefaultMockTextValue(key),
+                lineIndex: Number.MAX_SAFE_INTEGER,
+            });
+        }
+    });
+
+    return visibleEntries.sort((a, b) => a.lineIndex - b.lineIndex);
+}
+
+function replaceMockTextSensorValue(sensorKey: MockChannelKey, nextValueText: string, lineIndex: number): void {
     const lines = getMockTextValue().split('\n');
     let targetIndex = -1;
 
@@ -1792,11 +1906,72 @@ function replaceMockTextSensorValue(sensorKey: SensorKey, nextValueText: string,
     saveMockTextValue();
 }
 
-function addMockSensorKeys(target: Set<SensorKey>, keys: SensorKey[]): void {
+function addMockSensorKeys(target: Set<MockChannelKey>, keys: MockChannelKey[]): void {
     keys.forEach((key) => target.add(key));
 }
 
-function inferMockSensorKeysFromCode(code: string): Set<SensorKey> {
+function parseCodeNumberLiteral(raw: string | undefined): number | null {
+    if (!raw) return null;
+    const normalized = raw.trim();
+    const value = /^0x[0-9a-f]+$/i.test(normalized) ? parseInt(normalized, 16) : Number(normalized);
+    return Number.isFinite(value) ? value : null;
+}
+
+function escapeRegExpLiteral(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function extractCodeNumericConstants(code: string): Map<string, number> {
+    const constants = new Map<string, number>();
+    for (const match of code.matchAll(/#define\s+([A-Za-z_][A-Za-z0-9_]*)\s+(0x[0-9a-f]+|\d+(?:\.\d+)?)/gi)) {
+        const value = parseCodeNumberLiteral(match[2]);
+        if (value !== null) constants.set(match[1], value);
+    }
+    for (const match of code.matchAll(/\b(?:const\s+)?(?:int|uint8_t|uint16_t|byte)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(0x[0-9a-f]+|\d+(?:\.\d+)?)/gi)) {
+        const value = parseCodeNumberLiteral(match[2]);
+        if (value !== null) constants.set(match[1], value);
+    }
+    return constants;
+}
+
+function resolveCodeNumericValue(raw: string | undefined, constants: Map<string, number>): number | null {
+    if (!raw) return null;
+    return parseCodeNumberLiteral(raw) ?? constants.get(raw.trim()) ?? null;
+}
+
+function extractBeginIdsForDeclarations(code: string, declarationPattern: RegExp, defaultId: number): Set<number> {
+    const constants = extractCodeNumericConstants(code);
+    const ids = new Set<number>();
+    for (const declaration of code.matchAll(declarationPattern)) {
+        const variableName = declaration[1];
+        const beginMatch = code.match(new RegExp(`\\b${escapeRegExpLiteral(variableName)}\\.begin\\s*\\(\\s*([A-Za-z_][A-Za-z0-9_]*|0x[0-9a-fA-F]+|\\d+)`));
+        const value = resolveCodeNumericValue(beginMatch?.[1], constants);
+        ids.add(value ?? defaultId);
+    }
+    return ids;
+}
+
+function extractModbusSlaveIdsFromCode(code: string): Set<number> {
+    return extractBeginIdsForDeclarations(code, /\bModbusMaster\s+([A-Za-z_][A-Za-z0-9_]*)\s*;/g, 1);
+}
+
+function extractI2cAddressesFromCode(code: string, declarationPattern: RegExp, defaultAddress: number): Set<number> {
+    return extractBeginIdsForDeclarations(code, declarationPattern, defaultAddress);
+}
+
+function extractAnalogPinsFromCode(code: string): Set<number> {
+    const constants = extractCodeNumericConstants(code);
+    const pins = new Set<number>();
+    for (const match of code.matchAll(/\banalogRead\s*\(\s*([A-Za-z_][A-Za-z0-9_]*|0x[0-9a-fA-F]+|\d+)/g)) {
+        const value = resolveCodeNumericValue(match[1], constants);
+        if (value !== null) pins.add(value);
+    }
+    return pins;
+}
+
+function inferMockSensorKeysFromCode(code: string): Set<MockChannelKey> {
+    const deviceKeys = getMockChannelKeysForCode(code);
+    if (deviceKeys.size > 0) return deviceKeys;
     const keys = new Set<SensorKey>();
     const hasModbusRead = /ModbusMaster|Serial2|readHoldingRegisters|getResponseBuffer/.test(code);
 
@@ -1820,19 +1995,19 @@ function inferMockSensorKeysFromCode(code: string): Set<SensorKey> {
         addMockSensorKeys(keys, MODBUS_MOCK_PROFILE_SENSOR_KEYS[getActiveModbusMockProfile()]);
     }
 
-    return keys;
+    return new Set<MockChannelKey>(keys);
 }
 
 function setCompiledMockSensorFilter(sourceCode: string): void {
     compiledMockSensorKeys = inferMockSensorKeysFromCode(sourceCode);
-    renderMockTextSliders();
+    renderMockEditors();
 }
 
 function renderMockTextSliders(): void {
+    renderMockDeviceConfiguration();
     if (!mockTextSliders) return;
     mockTextSliders.innerHTML = '';
-    const entries = parseMockTextSensorEntries(getMockTextValue())
-        .filter((entry) => !compiledMockSensorKeys || compiledMockSensorKeys.has(entry.key));
+    const entries = getVisibleMockTextSensorEntries();
     mockTextSliders.hidden = entries.length === 0;
 
     entries.forEach((entry) => {
@@ -1850,7 +2025,7 @@ function renderMockTextSliders(): void {
 
         const name = document.createElement('span');
         name.className = 'mock-text-slider-name';
-        name.textContent = translateUi(SENSOR_LABEL_KEYS[entry.key]);
+        name.textContent = getMockChannelLabel(entry.key);
 
         const value = document.createElement('input');
         value.type = 'number';
@@ -1859,7 +2034,7 @@ function renderMockTextSliders(): void {
         value.min = String(min);
         value.max = String(max);
         value.step = String(step);
-        value.setAttribute('aria-label', `${translateUi(SENSOR_LABEL_KEYS[entry.key])} value`);
+        value.setAttribute('aria-label', `${getMockChannelLabel(entry.key)} value`);
 
         const slider = document.createElement('input');
         slider.type = 'range';
@@ -1982,19 +2157,52 @@ function downloadCircuitSession(): void {
         showSaveFilePicker?: (options?: SaveFilePickerOptions) => Promise<SaveFileHandle>;
     };
 
-    const fallbackDownload = () => {
+    const isEmbeddedDownloadFallbackRisk = (): boolean => {
+        try {
+            return window.self !== window.top;
+        } catch (_error) {
+            return true;
+        }
+    };
+
+    const tryCopySessionToClipboard = async (): Promise<boolean> => {
+        try {
+            if (!navigator.clipboard?.writeText) return false;
+            await navigator.clipboard.writeText(fileText);
+            return true;
+        } catch (_error) {
+            return false;
+        }
+    };
+
+    const fallbackDownload = async () => {
+        if (isEmbeddedDownloadFallbackRisk()) {
+            localStorage.setItem(SESSION_EXPORT_STORAGE_KEY, fileText);
+            const copied = await tryCopySessionToClipboard();
+            showPlainStatus(
+                copied
+                    ? 'Session saved locally and copied to clipboard.'
+                    : 'Session saved locally. Download skipped in embedded browser.',
+                copied ? 'success' : 'info',
+                3500
+            );
+            return;
+        }
+
         const blob = new Blob([fileText], { type: 'application/json' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = fileName;
+        document.body.appendChild(link);
         link.click();
-        URL.revokeObjectURL(link.href);
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
         showPlainStatus('Circuit session downloaded.', 'success', 2500);
     };
 
     const saveFilePicker = pickerWindow.showSaveFilePicker;
     if (!saveFilePicker) {
-        fallbackDownload();
+        void fallbackDownload();
         return;
     }
 
@@ -2020,7 +2228,7 @@ function downloadCircuitSession(): void {
                 showPlainStatus('Save cancelled.', 'info', 2000);
                 return;
             }
-            fallbackDownload();
+            await fallbackDownload();
         }
     })();
 }
@@ -2051,8 +2259,7 @@ function normalizeMockTimelineConfig(raw: unknown): MockTimelineConfig {
         return { durationSec, tracks };
     }
 
-    SENSOR_KEYS.forEach((key) => {
-        const maybeList = (rawTracks as Record<string, unknown>)[key];
+    Object.entries(rawTracks as Record<string, unknown>).forEach(([key, maybeList]) => {
         if (!Array.isArray(maybeList)) return;
         const parsed: MockSegment[] = [];
         for (const item of maybeList) {
@@ -2115,8 +2322,8 @@ function validateTimelineConfig(config: MockTimelineConfig): string | null {
     if (!Number.isFinite(config.durationSec) || config.durationSec <= 0) {
         return 'ui.mock.timeline.error.duration';
     }
-    for (const key of SENSOR_KEYS) {
-        const error = validateTrackSegments(config.tracks[key], config.durationSec);
+    for (const key of Object.keys(config.tracks)) {
+        const error = validateTrackSegments(config.tracks[key] || [], config.durationSec);
         if (error) return error;
     }
     return null;
@@ -2158,8 +2365,8 @@ function updateTimelineDuration(nextDuration: number): boolean {
         durationSec,
         tracks: createEmptyTimelineTracks(),
     };
-    SENSOR_KEYS.forEach((key) => {
-        nextConfig.tracks[key] = mockTimelineConfig.tracks[key]
+    Object.keys(mockTimelineConfig.tracks).forEach((key) => {
+        nextConfig.tracks[key] = (mockTimelineConfig.tracks[key] || [])
             .filter((segment) => segment.startSec < durationSec)
             .map((segment) => ({
                 startSec: roundSeconds(segment.startSec),
@@ -2180,7 +2387,7 @@ function updateTimelineDuration(nextDuration: number): boolean {
     return true;
 }
 
-function updateTrackSegments(sensorKey: SensorKey, nextSegments: MockSegment[]): boolean {
+function updateTrackSegments(sensorKey: MockChannelKey, nextSegments: MockSegment[]): boolean {
     const cleaned = nextSegments.map((segment) => ({
         startSec: roundSeconds(segment.startSec),
         endSec: roundSeconds(segment.endSec),
@@ -2198,8 +2405,8 @@ function updateTrackSegments(sensorKey: SensorKey, nextSegments: MockSegment[]):
     return true;
 }
 
-function addSegment(sensorKey: SensorKey) {
-    const segments = [...mockTimelineConfig.tracks[sensorKey]].sort((a, b) => a.startSec - b.startSec);
+function addSegment(sensorKey: MockChannelKey) {
+    const segments = [...(mockTimelineConfig.tracks[sensorKey] || [])].sort((a, b) => a.startSec - b.startSec);
     const duration = mockTimelineConfig.durationSec;
     let start = 0;
     for (const segment of segments) {
@@ -2215,16 +2422,16 @@ function addSegment(sensorKey: SensorKey) {
     updateTrackSegments(sensorKey, nextSegments);
 }
 
-function updateSegmentField(sensorKey: SensorKey, index: number, field: keyof MockSegment, value: number): boolean {
-    const nextSegments = mockTimelineConfig.tracks[sensorKey].map((segment) => ({ ...segment }));
+function updateSegmentField(sensorKey: MockChannelKey, index: number, field: keyof MockSegment, value: number): boolean {
+    const nextSegments = (mockTimelineConfig.tracks[sensorKey] || []).map((segment) => ({ ...segment }));
     const target = nextSegments[index];
     if (!target) return false;
     target[field] = value;
     return updateTrackSegments(sensorKey, nextSegments);
 }
 
-function deleteSegment(sensorKey: SensorKey, index: number): void {
-    const nextSegments = mockTimelineConfig.tracks[sensorKey].filter((_segment, segmentIndex) => segmentIndex !== index);
+function deleteSegment(sensorKey: MockChannelKey, index: number): void {
+    const nextSegments = (mockTimelineConfig.tracks[sensorKey] || []).filter((_segment, segmentIndex) => segmentIndex !== index);
     updateTrackSegments(sensorKey, nextSegments);
 }
 
@@ -2233,7 +2440,8 @@ function renderMockTimelineTracks() {
     mockTimelineTracksContainer.innerHTML = '';
     if (mockTimelineDurationInput) mockTimelineDurationInput.value = String(mockTimelineConfig.durationSec);
 
-    SENSOR_KEYS.forEach((sensorKey) => {
+    getAvailableMockChannelKeys().forEach((sensorKey) => {
+        if (!mockTimelineConfig.tracks[sensorKey]) mockTimelineConfig.tracks[sensorKey] = [];
         const row = document.createElement('section');
         row.className = 'mock-timeline-track';
 
@@ -2242,7 +2450,7 @@ function renderMockTimelineTracks() {
 
         const title = document.createElement('h4');
         title.className = 'mock-timeline-track-title';
-        title.textContent = translateUi(SENSOR_LABEL_KEYS[sensorKey]);
+        title.textContent = getMockChannelLabel(sensorKey);
 
         const addButton = document.createElement('button');
         addButton.type = 'button';
@@ -2353,10 +2561,14 @@ function renderMockTimelineTracks() {
 function populateMockGraphSensorOptions() {
     if (!mockGraphSensorSelect) return;
     mockGraphSensorSelect.innerHTML = '';
-    SENSOR_KEYS.forEach((sensorKey) => {
+    const sensorKeys = getAvailableMockChannelKeys();
+    if (!sensorKeys.includes(activeGraphSensor) && sensorKeys.length > 0) {
+        setActiveGraphSensor(sensorKeys[0], false);
+    }
+    sensorKeys.forEach((sensorKey) => {
         const option = document.createElement('option');
         option.value = sensorKey;
-        option.textContent = translateUi(SENSOR_LABEL_KEYS[sensorKey]);
+        option.textContent = getMockChannelLabel(sensorKey);
         mockGraphSensorSelect.appendChild(option);
     });
     mockGraphSensorSelect.value = activeGraphSensor;
@@ -2617,7 +2829,6 @@ mockBackGraphBtn?.addEventListener('click', () => {
 
 mockGraphSensorSelect?.addEventListener('change', () => {
     const value = mockGraphSensorSelect.value;
-    if (!isSensorKey(value)) return;
     setActiveGraphSensor(value);
     renderMockGraphEditor();
 });
@@ -3323,6 +3534,16 @@ simHttpPathInput?.addEventListener('keydown', (event) => {
 });
 
 (window as any).hackcable_analog_read = (pin: number): number => {
+    const device = resolveMockDevice('analog', pin);
+    if (device) {
+        return withMockDevice(device, () => {
+            const metric = device.profile.metrics[0];
+            if (metric === 'soil') return getMock('soil', 50) * 40.95; // 0-100% -> 0-4095 ADC
+            if (metric === 'tmec_analog_uv') return getScaledMockRegisterValue('tmec_analog_uv', 2500);
+            return Math.round(getMock(metric, getDefaultMockTextValue(getMockChannelKey(device, metric))));
+        });
+    }
+
     const selectedExample = getSelectedExampleKey();
     if (selectedExample === 'handysense_real_bfarm_tmec_analog_test' || circuitHasComponent(61)) {
         if (pin >= 1 && pin <= 4) return getScaledMockRegisterValue('tmec_analog_uv', 2500);
@@ -3350,8 +3571,180 @@ function isSensorKey(key: string): key is SensorKey {
     return SENSOR_KEY_SET.has(key as SensorKey);
 }
 
+function getMockDevices(): MockSensorDevice[] {
+    const figures = hackCable?.editor?.canvas?.getFigures?.();
+    if (!figures || typeof figures.each !== 'function') return [];
+
+    const devices: MockSensorDevice[] = [];
+    figures.each((_index: number, figure: any) => {
+        const componentId = figure?.component?.id ?? figure?.componentId;
+        const profile = MOCK_SENSOR_PROFILES[componentId];
+        if (!profile) return;
+        const config = figure.getMockSensorConfig?.() || {};
+        const identity = profile.transport === 'rs485'
+            ? { slaveId: Number(config.slaveId ?? profile.defaultId) }
+            : profile.transport === 'i2c'
+                ? { i2cAddress: Number(config.i2cAddress ?? profile.defaultId) }
+                : { analogPin: Number(config.analogPin ?? profile.defaultId) };
+        const fallbackName = wokwiComponentById[componentId]?.name || `Sensor ${componentId}`;
+        devices.push({
+            figureId: String(figure.getId?.() ?? componentId),
+            componentId,
+            label: typeof config.label === 'string' && config.label.trim() ? config.label.trim() : fallbackName,
+            profile,
+            ...identity,
+        });
+    });
+    return devices;
+}
+
+function getMockChannelKey(device: MockSensorDevice, metric: SensorKey): MockChannelKey {
+    return `device_${device.figureId.replace(/[^A-Za-z0-9_]/g, '_')}__${metric}`.toLowerCase();
+}
+
+function getMockChannelMetric(channelKey: MockChannelKey): SensorKey | null {
+    const match = channelKey.match(/__(\w+)$/);
+    const candidate = match ? match[1] : channelKey;
+    return isSensorKey(candidate) ? candidate : null;
+}
+
+function getMockChannelLabel(channelKey: MockChannelKey): string {
+    const metric = getMockChannelMetric(channelKey);
+    const device = getMockDevices().find((candidate) => candidate.profile.metrics.some((item) => getMockChannelKey(candidate, item) === channelKey));
+    if (!metric) return channelKey;
+    const metricLabel = translateUi(SENSOR_LABEL_KEYS[metric]);
+    if (!device) return metricLabel;
+    const identity = device.profile.transport === 'rs485'
+        ? `ID ${device.slaveId}`
+        : device.profile.transport === 'i2c'
+            ? `0x${(device.i2cAddress ?? 0).toString(16).toUpperCase()}`
+            : `GPIO ${device.analogPin}`;
+    return `${device.label} (${identity}) / ${metricLabel}`;
+}
+
+function getMockChannelKeysForCode(code: string): Set<MockChannelKey> {
+    const devices = getMockDevices();
+    const hasModbus = /ModbusMaster|readHoldingRegisters|getResponseBuffer/.test(code);
+    const hasSht31 = /SHT31/i.test(code);
+    const hasBh1750 = /BH1750/i.test(code);
+    const hasSen55 = /SensirionI2CSen5x|sen5x/i.test(code);
+    const hasAnalog = /analogRead\s*\(/i.test(code) || /ReadAnalog_(?:from_)?MPC3424/i.test(code);
+    const modbusSlaveIds = extractModbusSlaveIdsFromCode(code);
+    const sht31Addresses = extractI2cAddressesFromCode(code, /\b(?:Adafruit_)?SHT31\s+([A-Za-z_][A-Za-z0-9_]*)\s*[;(]/g, 0x44);
+    const bh1750Addresses = extractI2cAddressesFromCode(code, /\bBH1750\s+([A-Za-z_][A-Za-z0-9_]*)\s*[;(]/g, 0x23);
+    const analogPins = extractAnalogPinsFromCode(code);
+    const keys = new Set<MockChannelKey>();
+    devices.forEach((device) => {
+        const used = device.profile.transport === 'rs485' ? hasModbus && (modbusSlaveIds.size === 0 || modbusSlaveIds.has(device.slaveId ?? device.profile.defaultId))
+            : device.componentId === 41 ? hasSht31 && (sht31Addresses.size === 0 || sht31Addresses.has(device.i2cAddress ?? device.profile.defaultId))
+                : device.componentId === 42 ? hasBh1750 && (bh1750Addresses.size === 0 || bh1750Addresses.has(device.i2cAddress ?? device.profile.defaultId))
+                    : device.componentId === 55 ? hasSen55
+                        : hasAnalog && (analogPins.size === 0 || analogPins.has(device.analogPin ?? device.profile.defaultId));
+        if (!used) return;
+        device.profile.metrics.forEach((metric) => keys.add(getMockChannelKey(device, metric)));
+    });
+    return keys;
+}
+
+function getAvailableMockChannelKeys(): MockChannelKey[] {
+    if (compiledMockSensorKeys && compiledMockSensorKeys.size > 0) return [...compiledMockSensorKeys];
+    const deviceKeys = getMockDevices().flatMap((device) => device.profile.metrics.map((metric) => getMockChannelKey(device, metric)));
+    return deviceKeys.length > 0 ? deviceKeys : SENSOR_KEYS;
+}
+
+function getMockDeviceIdentity(device: MockSensorDevice): string {
+    if (device.profile.transport === 'rs485') return `rs485:${device.slaveId}`;
+    if (device.profile.transport === 'i2c') return `i2c:${device.i2cAddress}`;
+    return `analog:${device.analogPin}`;
+}
+
+function getMockDeviceConfigurationErrors(devices = getMockDevices()): string[] {
+    const seen = new Map<string, MockSensorDevice>();
+    const errors: string[] = [];
+    devices.forEach((device) => {
+        const id = getMockDeviceIdentity(device);
+        const prior = seen.get(id);
+        if (prior) errors.push(`${device.label} and ${prior.label} share ${id}. Configure a unique hardware ID.`);
+        else seen.set(id, device);
+    });
+    return errors;
+}
+
+function saveMockSensorConfiguration(device: MockSensorDevice, value: string | number): void {
+    const figures = hackCable?.editor?.canvas?.getFigures?.();
+    if (!figures || typeof figures.each !== 'function') return;
+    figures.each((_index: number, figure: any) => {
+        if (String(figure.getId?.()) !== device.figureId) return;
+        const config = figure.getMockSensorConfig?.() || {};
+        if (typeof value === 'string') config.label = value;
+        else if (device.profile.transport === 'rs485') config.slaveId = value;
+        else if (device.profile.transport === 'i2c') config.i2cAddress = value;
+        else config.analogPin = value;
+        figure.setMockSensorConfig?.(config);
+    });
+    localStorage.setItem('savedEditor', JSON.stringify(hackCable.editor.getEditorSaveData()));
+    renderMockDeviceConfiguration();
+    renderMockTextSliders();
+    renderMockEditors();
+}
+
+function renderMockDeviceConfiguration(): void {
+    if (!mockDeviceConfig || !mockDeviceConfigList || !mockDeviceConfigErrors) return;
+    const devices = getMockDevices();
+    mockDeviceConfig.hidden = devices.length === 0;
+    mockDeviceConfigList.innerHTML = '';
+    devices.forEach((device) => {
+        const row = document.createElement('div');
+        row.className = 'mock-device-config-row';
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.value = device.label;
+        nameInput.setAttribute('aria-label', 'Sensor label');
+        nameInput.addEventListener('change', () => saveMockSensorConfiguration(device, nameInput.value.trim()));
+        const idInput = document.createElement('input');
+        idInput.type = 'number';
+        idInput.min = device.profile.transport === 'i2c' ? '1' : '0';
+        idInput.max = device.profile.transport === 'i2c' ? '127' : '255';
+        idInput.value = String(device.profile.transport === 'rs485' ? device.slaveId : device.profile.transport === 'i2c' ? device.i2cAddress : device.analogPin);
+        const idLabel = document.createElement('label');
+        idLabel.textContent = device.profile.transport === 'rs485' ? 'Slave ID' : device.profile.transport === 'i2c' ? 'I2C address' : 'Analog pin';
+        idLabel.appendChild(idInput);
+        idInput.addEventListener('change', () => {
+            const next = Number(idInput.value);
+            if (Number.isInteger(next) && next >= 0) saveMockSensorConfiguration(device, next);
+            else renderMockDeviceConfiguration();
+        });
+        row.append(nameInput, idLabel);
+        mockDeviceConfigList.appendChild(row);
+    });
+    const errors = getMockDeviceConfigurationErrors();
+    mockDeviceConfigErrors.hidden = errors.length === 0;
+    mockDeviceConfigErrors.textContent = errors.join(' ');
+}
+
+function resolveMockDevice(transport: SensorTransport, id: number, componentId?: number): MockSensorDevice | null {
+    const matches = getMockDevices().filter((device) => {
+        if (device.profile.transport !== transport) return false;
+        if (componentId !== undefined && device.componentId !== componentId) return false;
+        return transport === 'rs485' ? device.slaveId === id
+            : transport === 'i2c' ? device.i2cAddress === id
+                : device.analogPin === id;
+    });
+    return matches.length === 1 ? matches[0] : null;
+}
+
+function withMockDevice<T>(device: MockSensorDevice | null, read: () => T): T {
+    const previous = activeMockDevice;
+    activeMockDevice = device;
+    try {
+        return read();
+    } finally {
+        activeMockDevice = previous;
+    }
+}
+
 function getMockAtTime(
-    key: SensorKey,
+    key: MockChannelKey,
     nowMs: number,
     config: MockTimelineConfig,
     runStartMs: number,
@@ -3371,11 +3764,15 @@ function getMockAtTime(
 }
 
 function getMock(key: string, defaultVal: number): number {
-    if (activeMockSource === 'timeline' && isSensorKey(key)) {
-        const timedValue = getMockAtTime(key, Date.now(), mockTimelineConfig, mockRunStartMs);
+    const metric = isSensorKey(key) ? key : null;
+    const channelKey = metric && activeMockDevice ? getMockChannelKey(activeMockDevice, metric) : key;
+    if (activeMockSource === 'timeline') {
+        const timedValue = getMockAtTime(channelKey, Date.now(), mockTimelineConfig, mockRunStartMs)
+            ?? (channelKey !== key && metric ? getMockAtTime(metric, Date.now(), mockTimelineConfig, mockRunStartMs) : undefined);
         return timedValue !== undefined ? timedValue : defaultVal;
     }
-    const value = parseMockValues()[key];
+    const values = parseMockValues();
+    const value = values[channelKey] ?? (channelKey !== key ? values[key] : undefined);
     return value !== undefined ? value : defaultVal;
 }
 
@@ -3495,8 +3892,15 @@ function getFloat32BigEndianWords(value: number): [number, number] {
 }
 
 // Sensor data bridges for Clang/LLVM ESP32 examples
-(window as any).hackcable_modbus_read = (slaveId: number, regAddr: number): number => {
-    const activeProfile = getActiveModbusMockProfile();
+function resolveModbusMockDevice(slaveId: number): MockSensorDevice | null {
+    const direct = resolveMockDevice('rs485', slaveId);
+    if (direct) return direct;
+    const waterQualitySuites = getMockDevices().filter((device) => device.profile.modbusProfile === 'bfarm-water-quality-suite-rs485');
+    if (waterQualitySuites.length === 1 && slaveId >= 1 && slaveId <= 5) return waterQualitySuites[0];
+    return null;
+}
+
+function readMockModbusRegister(activeProfile: ModbusMockProfile, slaveId: number, regAddr: number): number {
     if (activeProfile === 'sensor-weather-htco2plx') {
         const registers: Record<number, number> = {
             500: getScaledMockRegisterValue('humidity', 60.0, 10),
@@ -3542,7 +3946,7 @@ function getFloat32BigEndianWords(value: number): [number, number] {
     if (activeProfile === 'sensor-dt-par485') {
         return regAddr === 0 ? getScaledMockRegisterValue('par', 650.0) : 0;
     }
-    if (getActiveModbusMockProfile() === 'bfarm-7in1-soil') {
+    if (activeProfile === 'bfarm-7in1-soil') {
         const soil7in1Registers: Record<number, number> = {
             0: getScaledMockRegisterValue('soil', 50.0, 10),
             1: getScaledMockRegisterValue('temperature', 25.0, 10),
@@ -3556,7 +3960,7 @@ function getFloat32BigEndianWords(value: number): [number, number] {
         return 0;
     }
 
-    if (getActiveModbusMockProfile() === 'bfarm-ammonia-rs485') {
+    if (activeProfile === 'bfarm-ammonia-rs485') {
         const ammoniaRegisters: Record<number, number> = {
             0: getScaledMockRegisterValue('ammonia', 2.5, 100),
             1: getScaledMockRegisterValue('ph', 7.0, 100),
@@ -3566,7 +3970,7 @@ function getFloat32BigEndianWords(value: number): [number, number] {
         return 0;
     }
 
-    if (getActiveModbusMockProfile() === 'bfarm-soil-temp-multiread-rs485') {
+    if (activeProfile === 'bfarm-soil-temp-multiread-rs485') {
         const soilTempRegisters: Record<number, number> = {
             0: getScaledMockRegisterValueFromAliases(['soil_moisture', 'soil'], 50.0, 10),
             1: getScaledMockRegisterValueFromAliases(['soil_temp', 'temperature'], 25.0, 10),
@@ -3575,22 +3979,22 @@ function getFloat32BigEndianWords(value: number): [number, number] {
         return 0;
     }
 
-    if (getActiveModbusMockProfile() === 'bfarm-ultrasonic-rs485') {
+    if (activeProfile === 'bfarm-ultrasonic-rs485') {
         if (regAddr === 256) return getScaledMockRegisterValue('distance', 150.0, 10);
         return 0;
     }
 
-    if (getActiveModbusMockProfile() === 'bfarm-turbidity-xm3318b-rs485') {
+    if (activeProfile === 'bfarm-turbidity-xm3318b-rs485') {
         if (regAddr === 0) return getScaledMockRegisterValue('turbidity', 250.0);
         return 0;
     }
 
-    if (getActiveModbusMockProfile() === 'bfarm-turbidity-xm8518-rs485') {
+    if (activeProfile === 'bfarm-turbidity-xm8518-rs485') {
         if (regAddr === 0) return getScaledMockRegisterValue('turbidity', 250.0);
         return 0;
     }
 
-    if (getActiveModbusMockProfile() === 'bfarm-nitrate-isfet-rs485') {
+    if (activeProfile === 'bfarm-nitrate-isfet-rs485') {
         const nitrateRegisters: Record<number, number> = {
             0: getScaledMockRegisterValue('nitrate_vout', 315.0, 10),
             1: getScaledMockRegisterValue('nitrate_vout_temp', 298.0, 10),
@@ -3607,7 +4011,7 @@ function getFloat32BigEndianWords(value: number): [number, number] {
         return 0;
     }
 
-    if (getActiveModbusMockProfile() === 'bfarm-tmec-tensio-rs485') {
+    if (activeProfile === 'bfarm-tmec-tensio-rs485') {
         const tensioRegisters: Record<number, number> = {
             0: 0,
             1: getScaledMockRegisterValue('temperature', 25.0, 10),
@@ -3620,7 +4024,7 @@ function getFloat32BigEndianWords(value: number): [number, number] {
         return 0;
     }
 
-    if (getActiveModbusMockProfile() === 'bfarm-water-quality-suite-rs485') {
+    if (activeProfile === 'bfarm-water-quality-suite-rs485') {
         if (slaveId === 1 && regAddr === 4) {
             return getScaledMockRegisterValue('water_level', 120.0);
         }
@@ -3656,7 +4060,7 @@ function getFloat32BigEndianWords(value: number): [number, number] {
         return 0;
     }
 
-    if (getActiveModbusMockProfile() === 'bfarm-tubular-soil-probe-rs485') {
+    if (activeProfile === 'bfarm-tubular-soil-probe-rs485') {
         const tubularSoilRegisters: Record<number, number> = {
             0: getScaledMockRegisterValue('tubular_moisture_10', 42.0, 10),
             1: getScaledMockRegisterValue('tubular_temperature_10', 26.0, 10),
@@ -3673,21 +4077,21 @@ function getFloat32BigEndianWords(value: number): [number, number] {
         return 0;
     }
 
-    if (getActiveModbusMockProfile() === 'bfarm-air-velocity-sm3789') {
+    if (activeProfile === 'bfarm-air-velocity-sm3789') {
         if (slaveId === 1 && regAddr === 0) {
             return getScaledMockRegisterValue('air_velocity', 12.0);
         }
         return 0;
     }
 
-    if (getActiveModbusMockProfile() === 'bfarm-lux120k-rs485') {
+    if (activeProfile === 'bfarm-lux120k-rs485') {
         if (slaveId === 1 && (regAddr === 0 || regAddr === 3)) {
             return getScaledMockRegisterValue('lux', 500.0);
         }
         return 0;
     }
 
-    if (getActiveModbusMockProfile() === 'bfarm-weather-sensor-rs485') {
+    if (activeProfile === 'bfarm-weather-sensor-rs485') {
         const weatherSensorRegisters: Record<number, number> = {
             500: getScaledMockRegisterValue('humidity', 60.0, 10),
             501: getScaledMockRegisterValue('temperature', 25.0, 10),
@@ -3708,22 +4112,42 @@ function getFloat32BigEndianWords(value: number): [number, number] {
     };
     if (regAddr in weatherRegisters) return weatherRegisters[regAddr];
     return getMock('ph', 7.0);
+}
+
+(window as any).hackcable_modbus_read = (slaveId: number, regAddr: number): number => {
+    const device = resolveModbusMockDevice(slaveId);
+    return withMockDevice(device, () => {
+        const activeProfile = device?.profile.modbusProfile ?? getActiveModbusMockProfile();
+        return readMockModbusRegister(activeProfile, slaveId, regAddr);
+    });
 };
-(window as any).hackcable_sht31_temp = (): number => getMock('temperature', 25.0);
-(window as any).hackcable_sht31_humidity = (): number => getMock('humidity', 60.0);
-(window as any).hackcable_bh1750_lux = (): number => getMock('lux', 500.0);
-(window as any).hackcable_sen55_value = (index: number): number => {
+(window as any).hackcable_sht31_temp = (address = 0x44): number => {
+    const device = resolveMockDevice('i2c', address, 41);
+    return withMockDevice(device, () => getMock('temperature', 25.0));
+};
+(window as any).hackcable_sht31_humidity = (address = 0x44): number => {
+    const device = resolveMockDevice('i2c', address, 41);
+    return withMockDevice(device, () => getMock('humidity', 60.0));
+};
+(window as any).hackcable_bh1750_lux = (address = 0x23): number => {
+    const device = resolveMockDevice('i2c', address, 42);
+    return withMockDevice(device, () => getMock('lux', 500.0));
+};
+(window as any).hackcable_sen55_value = (addressOrIndex: number, maybeIndex?: number): number => {
+    const address = maybeIndex === undefined ? 0x69 : addressOrIndex;
+    const index = maybeIndex === undefined ? addressOrIndex : maybeIndex;
+    const device = resolveMockDevice('i2c', address, 55);
     const values = [
-        getMock('pm1', 8.0),
-        getMock('pm25', 12.0),
-        getMock('pm4', 15.0),
-        getMock('pm10', 20.0),
-        getMock('humidity', 60.0),
-        getMock('temperature', 25.0),
-        getMock('voc', 100.0),
-        getMock('nox', 10.0),
+        () => getMock('pm1', 8.0),
+        () => getMock('pm25', 12.0),
+        () => getMock('pm4', 15.0),
+        () => getMock('pm10', 20.0),
+        () => getMock('humidity', 60.0),
+        () => getMock('temperature', 25.0),
+        () => getMock('voc', 100.0),
+        () => getMock('nox', 10.0),
     ];
-    return values[index] ?? 0;
+    return withMockDevice(device, () => values[index]?.() ?? 0);
 };
 
 async function cleanupWasmInstance() {

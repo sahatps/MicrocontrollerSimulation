@@ -161,10 +161,10 @@ extern "C" {
     void Wire_setClock(unsigned long freq);
 
     // HackCable sensor bridge functions (called from sensor library stubs)
-    float hackcable_sht31_temp();
-    float hackcable_sht31_humidity();
-    float hackcable_bh1750_lux();
-    float hackcable_sen55_value(int index);
+    float hackcable_sht31_temp(int address);
+    float hackcable_sht31_humidity(int address);
+    float hackcable_bh1750_lux(int address);
+    float hackcable_sen55_value(int address, int index);
     int   hackcable_modbus_read(int slaveId, int regAddr);
     int   hackcable_local_second_of_day();
 }
@@ -254,13 +254,15 @@ export const SHT31_H = `
 #include <Arduino.h>
 
 class SHT31 {
+private:
+    uint8_t _addr = 0x44;
 public:
-    bool begin(uint8_t /*addr*/ = 0x44) { return true; }
+    bool begin(uint8_t addr = 0x44) { _addr = addr; return true; }
     bool read() { return true; }
-    float readTemperature() { return hackcable_sht31_temp(); }
-    float readHumidity()    { return hackcable_sht31_humidity(); }
-    float getTemperature()  { return hackcable_sht31_temp(); }
-    float getHumidity()     { return hackcable_sht31_humidity(); }
+    float readTemperature() { return hackcable_sht31_temp((int)_addr); }
+    float readHumidity()    { return hackcable_sht31_humidity((int)_addr); }
+    float getTemperature()  { return hackcable_sht31_temp((int)_addr); }
+    float getHumidity()     { return hackcable_sht31_humidity((int)_addr); }
     bool heater(bool /*on*/) { return true; }
     bool isHeaterEnabled() { return false; }
 };
@@ -274,14 +276,16 @@ export const BH1750_H = `
 #define BH1750_ONE_TIME_HIGH_RES_MODE   0x20
 
 class BH1750 {
+private:
+    uint8_t _addr = 0x23;
 public:
     static const uint8_t CONTINUOUS_HIGH_RES_MODE = BH1750_CONTINUOUS_HIGH_RES_MODE;
     static const uint8_t ONE_TIME_HIGH_RES_MODE = BH1750_ONE_TIME_HIGH_RES_MODE;
-    BH1750(uint8_t /*addr*/ = 0x23) {}
+    BH1750(uint8_t addr = 0x23) : _addr(addr) {}
     bool begin(uint8_t /*mode*/ = BH1750_CONTINUOUS_HIGH_RES_MODE,
-               uint8_t /*addr*/ = 0x23) { return true; }
+               uint8_t addr = 0x23) { _addr = addr; return true; }
     void configure(uint8_t /*mode*/) {}
-    float readLightLevel() { return hackcable_bh1750_lux(); }
+    float readLightLevel() { return hackcable_bh1750_lux((int)_addr); }
     bool measurementReady(bool /*maxWait*/ = false) { return true; }
 };
 `;
@@ -327,8 +331,10 @@ export const SENSIRION_I2C_SEN5X_H = `
 #include <Wire.h>
 
 class SensirionI2CSen5x {
+private:
+    uint8_t _addr = 0x69;
 public:
-    void begin(_WireClass& /*wire*/) {}
+    void begin(_WireClass& /*wire*/) { _addr = 0x69; }
     uint16_t startMeasurement() { return 0; }
     uint16_t readMeasuredValues(
         float& pm1p0,
@@ -340,14 +346,14 @@ public:
         float& vocIndex,
         float& noxIndex
     ) {
-        pm1p0 = hackcable_sen55_value(0);
-        pm2p5 = hackcable_sen55_value(1);
-        pm4p0 = hackcable_sen55_value(2);
-        pm10p0 = hackcable_sen55_value(3);
-        ambientHumidity = hackcable_sen55_value(4);
-        ambientTemperature = hackcable_sen55_value(5);
-        vocIndex = hackcable_sen55_value(6);
-        noxIndex = hackcable_sen55_value(7);
+        pm1p0 = hackcable_sen55_value((int)_addr, 0);
+        pm2p5 = hackcable_sen55_value((int)_addr, 1);
+        pm4p0 = hackcable_sen55_value((int)_addr, 2);
+        pm10p0 = hackcable_sen55_value((int)_addr, 3);
+        ambientHumidity = hackcable_sen55_value((int)_addr, 4);
+        ambientTemperature = hackcable_sen55_value((int)_addr, 5);
+        vocIndex = hackcable_sen55_value((int)_addr, 6);
+        noxIndex = hackcable_sen55_value((int)_addr, 7);
         return 0;
     }
 };

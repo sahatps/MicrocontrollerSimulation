@@ -997,6 +997,65 @@ body.controlbar-hidden #hackCable
                     &[hidden]
                         display none !important
 
+                .mock-device-config
+                    border 1px solid #3a4658
+                    background linear-gradient(135deg, #182331, #121922)
+                    border-radius 8px
+                    padding 10px
+                    margin-bottom 10px
+
+                    &[hidden]
+                        display none !important
+
+                .mock-device-config-header
+                    display flex
+                    justify-content space-between
+                    gap 12px
+                    align-items baseline
+                    margin-bottom 8px
+
+                    h4
+                        margin 0
+                        color #f3f4f6
+
+                    span
+                        color #a7b0bf
+                        font-size .82rem
+
+                .mock-device-config-list
+                    display flex
+                    flex-direction column
+                    gap 6px
+
+                .mock-device-config-row
+                    display grid
+                    grid-template-columns minmax(0, 1fr) 130px
+                    gap 8px
+
+                    input
+                        min-width 0
+                        background #0f141c
+                        border 1px solid #3a4658
+                        color #f3f4f6
+                        border-radius 5px
+                        padding 5px 7px
+
+                    label
+                        color #a7b0bf
+                        font-size .78rem
+                        display flex
+                        flex-direction column
+                        gap 3px
+
+                .mock-device-config-errors
+                    margin-bottom 8px
+                    padding 7px 8px
+                    border-radius 5px
+                    background rgba(127, 29, 29, .35)
+                    border 1px solid #b45309
+                    color #fed7aa
+                    font-size .83rem
+
                 .mock-source-panel[data-mock-source-panel="text"]
                     .mock-text-toolbar
                         display flex

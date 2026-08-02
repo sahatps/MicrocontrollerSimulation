@@ -48,6 +48,7 @@ export class Editor{
         data.figures.forEach((figureData) => {
             let figure = new ComponentFigure(wokwiComponentById[figureData.componentId]);
             figure.setId(figureData.figureId) // So the connections can find this figure
+            figure.setMockSensorConfig(figureData.mockSensorConfig);
             this._canvas.add(figure.setX(figureData.x).setY(figureData.y))
         })
         // Add all connections

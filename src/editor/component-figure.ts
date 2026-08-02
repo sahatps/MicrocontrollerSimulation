@@ -40,12 +40,25 @@ function disableDraw2dPortDragPreview(): void {
 
 disableDraw2dPortDragPreview();
 
-export declare type FigureData = {componentId: number, figureId: string, x: number, y: number}
+export declare type MockSensorFigureConfig = {
+    label?: string;
+    slaveId?: number;
+    i2cAddress?: number;
+    analogPin?: number;
+}
+export declare type FigureData = {
+    componentId: number,
+    figureId: string,
+    x: number,
+    y: number,
+    mockSensorConfig?: MockSensorFigureConfig,
+}
 export declare type WiringData = {svgPath: string, fromFigure: string, fromPortName: string, targetFigure: string, targetPortName: string}
 
 export class ComponentFigure extends draw2d.shape.basic.Rectangle{
 
     private readonly component: WokwiComponentInfo;
+    private mockSensorConfig?: MockSensorFigureConfig;
     public readonly componentElement: WokwiComponent;
     private overlayBaseWidth = 0;
     private overlayBaseHeight = 0;
@@ -260,7 +273,16 @@ export class ComponentFigure extends draw2d.shape.basic.Rectangle{
             figureId: this.getId(),
             x: this.getX(),
             y: this.getY(),
+            mockSensorConfig: this.getMockSensorConfig(),
         }
+    }
+
+    public getMockSensorConfig(): MockSensorFigureConfig | undefined {
+        return this.mockSensorConfig ? { ...this.mockSensorConfig } : undefined;
+    }
+
+    public setMockSensorConfig(config: MockSensorFigureConfig | undefined): void {
+        this.mockSensorConfig = config ? { ...config } : undefined;
     }
     public getWiringData(): WiringData[]{
 

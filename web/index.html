@@ -231,6 +231,14 @@
                     </div>
                 </div>
                 <div class="editor-tab-panel" data-editor-panel="mock" hidden>
+                    <section id="mock-device-config" class="mock-device-config" hidden>
+                        <div class="mock-device-config-header">
+                            <h4>Sensor devices</h4>
+                            <span>Configure the hardware ID used by your code.</span>
+                        </div>
+                        <div id="mock-device-config-errors" class="mock-device-config-errors" hidden></div>
+                        <div id="mock-device-config-list" class="mock-device-config-list"></div>
+                    </section>
                     <div class="mock-source-toggle" role="group" aria-label="Mock source">
                         <button type="button" class="mock-source-btn active" data-mock-source="text"
                             data-i18n="ui.mock.source.text">Text</button>
@@ -248,6 +256,8 @@
   temperature = 25
 ph = 7.0
 lux = 500
+co2 = 400
+pressure = 1013
 soil = 50
 ec = 1200
 nitrogen = 120
